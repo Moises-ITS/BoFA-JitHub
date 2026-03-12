@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { Opportunity, OPPORTUNITY_TYPE_LABELS } from '../types/opportunities';
+import { type Opportunity, OPPORTUNITY_TYPE_LABELS } from '../types/opportunities';
 import NetworkBadge from './NetworkBadge';
 
 interface Props {

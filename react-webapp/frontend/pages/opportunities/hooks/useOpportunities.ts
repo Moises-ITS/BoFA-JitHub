@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import {
+import type {
   Step,
   UserProfile,
   Opportunity,

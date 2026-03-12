@@ -4,7 +4,7 @@ import { useAuth }              from '../../context/AuthContext';
 import { useOpportunities }     from './hooks/useOpportunities';
 import ApplicationTracker       from './components/ApplicationTracker';
 import SmartFeed                from './components/SmartFeed';
-import { INTEREST_OPTIONS, MAJOR_OPTIONS, UserProfile } from './types/opportunities';
+import { INTEREST_OPTIONS, MAJOR_OPTIONS, type UserProfile } from './types/opportunities';
 import './Opportunities.css';
 
 // ── Step metadata ──────────────────────────────────────────────────────────────

@@ -1,0 +1,41 @@
+# .github/workflows/ci.yml
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type check shared
+        run: npm run type-check -w shared
+
+      - name: Type check frontend
+        run: npm run type-check -w frontend
+
+      - name: Type check backend
+        run: npm run type-check -w backend
+
+      - name: Lint frontend
+        run: npm run lint -w frontend
+
+      - name: Lint backend
+        run: npm run lint -w backend
+
+      - name: Build
+        run: npm run build

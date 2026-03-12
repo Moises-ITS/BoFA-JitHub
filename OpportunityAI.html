@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OpportunityAI — NJIT Campus Opportunity Engine</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117;
+      --surface: #161b27;
+      --surface2: #1e2535;
+      --border: #2d3748;
+      --text: #e2e8f0;
+      --muted: #718096;
+      --red: #CC0000;
+      --green: #22c55e;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+      --gold: #f59e0b;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    /* ── Navbar ── */
+    .navbar {
+      background: var(--red);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 1.2rem;
+    }
+    .nav-logo span { font-size: 1.4rem; }
+    .nav-tagline { font-size: 0.72rem; opacity: 0.85; }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+    .nav-chip {
+      background: rgba(255,255,255,0.18);
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .nav-avatar {
+      width: 34px; height: 34px;
+      background: rgba(255,255,255,0.25);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    /* ── Step indicators ── */
+    .step-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 20px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      position: relative;
+      cursor: default;
+    }
+    .step.active { color: var(--text); }
+    .step.done { color: var(--green); }
+    .step-num {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .step.active .step-num { background: var(--red); color: white; }
+    .step.done .step-num { background: var(--green); color: white; }
+    .step-arrow { color: var(--border); font-size: 0.7rem; }
+    /* ── Content area ── */
+    .content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+    /* ── View panels ── */
+    .view { display: none; width: 100%; }
+    .view.active { display: flex; }
+    /* ════════════ PROFILE WIZARD ════════════ */
+    #view-profile {
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      background: var(--bg);
+    }
+    .wizard-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 560px;
+      width: 100%;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    }
+    .wizard-card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 6px;
+    }
+    .wizard-card .sub {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 28px;
+    }
+    .field { margin-bottom: 18px; }
+    .field label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 7px;
+    }
+    .field input, .field select {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      color: var(--text);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    .field input:focus, .field select:focus { border-color: var(--red); }
+    .field select option { background: var(--surface2); }
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.83rem;
+      transition: all 0.15s;
+    }
+    .checkbox-item:hover { border-color: var(--red); }
+    .checkbox-item.checked { border-color: var(--red); background: rgba(204,0,0,0.1); color: #ff6b6b; }
+    .checkbox-item input { display: none; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .btn-primary {
+      width: 100%;
+      padding: 13px;
+      background: var(--red);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: all 0.2s;
+      letter-spacing: 0.3px;
+    }
+    .btn-primary:hover {
+      background: #e00000;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(204,0,0,0.5);
+    }
+    /* ════════════ AI SCANNER ════════════ */
+    #view-scan {
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      background: var(--bg);
+    }
+    .scan-card {
+      background: #0a0c10;
+      border: 1px solid #22c55e44;
+      border-radius: 16px;
+      padding: 32px 36px;
+      max-width: 580px;
+      width: 100%;
+      box-shadow: 0 0 40px rgba(34,197,94,0.08);
+    }
+    .scan-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .scan-dot {
+      width: 10px; height: 10px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: blink 1s infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+    .scan-title { font-size: 0.85rem; color: var(--green); font-family: monospace; letter-spacing: 1px; }
+    .terminal {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.82rem;
+      min-height: 260px;
+      line-height: 1.8;
+    }
+    .t-line { display: flex; gap: 8px; align-items: flex-start; }
+    .t-prompt { color: var(--green); flex-shrink: 0; }
+    .t-text { color: #a8f5a8; }
+    .t-text.dim { color: #4a7c59; }
+    .t-text.highlight { color: #4ade80; font-weight: bold; }
+    .t-text.warn { color: #fbbf24; }
+    .cursor {
+      display: inline-block;
+      width: 8px; height: 14px;
+      background: var(--green);
+      animation: blink 0.7s infinite;
+      vertical-align: middle;
+    }
+    .scan-progress { margin-top: 24px; }
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .progress-bar {
+      height: 6px;
+      background: #1a2020;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #22c55e, #4ade80);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.4s ease;
+      box-shadow: 0 0 8px rgba(34,197,94,0.6);
+    }
+    .scan-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .stat-box {
+      background: #0d1a11;
+      border: 1px solid #22c55e22;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    .stat-num {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--green);
+      font-family: monospace;
+    }
+    .stat-lbl { font-size: 0.7rem; color: #4a7c59; margin-top: 2px; }
+    /* ════════════ OPPORTUNITIES FEED ════════════ */
+    #view-feed { flex-direction: row; }
+    .filter-sidebar {
+      width: 240px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 20px;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    .filter-sidebar h3 {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    .filter-group { margin-bottom: 20px; }
+    .filter-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      font-size: 0.83rem;
+      cursor: pointer;
+    }
+    .filter-check input[type=checkbox] {
+      accent-color: var(--red);
+      width: 14px; height: 14px;
+      cursor: pointer;
+    }
+    .filter-count {
+      margin-left: auto;
+      background: var(--surface2);
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+    .match-slider { width: 100%; accent-color: var(--red); margin-top: 8px; }
+    .match-val { font-size: 0.8rem; color: var(--red); font-weight: 700; }
+    .profile-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 8px;
+      font-size: 0.78rem;
+    }
+    .profile-chip .chip-label { color: var(--muted); font-size: 0.7rem; margin-bottom: 3px; }
+    .profile-chip .chip-val { font-weight: 600; }
+    /* ── Feed area ── */
+    .feed-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+    }
+    .feed-header { margin-bottom: 20px; }
+    .feed-title { font-size: 1.1rem; font-weight: 700; }
+    .feed-subtitle { font-size: 0.78rem; color: var(--muted); margin-top: 2px; display: block; }
+    .feed-list { display: flex; flex-direction: column; gap: 14px; }
+    /* ── Listing Card ── */
+    .listing-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+    .listing-card:hover {
+      border-color: #4a5568;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .listing-card.applied {
+      border-color: rgba(34,197,94,0.3);
+      background: #0f1a12;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .card-meta { display: flex; align-items: center; gap: 8px; }
+    .card-actions { display: flex; align-items: center; gap: 8px; }
+    .type-badge {
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .type-research   { background: rgba(139,92,246,0.15); color: #8b5cf6; border: 1px solid #8b5cf666; }
+    .type-internship { background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid #3b82f666; }
+    .type-job        { background: rgba(34,197,94,0.15);  color: #22c55e; border: 1px solid #22c55e66; }
+    .type-club       { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid #f59e0b66; }
+    .type-fellowship { background: rgba(204,0,0,0.15);    color: #ff6b6b; border: 1px solid #cc000066; }
+    .type-ta         { background: rgba(6,182,212,0.15);  color: #06b6d4; border: 1px solid #06b6d466; }
+    .match-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+      background: rgba(0,0,0,0.25);
+    }
+    .match-high   { color: var(--green); border: 1px solid rgba(34,197,94,0.4); }
+    .match-mid    { color: var(--blue);  border: 1px solid rgba(59,130,246,0.4); }
+    .match-low    { color: var(--gold);  border: 1px solid rgba(245,158,11,0.4); }
+    .card-title { font-size: 1rem; font-weight: 700; margin-bottom: 4px; line-height: 1.3; }
+    .card-org   { font-size: 0.82rem; color: var(--muted); margin-bottom: 10px; }
+    .card-loc   { color: #4a5568; }
+    .card-desc  { font-size: 0.85rem; color: #a0aec0; line-height: 1.6; margin-bottom: 14px; }
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 0.73rem;
+      color: var(--muted);
+    }
+    .card-right { display: flex; align-items: center; gap: 10px; font-size: 0.75rem; color: var(--muted); }
+    .deadline { color: var(--gold); font-weight: 600; }
+    .posted   { color: #4a5568; }
+    .icon-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.1rem;
+      color: var(--muted);
+      padding: 4px 6px;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .icon-btn:hover { color: var(--gold); background: rgba(245,158,11,0.1); }
+    .icon-btn.saved { color: var(--gold); }
+    .apply-btn {
+      padding: 6px 14px;
+      background: var(--red);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .apply-btn:hover { background: #e00000; }
+    .apply-btn.applied-btn { background: var(--green); cursor: default; }
+  </style>
+</head>
+<body>
+
+<!-- ══ Navbar ══ -->
+<nav class="navbar">
+  <div class="nav-logo">
+    <span>🚀</span>
+    <div>
+      <div>OpportunityAI</div>
+      <div class="nav-tagline">NJIT Campus Opportunity Engine</div>
+    </div>
+  </div>
+  <div class="nav-right">
+    <span class="nav-chip">NJIT</span>
+    <div class="nav-avatar" title="Log out">NJ</div>
+  </div>
+</nav>
+
+<!-- ══ Step bar ══ -->
+<div class="step-bar">
+  <div class="step active" id="step-1">
+    <div class="step-num">1</div>
+    Build Profile
+  </div>
+  <span class="step-arrow">›</span>
+  <div class="step" id="step-2">
+    <div class="step-num">2</div>
+    AI Scan
+  </div>
+  <span class="step-arrow">›</span>
+  <div class="step" id="step-3">
+    <div class="step-num">3</div>
+    Opportunities
+  </div>
+</div>
+
+<!-- ══ Content ══ -->
+<div class="content">
+
+  <!-- ── STEP 1: Profile Wizard ── -->
+  <div class="view active" id="view-profile">
+    <div class="wizard-card">
+      <h2>Build Your Profile</h2>
+      <p class="sub">Tell us about yourself so our AI can surface the best matches.</p>
+
+      <div class="row2">
+        <div class="field">
+          <label>Full Name</label>
+          <input type="text" id="inp-name" placeholder="Jane Smith"/>
+        </div>
+        <div class="field">
+          <label>GPA</label>
+          <input type="text" id="inp-gpa" placeholder="3.8"/>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Major</label>
+          <select id="inp-major">
+            <option value="">Select major…</option>
+            <option>Computer Science</option>
+            <option>Computer Engineering</option>
+            <option>Electrical Engineering</option>
+            <option>Mechanical Engineering</option>
+            <option>Biomedical Engineering</option>
+            <option>Information Technology</option>
+            <option>Data Science</option>
+            <option>Mathematics</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Graduation Year</label>
+          <select id="inp-year">
+            <option value="">Select year…</option>
+            <option>2025</option>
+            <option>2026</option>
+            <option>2027</option>
+            <option>2028</option>
+            <option>2029</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Interests &amp; Skills</label>
+        <div class="checkbox-grid" id="interest-grid">
+          <div class="checkbox-item" onclick="toggleInterest(this)"><input type="checkbox"/>Machine Learning</div>
+          <div class="checkbox-item" onclick="toggleInterest(this)"><input type="checkbox"/>Web Development</div>
+          <div class="checkbox-item" onclick="toggleInterest(this)"><input type="checkbox"/>Cybersecurity</div>
+          <div class="checkbox-item" onclick="toggleInterest(this)"><input type="checkbox"/>Data Science</div>
+          <div class="checkbox-item" onclick="toggleInterest(this)"><input type="checkbox"/>Robotics</div>
+          <div class="checkbox-item" onclick="toggleInterest(this)"><input type="checkbox"/>Cloud Computing</div>
+          <div class="checkbox-item" onclick="toggleInterest(this)"><input type="checkbox"/>Mobile Dev</div>
+          <div class="checkbox-item" onclick="toggleInterest(this)"><input type="checkbox"/>Bioinformatics</div>
+        </div>
+      </div>
+
+      <button class="btn-primary" onclick="startScan()">Scan for Opportunities →</button>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: AI Scanner ── -->
+  <div class="view" id="view-scan">
+    <div class="scan-card">
+      <div class="scan-header">
+        <div class="scan-dot"></div>
+        <span class="scan-title">OPPORTUNITY-AI &nbsp;·&nbsp; NJIT SCANNER v2.4</span>
+      </div>
+      <div class="terminal" id="terminal"></div>
+      <div class="scan-progress">
+        <div class="progress-label">
+          <span>Scanning opportunities…</span>
+          <span id="pct-label">0%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+      </div>
+      <div class="scan-stats">
+        <div class="stat-box">
+          <div class="stat-num" id="stat-scanned">0</div>
+          <div class="stat-lbl">SCANNED</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="stat-matches">0</div>
+          <div class="stat-lbl">MATCHES</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="stat-sources">0</div>
+          <div class="stat-lbl">SOURCES</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: Opportunities Feed ── -->
+  <div class="view" id="view-feed">
+
+    <!-- Sidebar -->
+    <aside class="filter-sidebar">
+      <div id="profile-summary"></div>
+
+      <h3 style="margin-top:20px">Type</h3>
+      <div class="filter-group">
+        <label class="filter-check"><input type="checkbox" onchange="applyFilters()"> Research <span class="filter-count" id="cnt-research">0</span></label>
+        <label class="filter-check"><input type="checkbox" onchange="applyFilters()"> Internship <span class="filter-count" id="cnt-internship">0</span></label>
+        <label class="filter-check"><input type="checkbox" onchange="applyFilters()"> Full-time Job <span class="filter-count" id="cnt-job">0</span></label>
+        <label class="filter-check"><input type="checkbox" onchange="applyFilters()"> Club / Org <span class="filter-count" id="cnt-club">0</span></label>
+        <label class="filter-check"><input type="checkbox" onchange="applyFilters()"> Fellowship <span class="filter-count" id="cnt-fellowship">0</span></label>
+        <label class="filter-check"><input type="checkbox" onchange="applyFilters()"> TA / Grader <span class="filter-count" id="cnt-ta">0</span></label>
+      </div>
+
+      <h3>Min Match</h3>
+      <input type="range" min="0" max="100" step="5" value="60" class="match-slider" id="match-slider" oninput="updateMatchVal(this.value); applyFilters()"/>
+      <div class="match-val" id="match-val">60%+</div>
+    </aside>
+
+    <!-- Feed -->
+    <main class="feed-area">
+      <div class="feed-header">
+        <h2 class="feed-title" id="feed-count">8 Opportunities Found</h2>
+        <span class="feed-subtitle">Ranked by match score · NJIT network</span>
+      </div>
+      <div class="feed-list" id="feed-list"></div>
+    </main>
+  </div>
+
+</div><!-- /.content -->
+
+<script>
+  // ── Data ──────────────────────────────────────────────────────────────────
+  const OPPORTUNITIES = [
+    {
+      id: '1', title: 'Undergraduate Research Assistant — NLP Lab',
+      org: 'NJIT CSLA', type: 'research', match: 95,
+      deadline: 'Apr 15, 2025', tags: ['Python','NLP','PyTorch'],
+      desc: "Join Prof. Olariu's NLP group to work on large-language-model alignment and evaluation benchmarks for low-resource languages.",
+      loc: 'Newark, NJ (on-campus)', posted: 2, applied: false, saved: true,
+    },
+    {
+      id: '2', title: 'Software Engineering Intern',
+      org: 'Prudential Financial', type: 'internship', match: 88,
+      deadline: 'Mar 31, 2025', tags: ['React','Java','AWS'],
+      desc: "Summer 2025 SWE internship on Prudential's digital transformation team. Build full-stack features for client-facing financial dashboards.",
+      loc: 'Newark, NJ (hybrid)', posted: 5, applied: true, saved: false,
+    },
+    {
+      id: '3', title: 'Cybersecurity Research Fellowship',
+      org: 'NJIT CAIT', type: 'fellowship', match: 82,
+      deadline: 'Apr 1, 2025', tags: ['Networking','Linux','Pen Testing'],
+      desc: 'Paid research fellowship focusing on IoT device security and vulnerability disclosure. Includes stipend + conference travel funding.',
+      loc: 'Newark, NJ (on-campus)', posted: 8, applied: false, saved: false,
+    },
+    {
+      id: '4', title: 'Teaching Assistant — CS 435 Data Structures',
+      org: 'NJIT Ying Wu College', type: 'ta', match: 79,
+      deadline: null, tags: ['Java','Algorithms','Teaching'],
+      desc: 'Lead recitation sections, hold office hours, and grade assignments for CS 435. Must have completed the course with a B+ or higher.',
+      loc: 'Newark, NJ (on-campus)', posted: 3, applied: false, saved: false,
+    },
+    {
+      id: '5', title: 'ACM Chapter — Project Lead',
+      org: 'NJIT ACM', type: 'club', match: 76,
+      deadline: null, tags: ['Leadership','Open Source','Project Mgmt'],
+      desc: 'Lead a semester-long software project team of 5–8 students. Present at regional ACM-ICPC and SRC competitions.',
+      loc: 'Newark, NJ', posted: 1, applied: false, saved: true,
+    },
+    {
+      id: '6', title: 'Junior Full-Stack Developer',
+      org: 'Audible (Amazon)', type: 'job', match: 74,
+      deadline: 'May 1, 2025', tags: ['TypeScript','Node.js','PostgreSQL'],
+      desc: "Full-time role on the Content Discovery team. Own features from design doc through production. New grad & recent grads welcome.",
+      loc: 'Newark, NJ (hybrid)', posted: 12, applied: false, saved: false,
+    },
+    {
+      id: '7', title: 'Machine Learning Intern',
+      org: 'Cognizant', type: 'internship', match: 71,
+      deadline: 'Apr 10, 2025', tags: ['Python','TensorFlow','SQL'],
+      desc: 'Work alongside senior data scientists to build predictive models for enterprise clients. Competitive stipend + housing assistance.',
+      loc: 'Teaneck, NJ (on-site)', posted: 7, applied: false, saved: false,
+    },
+    {
+      id: '8', title: 'Cloud Infrastructure Research',
+      org: 'Bell Labs (Nokia)', type: 'research', match: 68,
+      deadline: 'Mar 28, 2025', tags: ['Kubernetes','Go','Distributed Systems'],
+      desc: 'Part-time research collaboration with Bell Labs on edge-cloud orchestration. Co-authorship opportunities on publications.',
+      loc: 'Murray Hill, NJ (hybrid)', posted: 14, applied: false, saved: false,
+    },
+  ];
+
+  let profileData = {};
+  let filteredIds = OPPORTUNITIES.map(o => o.id);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function toggleInterest(el) {
+    el.classList.toggle('checked');
+  }
+
+  function showView(id) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  function setStep(n) {
+    for (let i = 1; i <= 3; i++) {
+      const el = document.getElementById('step-' + i);
+      el.classList.remove('active', 'done');
+      if (i < n)  el.classList.add('done');
+      if (i === n) el.classList.add('active');
+    }
+  }
+
+  function matchClass(score) {
+    return score >= 90 ? 'match-high' : score >= 75 ? 'match-mid' : 'match-low';
+  }
+
+  // ── Step 1 → Step 2 ───────────────────────────────────────────────────────
+  function startScan() {
+    profileData = {
+      name:  document.getElementById('inp-name').value  || 'NJIT Student',
+      major: document.getElementById('inp-major').value || 'Computer Science',
+      year:  document.getElementById('inp-year').value  || '2026',
+      gpa:   document.getElementById('inp-gpa').value   || '',
+      interests: [...document.querySelectorAll('.checkbox-item.checked')].map(el => el.textContent.trim()),
+    };
+    setStep(2);
+    showView('view-scan');
+    runScan();
+  }
+
+  // ── AI Scanner animation ──────────────────────────────────────────────────
+  function runScan() {
+    const lines = [
+      { prompt: '$', text: 'opportunity-ai init --profile njit',               cls: '' },
+      { prompt: '>', text: `Loading profile: ${profileData.name}`,             cls: 'dim' },
+      { prompt: '>', text: `Major: ${profileData.major}  |  Year: ${profileData.year}`, cls: 'dim' },
+      { prompt: '$', text: 'scan --sources "njit,handshake,linkedin,nsf"',     cls: '' },
+      { prompt: '>', text: 'Connecting to NJIT Handshake API…',                cls: 'dim' },
+      { prompt: '✓', text: '127 listings indexed from Handshake',              cls: 'highlight' },
+      { prompt: '>', text: 'Scanning NSF REU database…',                       cls: 'dim' },
+      { prompt: '✓', text: '43 research programs matched',                     cls: 'highlight' },
+      { prompt: '>', text: 'Querying NJ employer network…',                    cls: 'dim' },
+      { prompt: '✓', text: '89 local employer postings found',                 cls: 'highlight' },
+      { prompt: '$', text: `match --interests "${(profileData.interests||[]).join(', ')||'CS, ML'}"`, cls: '' },
+      { prompt: '>', text: 'Running semantic similarity scoring…',             cls: 'dim' },
+      { prompt: '>', text: 'Applying GPA + major weighting…',                  cls: 'dim' },
+      { prompt: '!', text: 'High-confidence matches: 8 opportunities',         cls: 'warn' },
+      { prompt: '✓', text: 'Scan complete — loading your feed',                cls: 'highlight' },
+    ];
+
+    const terminal  = document.getElementById('terminal');
+    const fill      = document.getElementById('progress-fill');
+    const pctLabel  = document.getElementById('pct-label');
+    const statScan  = document.getElementById('stat-scanned');
+    const statMatch = document.getElementById('stat-matches');
+    const statSrc   = document.getElementById('stat-sources');
+    const DURATION  = 8400;
+    const start     = performance.now();
+
+    const delays = [0, 500, 900, 1400, 1900, 2600, 3100, 3700, 4200, 4800, 5400, 5900, 6600, 7200, 7800];
+    terminal.innerHTML = '';
+
+    // Add cursor line
+    const cursorLine = document.createElement('div');
+    cursorLine.className = 't-line';
+    cursorLine.innerHTML = '<span class="t-prompt">›</span><span class="cursor"></span>';
+    terminal.appendChild(cursorLine);
+
+    lines.forEach((l, i) => {
+      setTimeout(() => {
+        const div = document.createElement('div');
+        div.className = 't-line';
+        div.innerHTML = `<span class="t-prompt">${l.prompt}</span><span class="t-text ${l.cls}">${l.text}</span>`;
+        terminal.insertBefore(div, cursorLine);
+        terminal.scrollTop = terminal.scrollHeight;
+      }, delays[i]);
+    });
+
+    // Animate progress
+    function tick(now) {
+      const pct = Math.min(100, ((now - start) / DURATION) * 100);
+      fill.style.width = pct + '%';
+      pctLabel.textContent = Math.round(pct) + '%';
+      statScan.textContent  = Math.floor(pct / 100 * 259);
+      statMatch.textContent = Math.floor(pct / 100 * 8);
+      statSrc.textContent   = Math.min(4, Math.floor(pct / 25 + 1));
+      if (pct < 100) {
+        requestAnimationFrame(tick);
+      } else {
+        cursorLine.remove();
+        setTimeout(() => {
+          buildFeed();
+          setStep(3);
+          showView('view-feed');
+        }, 900);
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // ── Build Feed ────────────────────────────────────────────────────────────
+  function buildFeed() {
+    // Profile summary sidebar
+    const summary = document.getElementById('profile-summary');
+    summary.innerHTML = `
+      <h3>Your Profile</h3>
+      <div class="profile-chip"><div class="chip-label">Name</div><div class="chip-val">${profileData.name}</div></div>
+      <div class="profile-chip"><div class="chip-label">Major · Year</div><div class="chip-val">${profileData.major} · ${profileData.year}</div></div>
+      ${profileData.gpa ? `<div class="profile-chip"><div class="chip-label">GPA</div><div class="chip-val">${profileData.gpa}</div></div>` : ''}
+    `;
+
+    // Type counts
+    const counts = {};
+    OPPORTUNITIES.forEach(o => counts[o.type] = (counts[o.type] || 0) + 1);
+    document.getElementById('cnt-research').textContent   = counts.research   || 0;
+    document.getElementById('cnt-internship').textContent = counts.internship || 0;
+    document.getElementById('cnt-job').textContent        = counts.job        || 0;
+    document.getElementById('cnt-club').textContent       = counts.club       || 0;
+    document.getElementById('cnt-fellowship').textContent = counts.fellowship || 0;
+    document.getElementById('cnt-ta').textContent         = counts.ta         || 0;
+
+    renderCards(OPPORTUNITIES);
+  }
+
+  function renderCards(list) {
+    const container = document.getElementById('feed-list');
+    const countEl   = document.getElementById('feed-count');
+    countEl.textContent = `${list.length} Opportunit${list.length === 1 ? 'y' : 'ies'} Found`;
+
+    container.innerHTML = list.map(o => `
+      <article class="listing-card ${o.applied ? 'applied' : ''}" id="card-${o.id}">
+        <div class="card-header">
+          <div class="card-meta">
+            <span class="type-badge type-${o.type}">${typLabel(o.type)}</span>
+            <span class="match-badge ${matchClass(o.match)}">● ${o.match}%</span>
+          </div>
+          <div class="card-actions">
+            <button class="icon-btn ${o.saved ? 'saved' : ''}" onclick="toggleSaved('${o.id}')" title="${o.saved ? 'Unsave' : 'Save'}">
+              ${o.saved ? '★' : '☆'}
+            </button>
+            <button class="${o.applied ? 'apply-btn applied-btn' : 'apply-btn'}" onclick="toggleApplied('${o.id}')" ${o.applied ? 'disabled' : ''}>
+              ${o.applied ? '✓ Applied' : 'Apply'}
+            </button>
+          </div>
+        </div>
+        <h3 class="card-title">${o.title}</h3>
+        <p class="card-org">${o.org}<span class="card-loc"> · ${o.loc}</span></p>
+        <p class="card-desc">${o.desc}</p>
+        <div class="card-footer">
+          <div class="card-tags">${o.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+          <div class="card-right">
+            ${o.deadline ? `<span class="deadline">Due ${o.deadline}</span>` : ''}
+            <span class="posted">${o.posted === 0 ? 'Today' : o.posted + 'd ago'}</span>
+          </div>
+        </div>
+      </article>
+    `).join('');
+  }
+
+  function typLabel(t) {
+    return { research:'Research', internship:'Internship', job:'Full-time Job', club:'Club / Org', fellowship:'Fellowship', ta:'TA / Grader' }[t] || t;
+  }
+
+  // ── Filters ───────────────────────────────────────────────────────────────
+  function applyFilters() {
+    const checkboxes = document.querySelectorAll('.filter-group input[type=checkbox]');
+    const types = ['research','internship','job','club','fellowship','ta'];
+    const checked = [...checkboxes].map((cb, i) => cb.checked ? types[i] : null).filter(Boolean);
+    const minMatch = parseInt(document.getElementById('match-slider').value);
+
+    const filtered = OPPORTUNITIES.filter(o =>
+      (checked.length === 0 || checked.includes(o.type)) && o.match >= minMatch
+    );
+    renderCards(filtered);
+  }
+
+  function updateMatchVal(v) {
+    document.getElementById('match-val').textContent = v + '%+';
+  }
+
+  // ── Apply / Save toggles ──────────────────────────────────────────────────
+  function toggleApplied(id) {
+    const o = OPPORTUNITIES.find(x => x.id === id);
+    if (!o || o.applied) return;
+    o.applied = true;
+    applyFilters();
+  }
+
+  function toggleSaved(id) {
+    const o = OPPORTUNITIES.find(x => x.id === id);
+    if (!o) return;
+    o.saved = !o.saved;
+    applyFilters();
+  }
+</script>
+</body>
+</html>

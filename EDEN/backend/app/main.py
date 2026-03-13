@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.routers import clubs, events
 
 app = FastAPI()
 
@@ -10,4 +11,7 @@ app.add_middleware(
   allow_methods=["*"],
   allow_headers=["*"],
 )
+
+app.include_router(clubs.router)
+app.include_router(events.router)
 

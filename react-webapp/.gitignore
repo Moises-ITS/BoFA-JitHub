@@ -27,3 +27,7 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Playwright E2E test artifacts
+frontend/test-results/
+frontend/playwright-report/

@@ -1,0 +1,80 @@
+/* ── Campus Navbar ── */
+.navbar {
+  background: rgba(15, 15, 15, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04), 0 4px 24px rgba(0,0,0,0.5);
+  z-index: 100;
+}
+
+.navLogo {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 700; font-size: 1.1rem;
+  background: linear-gradient(90deg, #ffffff 0%, #9CA3AF 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.navTagline {
+  font-size: 0.68rem; color: #6B7280; font-weight: 400;
+  -webkit-text-fill-color: #6B7280;
+  background: none;
+}
+.navRight {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Mode badge */
+.modeBadge {
+  display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+  padding: 6px 14px; border-radius: 999px;
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.5px;
+  transition: background 0.3s;
+  white-space: nowrap;
+}
+.modeBadge.mode-free   { background: rgba(255,255,255,0.08); color: #9CA3AF; border: 1px solid rgba(255,255,255,0.1); }
+.modeBadge.mode-locked { background: rgba(99,179,237,0.15); color: #e0f2fe; border: 1px solid rgba(99,179,237,0.25); }
+.modeBadge.mode-path   { background: rgba(232,121,249,0.15); color: #fae8ff; border: 1px solid rgba(232,121,249,0.25); }
+
+.exitModeBtn {
+  display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+  background: rgba(192, 57, 43, 0.12); border: 1px solid rgba(192, 57, 43, 0.3); color: #E74C3C;
+  padding: 6px 14px; border-radius: 999px; font-size: 0.78rem; font-weight: 600;
+  cursor: pointer; font-family: inherit; transition: all 0.15s;
+  white-space: nowrap;
+}
+.exitModeBtn:hover { background: rgba(192, 57, 43, 0.22); border-color: rgba(192, 57, 43, 0.5); }
+
+.navChip {
+  display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+  padding: 6px 14px; border-radius: 999px; font-size: 0.78rem; font-weight: 500; color: #9CA3AF;
+  white-space: nowrap;
+}
+
+.profileAvatarBtn {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: linear-gradient(135deg, #C0392B, #E67E22);
+  border: 2px solid rgba(192, 57, 43, 0.4);
+  color: #fff; font-weight: 800; font-size: 0.85rem; cursor: pointer;
+  font-family: inherit; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(192, 57, 43, 0.3);
+}
+.profileAvatarBtn:hover { border-color: rgba(192, 57, 43, 0.7); box-shadow: 0 2px 12px rgba(192, 57, 43, 0.5); transform: translateY(-1px); }
+
+.logoutBtn {
+  display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #9CA3AF;
+  padding: 6px 16px; border-radius: 999px; font-size: 0.78rem; font-weight: 500;
+  cursor: pointer; font-family: inherit; letter-spacing: 0.3px; transition: all 0.15s;
+  white-space: nowrap;
+}
+.logoutBtn:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; border-color: rgba(255,255,255,0.2); }

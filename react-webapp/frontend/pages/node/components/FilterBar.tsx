@@ -1,9 +1,5 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// components/FilterBar.tsx
-// The row of toggle buttons that show/hide node types
-// ─────────────────────────────────────────────────────────────────────────────
-
-import { NodeType } from "../types/graphNodes";
+import React, { memo } from "react";
+import type { NodeType } from "../types/graphNodes";
 import { TYPE_COLOR } from "../constants/maps";
 
 interface FilterBarProps {
@@ -11,11 +7,11 @@ interface FilterBarProps {
   onToggleType: (type: NodeType) => void; // called when a button is clicked
 }
 
-export default function FilterBar({ hiddenTypes, onToggleType }: FilterBarProps) {
+const FilterBar = memo(function FilterBar({ hiddenTypes, onToggleType }: FilterBarProps) {
   return (
     <div className="filterGroup">
       <label className="filterLabel">Show:</label>
-      {(["student", "professor", "company", "club"] as NodeType[]).map(type => {
+      {(["student", "company", "club", "interest"] as NodeType[]).map(type => {
         const active = !hiddenTypes.has(type); // true = visible, false = hidden
         const color  = TYPE_COLOR[type];
         return (
@@ -42,4 +38,6 @@ export default function FilterBar({ hiddenTypes, onToggleType }: FilterBarProps)
       })}
     </div>
   );
-}
+});
+
+export default FilterBar;

@@ -12,6 +12,19 @@ export interface User {
   bio: string | null
   clubs: string[]
   companies: string[]
+  interests: string[]
+  linkedinUrl: string | null
+}
+
+export interface ProfileUpdate {
+  gpa: number | null
+  major: string
+  graduationYear: number
+  bio: string
+  clubs: string[]
+  companies: string[]
+  interests: string[]
+  linkedinUrl?: string | null
 }
 
 interface AuthContextValue {
@@ -21,6 +34,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>
   signup: (data: SignupData) => Promise<void>
   logout: () => void
+  updateProfile: (data: ProfileUpdate) => Promise<void>
 }
 
 export interface SignupData {
@@ -33,6 +47,8 @@ export interface SignupData {
   bio: string
   clubs: string[]
   companies: string[]
+  interests: string[]
+  linkedinUrl?: string | null
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -92,8 +108,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
+  async function updateProfile(data: ProfileUpdate) {
+    const res = await fetch(`${API}/api/auth/profile`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    const updated = await res.json()
+    if (!res.ok) throw new Error(updated.error ?? "Update failed")
+    setUser(updated)
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, signup, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   )

@@ -110,6 +110,7 @@
 }
 
 .auth-form input,
+.auth-form select,
 .auth-form textarea {
   background: #0f1117;
   border: 1px solid #2a2d3a;
@@ -121,11 +122,55 @@
   transition: border-color 0.15s;
   width: 100%;
   box-sizing: border-box;
+  font-family: inherit;
+}
+
+.auth-form select {
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238b8fa8' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.9rem center;
+  padding-right: 2.2rem;
+}
+
+.auth-form select option {
+  background: #1a1d27;
+  color: #f0f0f0;
 }
 
 .auth-form input:focus,
+.auth-form select:focus,
 .auth-form textarea:focus {
   border-color: #4f6ef7;
+}
+
+/* ── Password show/hide ── */
+.auth-pw-wrap {
+  position: relative;
+}
+
+.auth-pw-wrap input {
+  padding-right: 2.6rem;
+}
+
+.auth-pw-eye {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b6f88;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.auth-pw-eye:hover {
+  color: #4f6ef7;
 }
 
 .auth-hint {
@@ -155,7 +200,8 @@
   margin-top: 0.5rem;
 }
 
-.auth-tag-input input {
+.auth-tag-input input,
+.auth-tag-input select {
   flex: 1;
 }
 

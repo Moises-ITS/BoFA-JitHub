@@ -5,14 +5,20 @@ const PROTECTED = ['/home', '/profile', '/eden', '/opportunities', '/research', 
 
 test.describe('Protected Route Guards', () => {
   test('unauthenticated user is redirected to / from protected routes', async ({ page }) => {
-    // Block /me so no session is restored
-    await page.route('**/api/auth/me', route => route.abort())
+    // No localStorage token set — AuthContext will skip /me and set user=null immediately
+    await page.route('**/api/auth/me', route =>
+      route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"Unauthorized"}' })
+    )
 
     for (const route of PROTECTED) {
       await page.goto(route)
-      await page.waitForLoadState('networkidle')
-      const url = new URL(page.url())
-      expect(['/', '/login'], `Expected redirect from ${route}`).toContain(url.pathname)
+      // Poll the in-page URL — SPA redirects via replaceState don't fire a load event
+      await page.waitForFunction(
+        () => ['/', '/login'].includes(window.location.pathname),
+        { timeout: 8_000 }
+      )
+      const pathname = new URL(page.url()).pathname
+      expect(['/', '/login'], `Expected redirect from ${route}`).toContain(pathname)
     }
   })
 
@@ -32,8 +38,7 @@ test.describe('Protected Route Guards', () => {
 
   test('authenticated user can reach /network', async ({ page }) => {
     await setupAuth(page)
-    // Also mock the graph data endpoint if it exists
-    await page.route('**/api/**', route => route.fulfill({ status: 200, body: '[]' })).catch(() => {})
+    await page.route('**/api/**', route => route.fulfill({ status: 200, body: '[]' }))
     await page.goto('/network')
     await page.waitForLoadState('networkidle')
     await expect(page).toHaveURL('/network')

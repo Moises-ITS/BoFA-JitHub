@@ -23,7 +23,7 @@ import { NetworkIntro }                   from "../../components/NetworkTransiti
 import CampusNavbar                       from "../../components/CampusNavbar";
 import "./CampusGraph.css";
 
-const API             = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+const API             = import.meta.env.VITE_API_URL ?? "";
 const LOCKED_RADIUS   = 220;
 const MAX_NEIGHBORS   = 9;
 const HUB_MAX         = 6;

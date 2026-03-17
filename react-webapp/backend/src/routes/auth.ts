@@ -23,7 +23,6 @@ router.post("/signup", async (req: Request, res: Response) => {
   }
 
   try {
-    // Check if email already exists
     const existing = await db.query("SELECT id FROM users WHERE email = $1", [email])
     if (existing.rows.length > 0) {
       res.status(409).json({ error: "An account with that email already exists" })
@@ -35,14 +34,10 @@ router.post("/signup", async (req: Request, res: Response) => {
     const clubList: string[]     = clubs     ?? []
     const companyList: string[]  = companies ?? []
     const interestList: string[] = interests ?? []
-
     const linkedinUrlVal = linkedinUrl?.trim() || null
 
-    // Create student node in Neo4j first to get the graph_node_id
     const graphNodeId = await createStudentNode({
-      id,
-      name,
-      major,
+      id, name, major,
       gpa: gpa ?? null,
       graduationYear,
       bio: bio ?? "",
@@ -52,7 +47,6 @@ router.post("/signup", async (req: Request, res: Response) => {
       linkedinUrl: linkedinUrlVal,
     })
 
-    // Insert into PostgreSQL
     await db.query(
       `INSERT INTO users (id, email, name, password_hash, major, gpa, graduation_year, bio, clubs, companies, interests, graph_node_id, linkedin_url)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
@@ -120,7 +114,7 @@ router.post("/login", async (req: Request, res: Response) => {
   }
 })
 
-// GET /api/auth/me — returns current user from token
+// GET /api/auth/me — returns current user from Bearer token
 router.get("/me", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.query(
@@ -151,7 +145,7 @@ router.get("/me", requireAuth, async (req: AuthRequest, res: Response) => {
   }
 })
 
-// GET /api/auth/interests — returns all unique interests from registered users
+// GET /api/auth/interests
 router.get("/interests", async (_req: Request, res: Response) => {
   try {
     const result = await db.query(
@@ -160,12 +154,12 @@ router.get("/interests", async (_req: Request, res: Response) => {
        ORDER BY interest`
     )
     res.json(result.rows.map((r: { interest: string }) => r.interest).filter(Boolean))
-  } catch (err) {
+  } catch {
     res.json([])
   }
 })
 
-// PUT /api/auth/profile — update editable profile fields
+// PUT /api/auth/profile
 router.put("/profile", requireAuth, async (req: AuthRequest, res: Response) => {
   const { gpa, major, graduationYear, bio, clubs, companies, interests, linkedinUrl } = req.body
 
@@ -181,7 +175,6 @@ router.put("/profile", requireAuth, async (req: AuthRequest, res: Response) => {
   const linkedinUrlVal         = linkedinUrl?.trim() || null
 
   try {
-    // Fetch current name for Neo4j (name is not editable here)
     const existing = await db.query("SELECT name FROM users WHERE id = $1", [req.userId])
     if (existing.rows.length === 0) {
       res.status(404).json({ error: "User not found" })
@@ -197,9 +190,7 @@ router.put("/profile", requireAuth, async (req: AuthRequest, res: Response) => {
     await updateStudentNode({
       id: req.userId!,
       name: existing.rows[0].name,
-      major,
-      gpa: gpaVal,
-      graduationYear,
+      major, gpa: gpaVal, graduationYear,
       bio: bio ?? "",
       clubs: clubList,
       companies: companyList,

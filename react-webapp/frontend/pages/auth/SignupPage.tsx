@@ -4,7 +4,7 @@ import { useAuth } from "../../context/AuthContext"
 import type { SignupData } from "../../context/AuthContext"
 import "./auth.css"
 
-const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001"
+const API = import.meta.env.VITE_API_URL ?? ""
 
 const STEPS = ["Account", "Academic", "Campus Life", "Profile"] as const
 type Step = 0 | 1 | 2 | 3

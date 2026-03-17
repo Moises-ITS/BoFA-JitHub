@@ -10,7 +10,7 @@ import { TYPE_COLOR, TYPE_EMOJI, TYPE_BADGE, DETAIL_ICONS } from "../constants/m
 import { getNodeId } from "../utils/getNodeId";
 import { useAuth } from "../../../context/AuthContext";
 
-const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+const API = import.meta.env.VITE_API_URL ?? "";
 
 interface Recommendation {
   id:              string;
@@ -45,13 +45,11 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
 
   // Fetch connection status whenever the selected node changes
   useEffect(() => {
-    if (!node || !token || node.type !== "student" || isOwnNode) {
+    if (!node || !user || node.type !== "student" || isOwnNode) {
       setConnStatus("none");
       return;
     }
-    fetch(`${API}/api/connections/status?userId=${node.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    fetch(`${API}/api/connections/status?userId=${node.id}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : { status: "none" })
       .then(data => {
         if (data.status === "accepted") setConnStatus("connected");
@@ -60,22 +58,20 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
         else setConnStatus("none");
       })
       .catch(() => setConnStatus("none"));
-  }, [node?.id, token, isOwnNode]); // eslint-disable-line
+  }, [node?.id, user, isOwnNode]); // eslint-disable-line
 
   // Fetch recommendations when viewing own node
   useEffect(() => {
-    if (!isOwnNode || !token) { setRecs([]); return; }
-    fetch(`${API}/api/connections/recommendations`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    if (!isOwnNode || !user) { setRecs([]); return; }
+    fetch(`${API}/api/connections/recommendations`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : [])
       .then((data: Recommendation[]) => setRecs(data))
       .catch(() => setRecs([]));
-  }, [isOwnNode, token]);
+  }, [isOwnNode, user]);
 
   // ── Connection actions ────────────────────────────────────────────────────
   const sendRequest = async () => {
-    if (!node || !token) return;
+    if (!node || !user) return;
     setConnLoading(true);
     try {
       const res = await fetch(`${API}/api/connections/request`, {
@@ -89,7 +85,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
   };
 
   const acceptRequest = async () => {
-    if (!node || !token) return;
+    if (!node || !user) return;
     setConnLoading(true);
     try {
       const res = await fetch(`${API}/api/connections/accept`, {
@@ -103,7 +99,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
   };
 
   const rejectRequest = async () => {
-    if (!node || !token) return;
+    if (!node || !user) return;
     setConnLoading(true);
     try {
       await fetch(`${API}/api/connections/reject`, {

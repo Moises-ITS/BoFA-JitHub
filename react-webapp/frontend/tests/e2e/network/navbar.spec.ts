@@ -78,8 +78,9 @@ test.describe('CampusGraph Navbar', () => {
     await expect(avatar).toContainText('T')
   })
 
-  test('Home button navigates to landing page', async ({ page }) => {
+  test('Home button navigates away from /network', async ({ page }) => {
     await page.locator('button.logoutBtn').click()
-    await expect(page).toHaveURL('/')
+    // Authenticated users are redirected / → /home by LandingPage
+    await expect(page).toHaveURL('/home', { timeout: 8_000 })
   })
 })

@@ -1,8 +1,11 @@
 import { test, expect } from '@playwright/test'
 
 test.describe('Landing Page', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.route('**/api/auth/me', route => route.abort())
+  test.beforeEach(async ({ page, context }) => {
+    await context.clearCookies()
+    await page.route('**/api/auth/me', route =>
+      route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"Unauthorized"}' })
+    )
     await page.goto('/')
     await page.waitForLoadState('networkidle')
   })
@@ -34,6 +37,9 @@ test.describe('Landing Page', () => {
   })
 
   test('authenticated user is redirected to /home', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('token', 'mock-token')
+    })
     await page.route('**/api/auth/me', route =>
       route.fulfill({
         status: 200,
@@ -44,7 +50,6 @@ test.describe('Landing Page', () => {
         }),
       })
     )
-    await page.addInitScript(() => localStorage.setItem('token', 'mock-token'))
     await page.goto('/')
     await expect(page).toHaveURL('/home', { timeout: 10_000 })
   })

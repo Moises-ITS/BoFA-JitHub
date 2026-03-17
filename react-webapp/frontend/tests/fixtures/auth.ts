@@ -16,9 +16,13 @@ export const TEST_USER = {
 
 export const TEST_TOKEN = 'mock-jwt-token'
 
-/** Inject a valid auth session into localStorage and mock /api/auth/me */
+/** Inject a valid auth session via localStorage and mock /api/auth/me */
 export async function setupAuth(page: Page) {
-  // Mock the /me endpoint so AuthContext validates the token
+  // addInitScript runs before any page scripts, so localStorage is populated at startup
+  await page.addInitScript((token) => {
+    localStorage.setItem('token', token)
+  }, TEST_TOKEN)
+
   await page.route('**/api/auth/me', route =>
     route.fulfill({
       status: 200,
@@ -26,11 +30,6 @@ export async function setupAuth(page: Page) {
       body: JSON.stringify(TEST_USER),
     })
   )
-
-  // Seed localStorage before the page loads
-  await page.addInitScript(({ token }) => {
-    localStorage.setItem('token', token)
-  }, { token: TEST_TOKEN })
 }
 
 /** Mock a successful login POST */
@@ -40,6 +39,13 @@ export async function mockLogin(page: Page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ token: TEST_TOKEN, user: TEST_USER }),
+    })
+  )
+  await page.route('**/api/auth/me', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(TEST_USER),
     })
   )
 }
@@ -62,6 +68,13 @@ export async function mockSignup(page: Page) {
       status: 201,
       contentType: 'application/json',
       body: JSON.stringify({ token: TEST_TOKEN, user: TEST_USER }),
+    })
+  )
+  await page.route('**/api/auth/me', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(TEST_USER),
     })
   )
 }

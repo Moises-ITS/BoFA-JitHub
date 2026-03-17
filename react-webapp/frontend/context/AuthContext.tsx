@@ -54,27 +54,20 @@ export interface SignupData {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser]     = useState<User | null>(null)
-  const [token, setToken]   = useState<string | null>(() => localStorage.getItem("token"))
+  const [user, setUser]       = useState<User | null>(null)
+  const [token, setToken]     = useState<string | null>(() => localStorage.getItem("token"))
   const [loading, setLoading] = useState(true)
 
-  // On mount, validate the stored token
   useEffect(() => {
-    if (!token) {
-      setLoading(false)
-      return
-    }
+    if (!token) { setLoading(false); return }
     fetch(`${API}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => (r.ok ? r.json() : Promise.reject()))
       .then((u: User) => setUser(u))
-      .catch(() => {
-        localStorage.removeItem("token")
-        setToken(null)
-      })
+      .catch(() => { localStorage.removeItem("token"); setToken(null) })
       .finally(() => setLoading(false))
-  }, [token])
+  }, []) // eslint-disable-line
 
   async function login(email: string, password: string) {
     const res = await fetch(`${API}/api/auth/login`, {

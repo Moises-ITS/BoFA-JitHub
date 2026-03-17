@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { AuthProvider } from "./context/AuthContext"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import { Layout } from "./pages/home/layout"
-import ProtectedRoute from "./components/ProtectedRoute"
 import LoginPage from "./pages/auth/LoginPage"
 import SignupPage from "./pages/auth/SignupPage"
 import Home from "./pages/home/Home"
@@ -11,22 +10,19 @@ import Profile from "./pages/profile/profile"
 import EventsPage from "./pages/events/EventsPage"
 import OpportunitiesPage from "./pages/opportunities/OpportunitiesPage"
 import ResearchPage from "./pages/research/ResearchPage"
+import LandingPage from "./pages/landing/LandingPage"
+import ProtectedRoute from "./components/ProtectedRoute"
 
 // Lazy-load the heavy D3 graph page — keeps initial bundle small
 const CampusGraph = lazy(() => import("./pages/node/CampusGraph"))
-const LandingPage = lazy(() => import("./pages/landing/LandingPage"))
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public pages */}
-          <Route path="/" element={
-            <Suspense fallback={null}>
-              <LandingPage />
-            </Suspense>
-          } />
+          {/* Public landing + auth pages */}
+          <Route path="/"       element={<LandingPage />} />
           <Route path="/login"  element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
 

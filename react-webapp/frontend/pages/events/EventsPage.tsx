@@ -4,7 +4,7 @@ import { ExternalLink, TrendingUp, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { HeatmapCalendar } from "./components/heatmap-calendar";
 
-const API = import.meta.env.VITE_EDEN_API_URL ?? "http://localhost:8000";
+const API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
 const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥", "🎨", "🏆", "💻", "🎪", "🌈"];
 
 // ─── Category filters ────────────────────────────────────────────────────────
@@ -20,14 +20,15 @@ const FILTERS = [
   { label: "Social",               value: "social" },
   { label: "Conference",           value: "conference" },
   { label: "Study Support",        value: "study support" },
+  { label: "Hackathon",            value: "hackathon" },
 ];
 
 // Major → bonus points per category (on top of interest match)
 const MAJOR_AFFINITIES: Record<string, Record<string, number>> = {
-  "Computer Science":        { workshop: 20, recruiting: 18, conference: 14, "info session": 12 },
-  "Information Technology":  { workshop: 20, recruiting: 18, "info session": 14 },
-  "Electrical Engineering":  { workshop: 20, recruiting: 18, "site tour": 14 },
-  "Mechanical Engineering":  { workshop: 18, recruiting: 16, "site tour": 18 },
+  "Computer Science":        { workshop: 20, recruiting: 18, conference: 14, "info session": 12, hackathon: 25 },
+  "Information Technology":  { workshop: 20, recruiting: 18, "info session": 14, hackathon: 22 },
+  "Electrical Engineering":  { workshop: 20, recruiting: 18, "site tour": 14, hackathon: 20 },
+  "Mechanical Engineering":  { workshop: 18, recruiting: 16, "site tour": 18, hackathon: 16 },
   "Civil Engineering":       { "site tour": 20, volunteering: 14, workshop: 12 },
   "Chemical Engineering":    { workshop: 18, recruiting: 16, "info session": 14 },
   "Biomedical Engineering":  { workshop: 16, recruiting: 14, volunteering: 16 },
@@ -176,7 +177,7 @@ export default function EventsPage() {
     <div className="max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-semibold mb-1">
-          <span className="bg-gradient-to-r from-[#C0392B] to-[#E67E22] bg-clip-text text-transparent">EDEN</span> — Events
+          <span className="bg-gradient-to-r from-[#C0392B] to-[#E67E22] bg-clip-text text-transparent">Events</span>
         </h1>
         <p className="text-[#9CA3AF]">Discover what's happening across 204 NJIT orgs ✨</p>
       </div>
@@ -187,32 +188,18 @@ export default function EventsPage() {
             <h2 className="text-lg font-semibold text-white">Upcoming Events</h2>
           </div>
 
-          {/* Category filter chips */}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setActiveFilter(null)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                activeFilter === null
-                  ? "bg-[#C0392B] border-[#C0392B] text-white"
-                  : "bg-white/5 border-white/10 text-[#9CA3AF] hover:border-white/30 hover:text-white"
-              }`}
-            >
-              All
-            </button>
+          {/* Category filter dropdown */}
+          <select
+            value={activeFilter ?? ""}
+            onChange={(e) => setActiveFilter(e.target.value || null)}
+            className="text-sm bg-[#1A1A1A] border border-white/10 text-white rounded-lg px-3 py-2 focus:outline-none focus:border-white/30 cursor-pointer"
+            style={{ colorScheme: "dark" }}
+          >
+            <option value="">All categories</option>
             {FILTERS.map((f) => (
-              <button
-                key={f.value}
-                onClick={() => setActiveFilter(activeFilter === f.value ? null : f.value)}
-                className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                  activeFilter === f.value
-                    ? "bg-[#C0392B] border-[#C0392B] text-white"
-                    : "bg-white/5 border-white/10 text-[#9CA3AF] hover:border-white/30 hover:text-white"
-                }`}
-              >
-                {f.label}
-              </button>
+              <option key={f.value} value={f.value}>{f.label}</option>
             ))}
-          </div>
+          </select>
 
           {loading && <p className="text-[#9CA3AF] text-sm">Loading...</p>}
           {!loading && upcoming.length === 0 && (

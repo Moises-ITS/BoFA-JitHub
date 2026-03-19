@@ -9,6 +9,26 @@ from app import models
 
 router = APIRouter(prefix="/events", tags=["events"])
 
+CLUB_ACRONYMS: dict[str, str] = {
+    "Institute of Electrical and Electronics Engineers": "IEEE",
+    "Association for Computing Machinery": "ACM",
+    "Society of Hispanic Professional Engineers": "SHPE",
+    "Society of Women Engineers": "SWE",
+    "National Society of Black Engineers": "NSBE",
+    "American Society of Civil Engineers": "ASCE",
+    "American Society of Mechanical Engineers": "ASME",
+    "American Institute of Chemical Engineers": "AIChE",
+    "Biomedical Engineering Society": "BMES",
+    "Google Developer Student Club": "GDSC",
+    "Student Government Association": "SGA",
+    "Latino American Student Organization": "LASO",
+    "Muslim Student Association": "MSA",
+    "Women in Computer Science": "WiCS",
+}
+
+def _display_name(full_name: str) -> str:
+    return CLUB_ACRONYMS.get(full_name, full_name)
+
 
 def _format_event(event, post, club):
     days_until = None
@@ -18,6 +38,7 @@ def _format_event(event, post, club):
         "event_id": event.event_id,
         "event_name": event.event_name,
         "event_type": event.event_type,
+        "event_category": event.event_category,
         "date": str(event.date) if event.date else None,
         "days_until": days_until,
         "start_time": str(event.start_time) if event.start_time else None,
@@ -30,7 +51,7 @@ def _format_event(event, post, club):
         "is_open_to_public": event.is_open_to_public,
         "event_link": event.event_link,
         "club_id": club.club_id,
-        "club_name": club.name,
+        "club_name": _display_name(club.name),
         "likes": post.likes if post else None,
         "comments": post.comments if post else None,
         "engagement_score": float(post.engagement_score) if post and post.engagement_score else None,
@@ -272,7 +293,7 @@ def get_clubs_trending(limit: int = Query(5, le=20), db: Session = Depends(get_d
         .limit(limit)
         .all()
     )
-    return [{"rank": i + 1, "club_name": r.name, "total_likes": r.total_likes, "event_count": r.event_count} for i, r in enumerate(results)]
+    return [{"rank": i + 1, "club_name": _display_name(r.name), "total_likes": r.total_likes, "event_count": r.event_count} for i, r in enumerate(results)]
 
 
 @router.get("/clubs/top-risers")
@@ -289,7 +310,7 @@ def get_clubs_top_risers(limit: int = Query(5, le=20), db: Session = Depends(get
         .limit(limit)
         .all()
     )
-    return [{"rank": i + 1, "club_name": r.name, "avg_score": round(float(r.avg_score), 2), "event_count": r.event_count} for i, r in enumerate(results)]
+    return [{"rank": i + 1, "club_name": _display_name(r.name), "avg_score": round(float(r.avg_score), 2), "event_count": r.event_count} for i, r in enumerate(results)]
 
 
 @router.get("/{event_id}")

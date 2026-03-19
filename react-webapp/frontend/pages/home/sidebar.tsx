@@ -4,7 +4,7 @@ import { Home, Calendar, Briefcase, Network, Microscope, User } from "lucide-rea
 
 const navItems = [
   { icon: Home, label: "Home", path: "/home" },
-  { icon: Calendar, label: "EDEN", path: "/eden" },
+  { icon: Calendar, label: "Events", path: "/events" },
   { icon: Briefcase, label: "Opportunities", path: "/opportunities" },
   { icon: Network, label: "Campus Network", path: "/network" },
   { icon: Microscope, label: "Research", path: "/research" },

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { X, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
-const API = import.meta.env.VITE_EDEN_API_URL ?? "http://localhost:8000";
+const API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
 const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const times = ["8am", "10am", "12pm", "2pm", "4pm", "6pm", "8pm", "10pm"];
 const timeHours = [8, 10, 12, 14, 16, 18, 20, 22];

@@ -45,7 +45,7 @@ export default function App() {
             <Route element={<Layout />}>
               <Route path="/home"          element={<Home />} />
               <Route path="/profile"       element={<Profile />} />
-              <Route path="/eden"          element={<EventsPage />} />
+              <Route path="/events"         element={<EventsPage />} />
               <Route path="/opportunities" element={<OpportunitiesPage />} />
               <Route path="/research"      element={<ResearchPage />} />
             </Route>

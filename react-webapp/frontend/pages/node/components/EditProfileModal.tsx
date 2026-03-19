@@ -24,17 +24,17 @@ const KNOWN_INTERESTS = [
 ]
 
 const NJIT_CLUBS = [
-  "American Institute of Chemical Engineers", "American Society of Civil Engineers",
-  "American Society of Mechanical Engineers", "Association for Computing Machinery",
-  "Biomedical Engineering Society", "Caribbean Student Association", "Chinese Student Association",
+  "AIChE", "ASCE",
+  "ASME", "ACM",
+  "BMES", "Caribbean Student Association", "Chinese Student Association",
   "Cyber Defense Organization", "Data Science Club", "Entrepreneurship Club", "Finance Club",
-  "Google Developer Student Club", "Hack@NJIT",
-  "Institute of Electrical and Electronics Engineers", "Investment Club",
-  "Korean Student Association", "Latino American Student Organization", "Mathematics Club",
-  "Muslim Student Association", "National Society of Black Engineers", "Physics Club",
-  "Pre-Medical Society", "Robotics Club", "Society of Hispanic Professional Engineers",
-  "Society of Women Engineers", "Software Engineering Club", "Student Government Association",
-  "Theatre Arts Group", "Vietnamese Student Association", "Women in Computer Science",
+  "GDSC", "Hack@NJIT",
+  "IEEE", "Investment Club",
+  "Korean Student Association", "LASO", "Mathematics Club",
+  "MSA", "NSBE", "Physics Club",
+  "Pre-Medical Society", "Robotics Club", "SHPE",
+  "SWE", "Software Engineering Club", "SGA",
+  "Theatre Arts Group", "Vietnamese Student Association", "WiCS",
 ]
 
 interface Props {

@@ -8,7 +8,7 @@ import { DeadlineChip } from "./deadline-chip";
 import { format } from "date-fns";
 import { useAuth } from "../../context/AuthContext";
 
-const EDEN_API = import.meta.env.VITE_EDEN_API_URL ?? "http://localhost:8000";
+const EVENTS_API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
 const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥", "🎨", "🏆", "💻", "🎪", "🌈"];
 
 function fmt12(time: string): string {
@@ -26,7 +26,7 @@ function ClubAvatar({ clubId, clubName, index }: { clubId: number; clubName: str
 }
 
 const moduleCards = [
-  { icon: Calendar, label: "EDEN", path: "/eden", color: "from-[#C0392B] to-[#E74C3C]" },
+  { icon: Calendar, label: "Events", path: "/events", color: "from-[#C0392B] to-[#E74C3C]" },
   { icon: Briefcase, label: "Opportunities", path: "/opportunities", color: "from-[#E67E22] to-[#F39C12]" },
   { icon: Network, label: "Campus Network", path: "/network", color: "from-[#3498DB] to-[#5DADE2]" },
   { icon: Microscope, label: "Research", path: "/research", color: "from-[#9B59B6] to-[#BB8FCE]" },
@@ -39,7 +39,7 @@ export default function Home() {
 
   const [topEvents, setTopEvents] = useState<any[]>([]);
   useEffect(() => {
-    fetch(`${EDEN_API}/events/upcoming?limit=3`)
+    fetch(`${EVENTS_API}/events/upcoming?limit=3`)
       .then((r) => r.json())
       .then((d) => setTopEvents(d.events ?? d))
       .catch(() => {});
@@ -78,7 +78,7 @@ export default function Home() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-white">Top Events For You This Week</h2>
-          <Link to="/eden" className="text-sm text-[#C0392B] hover:text-[#E74C3C] transition-colors">
+          <Link to="/events" className="text-sm text-[#C0392B] hover:text-[#E74C3C] transition-colors">
             View all →
           </Link>
         </div>

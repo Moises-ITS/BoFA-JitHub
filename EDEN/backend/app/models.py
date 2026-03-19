@@ -36,11 +36,13 @@ class Event(Base):
   distance_from_campus = Column(Numeric(6, 2))
   transportation_required = Column(Boolean, default=False)
   has_free_food = Column(Boolean, default=False)
+  is_open_to_public = Column(Boolean, default=True)
   event_link = Column(String(500))
   promo_link = Column(String(500))
   days_until_midterm = Column(Integer)
   recap_engagement_score = Column(Numeric(8, 4))
   predicted_engagement_score = Column(Numeric(8,4))
+  event_category = Column(String(50))
 
 class EventPost(Base):
   __tablename__ = "event_posts"
@@ -53,6 +55,8 @@ class EventPost(Base):
   comments = Column(Integer)
   avg_likes_last_ten = Column(Numeric(8,4))
   engagement_score = Column(Numeric(8, 4))
+  post_url = Column(String(500))
+  caption = Column(String)
 
 class Collaboration(Base):
   __tablename__ = "collaborations"

@@ -3,7 +3,7 @@ uvicorn
 sqlalchemy
 psycopg2-binary
 python-dotenv
-instaloader
 apscheduler
 openai
-browser-cookie3
+requests
+playwright

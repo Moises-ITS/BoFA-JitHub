@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, parseISO } from "date-fns";
@@ -71,14 +71,13 @@ export function HeatmapCalendar() {
   }, [weekIdx, availableWeeks]);
 
   const getEvents = (day: string, hour: number): SlotEvent[] => grid[`${day}:${hour}`] ?? [];
-  // Fixed absolute scale: 1 event = lightest, 5+ = full red
-  const getColor = (count: number) => {
-    if (count === 0) return "bg-white/5";
-    if (count === 1) return "bg-[#C0392B]/30";
-    if (count === 2) return "bg-[#C0392B]/50";
-    if (count === 3) return "bg-[#C0392B]/70";
-    if (count === 4) return "bg-[#C0392B]/85";
-    return "bg-[#C0392B]";
+  const getCellStyle = (count: number): CSSProperties => {
+    if (count === 0) return { backgroundColor: "rgba(255,255,255,0.05)" };
+    if (count === 1) return { backgroundColor: "rgba(192,57,43,0.30)" };
+    if (count === 2) return { backgroundColor: "rgba(192,57,43,0.50)" };
+    if (count === 3) return { backgroundColor: "rgba(192,57,43,0.70)" };
+    if (count === 4) return { backgroundColor: "rgba(192,57,43,0.85)" };
+    return { backgroundColor: "rgb(192,57,43)" };
   };
 
   const selectedEvents = selected ? (grid[selected.key] ?? []) : [];
@@ -102,7 +101,8 @@ export function HeatmapCalendar() {
             <button
               onClick={() => setWeekIdx((i) => Math.max(0, i - 1))}
               disabled={weekIdx === 0}
-              className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{ opacity: weekIdx === 0 ? 0.25 : 1, cursor: weekIdx === 0 ? "not-allowed" : "pointer" }}
+              className="p-1 rounded hover:bg-white/10 transition-colors"
             >
               <ChevronLeft className="w-3.5 h-3.5 text-[#9CA3AF]" />
             </button>
@@ -110,7 +110,8 @@ export function HeatmapCalendar() {
             <button
               onClick={() => setWeekIdx((i) => Math.min(availableWeeks.length - 1, i + 1))}
               disabled={weekIdx === availableWeeks.length - 1}
-              className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{ opacity: weekIdx === availableWeeks.length - 1 ? 0.25 : 1, cursor: weekIdx === availableWeeks.length - 1 ? "not-allowed" : "pointer" }}
+              className="p-1 rounded hover:bg-white/10 transition-colors"
             >
               <ChevronRight className="w-3.5 h-3.5 text-[#9CA3AF]" />
             </button>
@@ -156,7 +157,8 @@ export function HeatmapCalendar() {
                       setSelected(isSelected ? null : { key, day, time });
                     }}
                     title={count > 0 ? `${count} event${count !== 1 ? "s" : ""}` : undefined}
-                    className={`h-7 rounded transition-all ${getColor(count)} ${
+                    style={getCellStyle(count)}
+                    className={`h-7 rounded transition-all ${
                       count > 0 ? "cursor-pointer" : "cursor-default"
                     } ${isSelected ? "ring-2 ring-white/60" : "border border-transparent hover:border-white/20"}`}
                   />
@@ -170,7 +172,7 @@ export function HeatmapCalendar() {
             <span>Less</span>
             <div className="flex gap-1">
               {[0, 1, 2, 3, 4, 5].map((val) => (
-                <div key={val} className={`w-3 h-3 rounded ${getColor(val)}`} />
+                <div key={val} className="w-3 h-3 rounded" style={getCellStyle(val)} />
               ))}
             </div>
             <span>More</span>

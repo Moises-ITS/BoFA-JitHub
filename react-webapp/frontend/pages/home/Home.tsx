@@ -1,11 +1,29 @@
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Calendar, Briefcase, Network, Microscope, TrendingUp, Users } from "lucide-react";
+import { Calendar, Briefcase, Network, Microscope, TrendingUp, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
-import { mockEvents, mockOpportunities, mockClubLeaderboard } from "./mock-data";
+import { mockOpportunities, mockClubLeaderboard } from "./mock-data";
 import { MatchBadge } from "./match-badge";
 import { DeadlineChip } from "./deadline-chip";
 import { format } from "date-fns";
 import { useAuth } from "../../context/AuthContext";
+
+const EDEN_API = import.meta.env.VITE_EDEN_API_URL ?? "http://localhost:8000";
+const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥", "🎨", "🏆", "💻", "🎪", "🌈"];
+
+function fmt12(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  const period = h >= 12 ? "pm" : "am";
+  const hour = h % 12 || 12;
+  return m === 0 ? `${hour}${period}` : `${hour}:${String(m).padStart(2, "0")}${period}`;
+}
+
+function ClubAvatar({ clubId, clubName, index }: { clubId: number; clubName: string; index: number }) {
+  const [failed, setFailed] = useState(false);
+  if (!failed)
+    return <img src={`/club_pics/${clubId}.jpg`} alt={clubName} onError={() => setFailed(true)} className="w-10 h-10 rounded-lg object-cover shrink-0" />;
+  return <div className="text-3xl shrink-0 w-10 h-10 flex items-center justify-center">{CLUB_EMOJIS[index % CLUB_EMOJIS.length]}</div>;
+}
 
 const moduleCards = [
   { icon: Calendar, label: "EDEN", path: "/eden", color: "from-[#C0392B] to-[#E74C3C]" },
@@ -17,8 +35,15 @@ const moduleCards = [
 export default function Home() {
   const { user } = useAuth();
   const firstName = user?.name?.split(" ")[0] ?? "";
-  const topEvents = mockEvents.slice(0, 3);
   const topOpportunity = mockOpportunities[0];
+
+  const [topEvents, setTopEvents] = useState<any[]>([]);
+  useEffect(() => {
+    fetch(`${EDEN_API}/events/upcoming?limit=3`)
+      .then((r) => r.json())
+      .then((d) => setTopEvents(d.events ?? d))
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -60,37 +85,37 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {topEvents.map((event, index) => (
             <motion.div
-              key={event.id}
+              key={event.event_id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + index * 0.1 }}
               whileHover={{ y: -4 }}
+              onClick={() => event.post_url && window.open(event.post_url, "_blank")}
               className="bg-[#1A1A1A] border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all cursor-pointer"
             >
               <div className="flex items-start justify-between mb-3">
-                <div className="text-3xl">{event.clubLogo}</div>
-                <MatchBadge score={event.matchScore} />
+                <ClubAvatar clubId={event.club_id} clubName={event.club_name} index={index} />
+                {event.post_url && <ExternalLink className="w-4 h-4 text-[#9CA3AF]" />}
               </div>
-              <h3 className="font-medium text-white mb-1">{event.title}</h3>
-              <p className="text-sm text-[#9CA3AF] mb-3">{event.club}</p>
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`text-xs px-2 py-1 rounded-md ${
-                  event.type === "Recruiting" ? "bg-[#C0392B]/20 text-[#E74C3C]" :
-                  event.type === "Free Food" ? "bg-[#E67E22]/20 text-[#F39C12]" :
-                  event.type === "Networking" ? "bg-[#3498DB]/20 text-[#5DADE2]" :
-                  "bg-[#9B59B6]/20 text-[#BB8FCE]"
-                }`}>
-                  {event.type}
-                </span>
-                <span className="text-xs text-[#9CA3AF]">{event.distance}</span>
+              <h3 className="font-medium text-white mb-1">{event.event_name}</h3>
+              <p className="text-sm text-[#9CA3AF] mb-3">{event.club_name}</p>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                {event.event_category && (
+                  <span className="text-xs px-2 py-1 rounded-md bg-white/5 text-[#9CA3AF] capitalize">
+                    {event.event_category}
+                  </span>
+                )}
+                {event.has_free_food && (
+                  <span className="text-xs px-2 py-1 rounded-md bg-[#E67E22]/20 text-[#F39C12]">Free Food</span>
+                )}
+                {event.virtual && (
+                  <span className="text-xs px-2 py-1 rounded-md bg-[#9B59B6]/20 text-[#BB8FCE]">Virtual</span>
+                )}
               </div>
               <p className="text-xs text-[#9CA3AF]">
-                {format(event.date, "EEE, MMM d 'at' h:mm a")}
+                {event.date ? format(new Date(event.date + "T00:00:00"), "EEE, MMM d") : "Date TBD"}
+                {event.start_time ? ` at ${fmt12(event.start_time.slice(0, 5))}` : ""}
               </p>
-              <div className="flex items-center gap-1 mt-3 text-xs text-[#9CA3AF]">
-                <Users className="w-3 h-3" />
-                <span>{event.attendees} attending</span>
-              </div>
             </motion.div>
           ))}
         </div>

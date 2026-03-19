@@ -1,12 +1,55 @@
 import { Router, Response } from "express"
 import { db } from "../config/postgres"
 import { requireAuth, AuthRequest } from "../middlewear/auth"
-import { createConnectionInNeo4j } from "../services/graphService"
+import { createConnectionInNeo4j, getRecommendations } from "../services/graphService"
 
 const router = Router()
 
 // All connection routes require auth
 router.use(requireAuth)
+
+// GET /api/connections/status?userId=X — connection status with another user
+router.get("/status", async (req: AuthRequest, res: Response) => {
+  const { userId } = req.query
+  const myId = req.userId!
+  if (!userId || typeof userId !== "string") {
+    res.status(400).json({ error: "userId required" })
+    return
+  }
+  try {
+    const result = await db.query(
+      `SELECT status, from_user_id
+       FROM connection_requests
+       WHERE (from_user_id = $1 AND to_user_id = $2)
+          OR (from_user_id = $2 AND to_user_id = $1)
+       LIMIT 1`,
+      [myId, userId]
+    )
+    if (result.rows.length === 0) {
+      res.json({ status: "none" })
+      return
+    }
+    const row = result.rows[0]
+    res.json({
+      status:    row.status as string,
+      direction: row.from_user_id === myId ? "sent" : "received",
+    })
+  } catch (err) {
+    console.error("Connection status error:", err)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// GET /api/connections/recommendations — recommended students based on shared attributes
+router.get("/recommendations", async (req: AuthRequest, res: Response) => {
+  try {
+    const recs = await getRecommendations(req.userId!)
+    res.json(recs)
+  } catch (err) {
+    console.error("Recommendations error:", err)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
 
 // POST /api/connections/request — send a connection request
 router.post("/request", async (req: AuthRequest, res: Response) => {

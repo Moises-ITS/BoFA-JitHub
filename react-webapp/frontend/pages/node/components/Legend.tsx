@@ -1,12 +1,19 @@
-import { NodeType } from "../types/graphNodes";
+// ─────────────────────────────────────────────────────────────────────────────
+// components/Legend.tsx
+// Bottom-left legend showing node type colors
+// ─────────────────────────────────────────────────────────────────────────────
+
+import React, { memo } from "react";
+import type { NodeType } from "../types/graphNodes";
 import { TYPE_COLOR } from "../constants/maps";
 
-export default function Legend() {
+const Legend = memo(function Legend() {
   return (
     <div className="legend">
       <div className="legendTitle">Node Types</div>
-      {(["student", "professor", "company", "club"] as NodeType[]).map(type => (
+      {(["student", "company", "club", "interest"] as NodeType[]).map(type => (
         <div key={type} className="legendItem">
+          {/* color and shape (circle vs square for company) are dynamic — stay inline */}
           <div style={{
             width:        10,
             height:       10,
@@ -19,4 +26,6 @@ export default function Legend() {
       ))}
     </div>
   );
-}
+});
+
+export default Legend;

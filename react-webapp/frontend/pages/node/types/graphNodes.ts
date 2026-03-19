@@ -1,24 +1,35 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// types/graph.ts
+// All TypeScript interfaces and types for the graph page
+// Eventually move this to shared/ when backend is connected
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface NodeDetails {
-  major?:      string;
-  year?:       string;
-  gpa?:        string;
-  goal?:       string;
-  company?:    string;
-  role?:       string;
-  year_grad?:  string;
-  research?:   string;
-  open_roles?: string;
-  focus?:      string;
-  members?:    string;
+  major?:       string;
+  year?:        string;
+  gpa?:         string;
+  goal?:        string;
+  company?:     string;
+  role?:        string;
+  year_grad?:   string;
+  research?:    string;
+  open_roles?:  string;
+  focus?:       string;
+  members?:     string;
+  bio?:         string;
+  linkedinUrl?: string;
+  [key: string]: unknown;
 }
 
-export type NodeType = "student" | "club" | "company" | "professor";
+// Union type — NodeType can ONLY be one of these exact strings
+export type NodeType = "student" | "club" | "company" | "professor" | "interest";
 
 export interface GraphNode {
   id:      string;
   label:   string;
   type:    NodeType;
   details: NodeDetails;
+  // D3 adds these at runtime during simulation
   r?:  number;
   x?:  number;
   y?:  number;
@@ -27,7 +38,10 @@ export interface GraphNode {
 }
 
 export interface GraphLink {
-  source: string | GraphNode;
-  target: string | GraphNode;
-  rel:    string;
+  source:  string | GraphNode; // D3 replaces string IDs with node objects
+  target:  string | GraphNode;
+  rel:     string;
+  weight:  number; // 0–1  relationship strength
+  opacity: number; // 0–1  confidence / recency
+  style:   "solid" | "dashed" | "direct"; // solid = structural, dashed = inferred, direct = student↔student
 }

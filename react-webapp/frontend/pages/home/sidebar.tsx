@@ -17,9 +17,26 @@ export function Sidebar() {
       <div className="mb-8">
         <motion.div
           whileHover={{ scale: 1.05 }}
-          className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#C0392B] to-[#E67E22] flex items-center justify-center shadow-lg shadow-[#E67E22]/20"
+          className="w-12 h-12 rounded-xl bg-[#E67E22] flex items-center justify-center shadow-lg shadow-[#E67E22]/30"
         >
-          <span className="text-white font-bold text-sm">JH</span>
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-8 h-8">
+            {/* Center node */}
+            <circle cx="24" cy="24" r="5" fill="white" />
+            {/* Spokes */}
+            <line x1="24" y1="19" x2="24" y2="10" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="24" y1="29" x2="24" y2="38" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="19" y1="21" x2="11" y2="15" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="29" y1="27" x2="37" y2="33" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="29" y1="21" x2="37" y2="15" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="19" y1="27" x2="11" y2="33" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+            {/* Outer nodes */}
+            <circle cx="24" cy="7"  r="3.5" fill="white" />
+            <circle cx="24" cy="41" r="3.5" fill="white" />
+            <circle cx="8"  cy="13" r="3.5" fill="white" />
+            <circle cx="40" cy="35" r="3.5" fill="white" />
+            <circle cx="40" cy="13" r="3.5" fill="white" />
+            <circle cx="8"  cy="35" r="3.5" fill="white" />
+          </svg>
         </motion.div>
       </div>
 

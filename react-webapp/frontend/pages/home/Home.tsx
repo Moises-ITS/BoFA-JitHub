@@ -1,28 +1,37 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Calendar, Briefcase, Network, Microscope, TrendingUp, ExternalLink } from "lucide-react";
+import { Calendar, Briefcase, Network, Microscope, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
-import { mockOpportunities, mockClubLeaderboard } from "./mock-data";
+import { mockOpportunities } from "./mock-data";
 import { MatchBadge } from "./match-badge";
 import { DeadlineChip } from "./deadline-chip";
 import { format } from "date-fns";
 import { useAuth } from "../../context/AuthContext";
+import {
+  EventDetailModal, fmt12, CLUB_EMOJIS,
+} from "../events/components/EventDetailModal";
+import type { AttendeeInfo, UserProfile } from "../events/components/EventDetailModal";
 
 const EVENTS_API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
-const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥", "🎨", "🏆", "💻", "🎪", "🌈"];
-
-function fmt12(time: string): string {
-  const [h, m] = time.split(":").map(Number);
-  const period = h >= 12 ? "pm" : "am";
-  const hour = h % 12 || 12;
-  return m === 0 ? `${hour}${period}` : `${hour}:${String(m).padStart(2, "0")}${period}`;
-}
+const AUTH_API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 function ClubAvatar({ clubId, clubName, index }: { clubId: number; clubName: string; index: number }) {
   const [failed, setFailed] = useState(false);
   if (!failed)
     return <img src={`/club_pics/${clubId}.jpg`} alt={clubName} onError={() => setFailed(true)} className="w-10 h-10 rounded-lg object-cover shrink-0" />;
   return <div className="text-3xl shrink-0 w-10 h-10 flex items-center justify-center">{CLUB_EMOJIS[index % CLUB_EMOJIS.length]}</div>;
+}
+
+// change_pct: positive = up, negative = down, null = not yet available
+function ClubChangePct({ pct }: { pct: number | null }) {
+  if (pct === null) return <span className="text-xs text-[#6B7280]">—</span>;
+  const color = pct >= 0 ? "#1ABC9C" : "#E74C3C";
+  const sign = pct >= 0 ? "+" : "";
+  return (
+    <span style={{ color, fontSize: "11px", fontWeight: 600 }}>
+      {sign}{Math.round(pct)}%
+    </span>
+  );
 }
 
 const moduleCards = [
@@ -37,7 +46,19 @@ export default function Home() {
   const firstName = user?.name?.split(" ")[0] ?? "";
   const topOpportunity = mockOpportunities[0];
 
+  const profile: UserProfile = {
+    major: user?.major ?? "",
+    interests: user?.interests ?? [],
+    clubs: user?.clubs ?? [],
+  };
+
   const [topEvents, setTopEvents] = useState<any[]>([]);
+  const [trendingClubs, setTrendingClubs] = useState<any[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [modalAttendees, setModalAttendees] = useState<AttendeeInfo | null>(null);
+  const [connectionIds, setConnectionIds] = useState<Set<string>>(new Set());
+  const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
+
   useEffect(() => {
     fetch(`${EVENTS_API}/events/upcoming?limit=3`)
       .then((r) => r.json())
@@ -45,7 +66,75 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    fetch(`${EVENTS_API}/events/clubs/trending?limit=5`)
+      .then((r) => r.json())
+      .then(setTrendingClubs)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!selectedEvent) { setModalAttendees(null); return; }
+    fetch(`${EVENTS_API}/rsvp/${selectedEvent.event_id}/attendees`)
+      .then(r => r.json())
+      .then(setModalAttendees)
+      .catch(() => {});
+  }, [selectedEvent]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetch(`${AUTH_API}/api/connections`, { credentials: "include" })
+      .then(r => r.json())
+      .then((data: { id: string }[]) => setConnectionIds(new Set(data.map(c => c.id))))
+      .catch(() => {});
+  }, [user?.id]);
+
+  // Batch-fetch RSVP status for visible events
+  useEffect(() => {
+    if (!topEvents.length || !user?.id) return;
+    fetch(`${EVENTS_API}/rsvp/batch-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: user.id, event_ids: topEvents.map((e: any) => e.event_id) }),
+    })
+      .then(r => r.json())
+      .then((data: Record<string, string>) =>
+        setRsvpMap(prev => ({
+          ...prev,
+          ...Object.fromEntries(Object.entries(data).map(([k, v]) => [Number(k), v])),
+        }))
+      )
+      .catch(() => {});
+  }, [topEvents, user?.id]);
+
+  async function handleRsvpToggle(eventId: number) {
+    if (!user) return;
+    const current = rsvpMap[eventId] ?? null;
+    const newStatus = current === "going" ? null : "going";
+    setRsvpMap(prev => ({ ...prev, [eventId]: newStatus }));
+    try {
+      if (newStatus === null) {
+        await fetch(`${EVENTS_API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, { method: "DELETE" });
+      } else {
+        await fetch(`${EVENTS_API}/rsvp/${eventId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: user.id, user_name: user.name,
+            user_major: user.major ?? null,
+            user_interests: JSON.stringify(user.interests ?? []),
+            user_clubs: JSON.stringify(user.clubs ?? []),
+            status: "going",
+          }),
+        });
+      }
+    } catch {
+      setRsvpMap(prev => ({ ...prev, [eventId]: current }));
+    }
+  }
+
   return (
+    <>
     <div className="max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-semibold mb-2">
@@ -74,10 +163,10 @@ export default function Home() {
         ))}
       </div>
 
-      {/* Top Events This Week */}
+      {/* Upcoming Events */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-white">Top Events For You This Week</h2>
+          <h2 className="text-xl font-semibold text-white">Upcoming Events</h2>
           <Link to="/events" className="text-sm text-[#C0392B] hover:text-[#E74C3C] transition-colors">
             View all →
           </Link>
@@ -90,12 +179,11 @@ export default function Home() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + index * 0.1 }}
               whileHover={{ y: -4 }}
-              onClick={() => event.post_url && window.open(event.post_url, "_blank")}
+              onClick={() => setSelectedEvent(event)}
               className="bg-[#1A1A1A] border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all cursor-pointer"
             >
               <div className="flex items-start justify-between mb-3">
                 <ClubAvatar clubId={event.club_id} clubName={event.club_name} index={index} />
-                {event.post_url && <ExternalLink className="w-4 h-4 text-[#9CA3AF]" />}
               </div>
               <h3 className="font-medium text-white mb-1">{event.event_name}</h3>
               <p className="text-sm text-[#9CA3AF] mb-3">{event.club_name}</p>
@@ -180,8 +268,8 @@ export default function Home() {
             className="bg-[#1A1A1A] border border-white/10 rounded-xl p-4"
           >
             <div className="space-y-3">
-              {mockClubLeaderboard.slice(0, 5).map((club, index) => (
-                <div key={club.rank} className="flex items-center gap-3 group cursor-pointer">
+              {trendingClubs.map((club, index) => (
+                <div key={club.club_name} className="flex items-center gap-3 group cursor-pointer">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium ${
                     index === 0 ? "bg-gradient-to-br from-[#C0392B] to-[#E74C3C] text-white" :
                     index === 1 ? "bg-white/10 text-white" :
@@ -191,15 +279,11 @@ export default function Home() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-white truncate group-hover:text-[#C0392B] transition-colors">
-                      {club.club}
+                      {club.club_name}
                     </p>
-                    <p className="text-xs text-[#9CA3AF]">{club.events} events this semester</p>
+                    <p className="text-xs text-[#9CA3AF]">{club.event_count} events this semester</p>
                   </div>
-                  {club.trend === "up" && (
-                    <div className="text-[#1ABC9C] text-xs font-medium">
-                      +{club.change}
-                    </div>
-                  )}
+                  <ClubChangePct pct={club.change_pct ?? null} />
                 </div>
               ))}
             </div>
@@ -207,5 +291,18 @@ export default function Home() {
         </div>
       </div>
     </div>
+
+    {selectedEvent && (
+      <EventDetailModal
+        event={selectedEvent}
+        attendees={modalAttendees}
+        connectionIds={connectionIds}
+        rsvpStatus={rsvpMap[selectedEvent.event_id] ?? null}
+        onRsvpToggle={user ? handleRsvpToggle : undefined}
+        profile={profile}
+        onClose={() => setSelectedEvent(null)}
+      />
+    )}
+    </>
   );
 }

@@ -5,7 +5,8 @@ gets the data from postgresql
 doesn't know how to connect, just grabs the values
 '''
 
-from sqlalchemy import Column, Integer, String, Boolean, Date, Time, DateTime, Numeric, ForeignKey
+from datetime import datetime, timezone
+from sqlalchemy import Column, Integer, String, Boolean, Date, Time, DateTime, Numeric, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -69,4 +70,17 @@ class Sponsor(Base):
   sponsor_id = Column(Integer, primary_key = True)
   event_id = Column(Integer, ForeignKey("events.event_id"))
   sponsor_name = Column(String(255))
+
+class EventRSVP(Base):
+  __tablename__ = "event_rsvps"
+  rsvp_id        = Column(Integer, primary_key=True, autoincrement=True)
+  event_id       = Column(Integer, ForeignKey("events.event_id", ondelete="CASCADE"), nullable=False)
+  user_id        = Column(Text, nullable=False)
+  user_name      = Column(Text)
+  user_major     = Column(Text)
+  user_interests = Column(Text)
+  user_clubs     = Column(Text)
+  rsvp_time      = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+  status         = Column(Text, nullable=False, default="going")
+  __table_args__ = (UniqueConstraint("event_id", "user_id"),)
 

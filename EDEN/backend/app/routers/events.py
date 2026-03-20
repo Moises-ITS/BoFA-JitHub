@@ -56,6 +56,7 @@ def _format_event(event, post, club):
         "comments": post.comments if post else None,
         "engagement_score": float(post.engagement_score) if post and post.engagement_score else None,
         "post_url": post.post_url if post else None,
+        "caption": post.caption if post else None,
     }
 
 
@@ -152,15 +153,40 @@ def _deduplicate(results):
 def get_trending(
     public_only: bool = Query(False),
     event_type: str = Query(None, description="promo or recap"),
+    upcoming_only: bool = Query(False),
     limit: int = Query(20, le=100),
     offset: int = Query(0),
     db: Session = Depends(get_db),
 ):
-    """Top events by raw likes this semester."""
+    """Upcoming events sorted by club trending rank, then event engagement."""
+    # Build club → total likes map for the semester
+    club_likes = dict(
+        db.query(models.Club.club_id, func.sum(models.EventPost.likes))
+        .join(models.Event, models.Event.club_id == models.Club.club_id)
+        .join(models.EventPost, models.EventPost.event_id == models.Event.event_id)
+        .filter(models.EventPost.post_datetime >= SEMESTER_START)
+        .group_by(models.Club.club_id)
+        .all()
+    )
+
     q = _apply_filters(_base_query(db), public_only, event_type)
     q = q.filter(models.EventPost.post_datetime >= SEMESTER_START)
-    results = q.order_by(models.EventPost.likes.desc()).offset(offset).limit(limit * 3).all()
-    return [_format_event(e, p, c) for e, p, c in _deduplicate(results)][:limit]
+    if upcoming_only:
+        today = date.today()
+        q = q.filter(models.Event.date != None, models.Event.date >= today, models.Event.date <= SEMESTER_END)
+
+    results = q.limit(limit * 5).all()
+    deduped = _deduplicate(results)
+
+    # Sort: club total likes (desc) primary, event engagement (desc) secondary
+    def _sort_key(row):
+        event, post, club = row
+        club_total = club_likes.get(club.club_id, 0) or 0
+        event_eng = float(post.engagement_score) if post and post.engagement_score else 0
+        return (club_total, event_eng)
+
+    deduped.sort(key=_sort_key, reverse=True)
+    return [_format_event(e, p, c) for e, p, c in deduped[:limit]]
 
 
 @router.get("/top-risers")
@@ -293,7 +319,8 @@ def get_clubs_trending(limit: int = Query(5, le=20), db: Session = Depends(get_d
         .limit(limit)
         .all()
     )
-    return [{"rank": i + 1, "club_name": _display_name(r.name), "total_likes": r.total_likes, "event_count": r.event_count} for i, r in enumerate(results)]
+    # change_pct reserved for future weekly-snapshot comparison; None until historical data is tracked
+    return [{"rank": i + 1, "club_name": _display_name(r.name), "total_likes": r.total_likes, "event_count": r.event_count, "change_pct": None} for i, r in enumerate(results)]
 
 
 @router.get("/clubs/top-risers")

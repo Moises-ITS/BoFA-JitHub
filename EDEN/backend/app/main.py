@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import clubs, events
+from app.routers import clubs, events, rsvp
 
 app = FastAPI()
 
@@ -13,5 +13,6 @@ app.add_middleware(
 )
 
 app.include_router(clubs.router)
+app.include_router(rsvp.router)
 app.include_router(events.router)
 

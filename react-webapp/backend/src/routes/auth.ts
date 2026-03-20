@@ -10,7 +10,7 @@ const router = Router()
 
 // POST /api/auth/signup
 router.post("/signup", async (req: Request, res: Response) => {
-  const { name, email, password, major, gpa, graduationYear, bio, clubs, companies, interests, linkedinUrl } = req.body
+  const { name, email, password, major, gpa, graduationYear, bio, clubs, companies, interests, linkedinUrl, skills, looking_for, year } = req.body
 
   if (!name || !email || !password || !major || !graduationYear) {
     res.status(400).json({ error: "name, email, password, major, and graduationYear are required" })
@@ -34,6 +34,9 @@ router.post("/signup", async (req: Request, res: Response) => {
     const clubList: string[]     = clubs     ?? []
     const companyList: string[]  = companies ?? []
     const interestList: string[] = interests ?? []
+    const skillList: string[]    = skills    ?? []
+    const lookingForList: string[] = looking_for ?? []
+    const yearVal: string | null = year ?? null
     const linkedinUrlVal = linkedinUrl?.trim() || null
 
     const graphNodeId = await createStudentNode({
@@ -48,15 +51,15 @@ router.post("/signup", async (req: Request, res: Response) => {
     })
 
     await db.query(
-      `INSERT INTO users (id, email, name, password_hash, major, gpa, graduation_year, bio, clubs, companies, interests, graph_node_id, linkedin_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-      [id, email, name, passwordHash, major, gpa ?? null, graduationYear, bio ?? null, clubList, companyList, interestList, graphNodeId, linkedinUrlVal]
+      `INSERT INTO users (id, email, name, password_hash, major, gpa, graduation_year, bio, clubs, companies, interests, graph_node_id, linkedin_url, skills, looking_for, year)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+      [id, email, name, passwordHash, major, gpa ?? null, graduationYear, bio ?? null, clubList, companyList, interestList, graphNodeId, linkedinUrlVal, skillList, lookingForList, yearVal]
     )
 
     const token = jwt.sign({ userId: id }, process.env.JWT_SECRET!, { expiresIn: "7d" })
     res.status(201).json({
       token,
-      user: { id, name, email, major, gpa, graduationYear, bio, clubs: clubList, companies: companyList, interests: interestList, linkedinUrl: linkedinUrlVal },
+      user: { id, name, email, major, gpa, graduationYear, bio, clubs: clubList, companies: companyList, interests: interestList, linkedinUrl: linkedinUrlVal, skills: skillList, looking_for: lookingForList, year: yearVal },
     })
   } catch (err) {
     console.error("Signup error:", err)
@@ -75,7 +78,7 @@ router.post("/login", async (req: Request, res: Response) => {
 
   try {
     const result = await db.query(
-      "SELECT id, name, email, password_hash, major, gpa, graduation_year, bio, clubs, companies, interests, linkedin_url FROM users WHERE email = $1",
+      "SELECT id, name, email, password_hash, major, gpa, graduation_year, bio, clubs, companies, interests, linkedin_url, skills, looking_for, year FROM users WHERE email = $1",
       [email]
     )
 
@@ -106,6 +109,9 @@ router.post("/login", async (req: Request, res: Response) => {
         companies: user.companies,
         interests: user.interests,
         linkedinUrl: user.linkedin_url,
+        skills: user.skills ?? [],
+        looking_for: user.looking_for ?? [],
+        year: user.year ?? null,
       },
     })
   } catch (err) {
@@ -118,7 +124,7 @@ router.post("/login", async (req: Request, res: Response) => {
 router.get("/me", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.query(
-      "SELECT id, name, email, major, gpa, graduation_year, bio, clubs, companies, interests, linkedin_url FROM users WHERE id = $1",
+      "SELECT id, name, email, major, gpa, graduation_year, bio, clubs, companies, interests, linkedin_url, skills, looking_for, year FROM users WHERE id = $1",
       [req.userId]
     )
     if (result.rows.length === 0) {
@@ -138,6 +144,9 @@ router.get("/me", requireAuth, async (req: AuthRequest, res: Response) => {
       companies: u.companies,
       interests: u.interests,
       linkedinUrl: u.linkedin_url,
+      skills: u.skills ?? [],
+      looking_for: u.looking_for ?? [],
+      year: u.year ?? null,
     })
   } catch (err) {
     console.error("Me error:", err)
@@ -161,18 +170,21 @@ router.get("/interests", async (_req: Request, res: Response) => {
 
 // PUT /api/auth/profile
 router.put("/profile", requireAuth, async (req: AuthRequest, res: Response) => {
-  const { gpa, major, graduationYear, bio, clubs, companies, interests, linkedinUrl } = req.body
+  const { gpa, major, graduationYear, bio, clubs, companies, interests, linkedinUrl, skills, looking_for, year } = req.body
 
   if (!major || !graduationYear) {
     res.status(400).json({ error: "major and graduationYear are required" })
     return
   }
 
-  const clubList: string[]     = clubs     ?? []
-  const companyList: string[]  = companies ?? []
-  const interestList: string[] = interests ?? []
-  const gpaVal                 = gpa ?? null
-  const linkedinUrlVal         = linkedinUrl?.trim() || null
+  const clubList: string[]       = clubs       ?? []
+  const companyList: string[]    = companies   ?? []
+  const interestList: string[]   = interests   ?? []
+  const skillList: string[]      = skills      ?? []
+  const lookingForList: string[] = looking_for ?? []
+  const yearVal: string | null   = year ?? null
+  const gpaVal                   = gpa ?? null
+  const linkedinUrlVal           = linkedinUrl?.trim() || null
 
   try {
     const existing = await db.query("SELECT name FROM users WHERE id = $1", [req.userId])
@@ -182,9 +194,9 @@ router.put("/profile", requireAuth, async (req: AuthRequest, res: Response) => {
     }
 
     await db.query(
-      `UPDATE users SET major=$1, gpa=$2, graduation_year=$3, bio=$4, clubs=$5, companies=$6, interests=$7, linkedin_url=$8
-       WHERE id=$9`,
-      [major, gpaVal, graduationYear, bio ?? null, clubList, companyList, interestList, linkedinUrlVal, req.userId]
+      `UPDATE users SET major=$1, gpa=$2, graduation_year=$3, bio=$4, clubs=$5, companies=$6, interests=$7, linkedin_url=$8, skills=$9, looking_for=$10, year=$11
+       WHERE id=$12`,
+      [major, gpaVal, graduationYear, bio ?? null, clubList, companyList, interestList, linkedinUrlVal, skillList, lookingForList, yearVal, req.userId]
     )
 
     await updateStudentNode({
@@ -199,7 +211,7 @@ router.put("/profile", requireAuth, async (req: AuthRequest, res: Response) => {
     })
 
     const updated = await db.query(
-      "SELECT id, name, email, major, gpa, graduation_year, bio, clubs, companies, interests, linkedin_url FROM users WHERE id=$1",
+      "SELECT id, name, email, major, gpa, graduation_year, bio, clubs, companies, interests, linkedin_url, skills, looking_for, year FROM users WHERE id=$1",
       [req.userId]
     )
     const u = updated.rows[0]
@@ -208,6 +220,7 @@ router.put("/profile", requireAuth, async (req: AuthRequest, res: Response) => {
       graduationYear: u.graduation_year, bio: u.bio,
       clubs: u.clubs, companies: u.companies, interests: u.interests,
       linkedinUrl: u.linkedin_url,
+      skills: u.skills ?? [], looking_for: u.looking_for ?? [], year: u.year ?? null,
     })
   } catch (err) {
     console.error("Profile update error:", err)

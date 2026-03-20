@@ -167,6 +167,19 @@ export async function updateStudentNode(student: StudentInput): Promise<void> {
   }
 }
 
+// Removes the bidirectional CONNECTED_TO relationship between two student nodes.
+export async function removeConnectionFromNeo4j(userId1: string, userId2: string): Promise<void> {
+  const session = driver.session()
+  try {
+    await session.run(
+      `MATCH (a {id: $userId1})-[r:CONNECTED_TO]-(b {id: $userId2}) DELETE r`,
+      { userId1, userId2 }
+    )
+  } finally {
+    session.close()
+  }
+}
+
 // Creates a bidirectional CONNECTED_TO relationship between two student nodes.
 export async function createConnectionInNeo4j(userId1: string, userId2: string): Promise<void> {
   const session = driver.session()

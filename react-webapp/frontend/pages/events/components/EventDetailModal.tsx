@@ -3,7 +3,10 @@ import { format } from "date-fns";
 
 export const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥", "🎨", "🏆", "💻", "🎪", "🌈"];
 
-export interface UserProfile { major: string; interests: string[]; clubs: string[] }
+export interface UserProfile {
+  major: string; interests: string[]; clubs: string[]
+  skills?: string[]; looking_for?: string[]; year?: string | null
+}
 export interface AttendeeInfo { count: number; preview: { user_id: string; user_name: string; user_major: string }[] }
 
 export const CLUB_GROUPS: string[][] = [
@@ -56,6 +59,25 @@ export const MAJOR_AFFINITIES: Record<string, Record<string, number>> = {
   "Humanities / Liberal Arts": { social: 18, exposure: 16, volunteering: 14 },
 };
 
+export const LOOKING_FOR_AFFINITIES: Record<string, Record<string, number>> = {
+  "Internship":            { recruiting: 25, "info session": 18, conference: 12 },
+  "Job":                   { recruiting: 25, "info session": 18, conference: 12 },
+  "Co-op":                 { recruiting: 22, "info session": 16 },
+  "Hackathon Partner":     { hackathon: 28 },
+  "Research Opportunity":  { conference: 20, workshop: 16 },
+  "Study Group":           { "study support": 22, workshop: 12 },
+  "Networking":            { recruiting: 18, conference: 16, exposure: 14, "info session": 12 },
+  "New Friends":           { social: 22, exposure: 14 },
+};
+
+const YEAR_BOOSTS: Record<string, Record<string, number>> = {
+  "Freshman":  { social: 8, exposure: 6 },
+  "Sophomore": { social: 6, workshop: 4 },
+  "Junior":    { recruiting: 10, "info session": 8 },
+  "Senior":    { recruiting: 12, "info session": 10, conference: 6 },
+  "Graduate":  { conference: 10, workshop: 8, "info session": 6 },
+};
+
 export const CATEGORY_STYLE: Record<string, { bg: string; color: string }> = {
   hackathon:         { bg: "rgba(192,57,43,0.2)",    color: "#E74C3C" },
   workshop:          { bg: "rgba(52,152,219,0.2)",   color: "#5DADE2" },
@@ -70,6 +92,23 @@ export const CATEGORY_STYLE: Record<string, { bg: string; color: string }> = {
   exposure:          { bg: "rgba(52,73,94,0.4)",     color: "#AAB7B8" },
   "study support":   { bg: "rgba(52,152,219,0.15)",  color: "#85C1E9" },
 };
+
+/** Extract a short, readable blurb from a raw Instagram caption. */
+export function captionBlurb(caption: string): string {
+  // Drop hashtag-only lines, blank lines, and emoji-only lines
+  const lines = caption.split("\n")
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith("#") && /[a-zA-Z]/.test(l));
+  const text = lines[0] ?? caption;
+  // Strip inline hashtags and collapse whitespace
+  const clean = text.replace(/#\S+/g, "").replace(/\s{2,}/g, " ").trim();
+  // Take up to first sentence break
+  const sentence = clean.split(/(?<=[.!?])\s/)[0] ?? clean;
+  if (sentence.length <= 80) return sentence;
+  // Break at last word boundary before 80 chars
+  const cut = sentence.slice(0, 80).replace(/\s+\S*$/, "");
+  return cut + "…";
+}
 
 export function fmt12(time: string): string {
   const [h, m] = time.split(":").map(Number);
@@ -93,6 +132,8 @@ export function matchScore(event: any, profile: UserProfile): number {
   const clubName = event.club_name ?? "";
   for (const interest of profile.interests) score += INTEREST_AFFINITIES[interest]?.[cat] ?? 0;
   score += MAJOR_AFFINITIES[profile.major]?.[cat] ?? 0;
+  for (const intent of (profile.looking_for ?? [])) score += LOOKING_FOR_AFFINITIES[intent]?.[cat] ?? 0;
+  if (profile.year) score += YEAR_BOOSTS[profile.year]?.[cat] ?? 0;
   if (profile.clubs.some(c => c.toLowerCase() === clubName.toLowerCase())) score += 30;
   for (const group of CLUB_GROUPS) {
     const userInGroup = profile.clubs.some(c => group.includes(c));
@@ -126,6 +167,8 @@ export function explainMatch(event: any, profile: UserProfile): string {
     reasons.push(`your interest in ${matchingInterests[0]}`);
   if ((MAJOR_AFFINITIES[profile.major]?.[cat] ?? 0) >= 16)
     reasons.push(`your ${profile.major} background`);
+  const intentMatch = (profile.looking_for ?? []).find(i => (LOOKING_FOR_AFFINITIES[i]?.[cat] ?? 0) >= 18);
+  if (intentMatch) reasons.push(`you're looking for ${intentMatch.toLowerCase()}`);
   const catLabel = cat ? `This ${cat}` : "This event";
   if (reasons.length === 0) return `${catLabel} aligns well with your profile on JitHub.`;
   if (reasons.length === 1) return `${catLabel} is a strong fit because of ${reasons[0]}.`;
@@ -178,7 +221,7 @@ export function EventDetailModal({ event, attendees, connectionIds, rsvpStatus, 
 
         {event.caption && (
           <p style={{ color: "#9CA3AF", fontSize: "13px", lineHeight: 1.6, borderLeft: "2px solid rgba(255,255,255,0.1)", paddingLeft: "12px", marginBottom: "16px" }}>
-            {event.caption.slice(0, 120).trimEnd()}…
+            {captionBlurb(event.caption)}
           </p>
         )}
 

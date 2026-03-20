@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { motion } from "motion/react";
-import { Home, Calendar, Briefcase, Network, Microscope, User } from "lucide-react";
+import { Home, Calendar, Briefcase, Network, Microscope, User, Bot } from "lucide-react";
 
 const navItems = [
   { icon: Home, label: "Home", path: "/home" },
@@ -8,6 +8,7 @@ const navItems = [
   { icon: Briefcase, label: "Opportunities", path: "/opportunities" },
   { icon: Network, label: "Campus Network", path: "/network" },
   { icon: Microscope, label: "Research", path: "/research" },
+  { icon: Bot, label: "Sandbox", path: "/sandbox" },
   { icon: User, label: "Profile", path: "/profile" },
 ];
 

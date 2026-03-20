@@ -241,7 +241,7 @@ function TopEventRow({ event, index, onSelect }: { event: any; index: number; on
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function EventsPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const profile: UserProfile = {
     major: user?.major ?? "",
     interests: user?.interests ?? [],
@@ -277,7 +277,7 @@ export default function EventsPage() {
 
   useEffect(() => {
     if (!user?.id) return;
-    fetch(`${AUTH_API}/api/connections`, { credentials: "include" })
+    fetch(`${AUTH_API}/api/connections`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then((data: { id: string }[]) => setConnectionIds(new Set(data.map(c => c.id))))
       .catch(() => {});
@@ -353,7 +353,10 @@ export default function EventsPage() {
     }
     fetch(`${API}/rsvp/${eventId}/attendees`)
       .then(r => r.json())
-      .then((data: AttendeeInfo) => setAttendeeMap(prev => ({ ...prev, [eventId]: data })))
+      .then((data: AttendeeInfo) => {
+        setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
+        if (selectedEvent?.event_id === eventId) setModalAttendees(data);
+      })
       .catch(() => {});
   }
 

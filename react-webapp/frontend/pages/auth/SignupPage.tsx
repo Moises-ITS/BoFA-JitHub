@@ -120,6 +120,19 @@ const NJIT_CLUBS = [
   "WiCS",
 ]
 
+const KNOWN_SKILLS = [
+  "C++", "CAD", "Data Analysis", "Excel", "Figma", "Java", "JavaScript",
+  "Leadership", "MATLAB", "Photoshop", "Public Speaking", "Python",
+  "React", "Research", "Rust", "SQL", "TypeScript", "Writing",
+]
+
+const LOOKING_FOR_OPTIONS = [
+  "Co-op", "Hackathon Partner", "Internship", "Job",
+  "Networking", "New Friends", "Research Opportunity", "Study Group",
+]
+
+const YEAR_OPTIONS = ["Freshman", "Sophomore", "Junior", "Senior", "Graduate"]
+
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
     // Eye open — Feather-style stroke icon
@@ -163,6 +176,7 @@ export default function SignupPage() {
   const [major, setMajor]             = useState("")
   const [gpa, setGpa]                 = useState("")
   const [graduationYear, setGradYear] = useState("")
+  const [year, setYear]               = useState("")
 
   // Step 2 — Campus Life
   const [clubInput, setClubInput]             = useState("")
@@ -184,6 +198,11 @@ export default function SignupPage() {
       })
       .catch(() => {/* keep baseline on failure */})
   }, [])
+
+  // Skills & looking_for (part of Step 2)
+  const [skillInput, setSkillInput]       = useState("")
+  const [skills, setSkills]               = useState<string[]>([])
+  const [lookingFor, setLookingFor]       = useState<string[]>([])
 
   // Step 3 — Profile
   const [bio, setBio]               = useState("")
@@ -246,6 +265,9 @@ export default function SignupPage() {
       companies,
       interests,
       linkedinUrl:    linkedinUrl.trim() || null,
+      skills,
+      looking_for:    lookingFor,
+      year:           year || null,
     }
 
     try {
@@ -344,6 +366,13 @@ export default function SignupPage() {
                   value={graduationYear} onChange={e => setGradYear(e.target.value)}
                   required placeholder="e.g. 2027"
                 />
+              </label>
+              <label>
+                Year <span className="auth-hint">(optional)</span>
+                <select value={year} onChange={e => setYear(e.target.value)}>
+                  <option value="">Select year…</option>
+                  {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
               </label>
             </>
           )}
@@ -450,6 +479,53 @@ export default function SignupPage() {
                   {interests.map(i => (
                     <span key={i} className="auth-tag">
                       {i} <button type="button" onClick={() => removeItem(i, interests, setInterests)}>×</button>
+                    </span>
+                  ))}
+                </div>
+              </fieldset>
+
+              <fieldset className="auth-fieldset">
+                <legend>Skills <span className="auth-hint">(optional)</span></legend>
+                <div className="auth-tag-input">
+                  <select value={skillInput} onChange={e => setSkillInput(e.target.value)}>
+                    <option value="">Select a skill…</option>
+                    {KNOWN_SKILLS.filter(s => !skills.includes(s)).map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                    <option value="custom">Custom skill…</option>
+                  </select>
+                  <button type="button" onClick={() => addItem(skillInput === "custom" ? "" : skillInput, skills, setSkills, setSkillInput)}>Add</button>
+                </div>
+                {skillInput === "custom" && (
+                  <div className="auth-tag-input" style={{ marginTop: "0.5rem" }}>
+                    <input
+                      placeholder="Type a skill and press Enter"
+                      onKeyDown={e => {
+                        if (e.key === "Enter") { e.preventDefault(); addItem(toTitleCase((e.target as HTMLInputElement).value), skills, setSkills, () => setSkillInput("")); (e.target as HTMLInputElement).value = "" }
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="auth-tags">
+                  {skills.map(s => (
+                    <span key={s} className="auth-tag">
+                      {s} <button type="button" onClick={() => removeItem(s, skills, setSkills)}>×</button>
+                    </span>
+                  ))}
+                </div>
+              </fieldset>
+
+              <fieldset className="auth-fieldset">
+                <legend>Looking for <span className="auth-hint">(optional)</span></legend>
+                <div className="auth-tags" style={{ marginTop: "0.5rem" }}>
+                  {LOOKING_FOR_OPTIONS.map(opt => (
+                    <span
+                      key={opt}
+                      className="auth-tag"
+                      style={{ cursor: "pointer", opacity: lookingFor.includes(opt) ? 1 : 0.45 }}
+                      onClick={() => setLookingFor(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt])}
+                    >
+                      {lookingFor.includes(opt) ? "✓ " : ""}{opt}
                     </span>
                   ))}
                 </div>

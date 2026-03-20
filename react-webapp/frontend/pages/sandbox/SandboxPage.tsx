@@ -16,6 +16,27 @@ const STARTERS = [
   "Find me a hackathon",
 ];
 
+// ── Topic extraction ───────────────────────────────────────────────────────────
+const TOPIC_MAP: [RegExp, string][] = [
+  [/hackathon|hack[- ]?a?thon/i,                      "hackathons"],
+  [/network(ing)?|meet people|connect with people/i,  "networking"],
+  [/internship|co-?op|\bjob\b|career|recruit|hiring/i,"career"],
+  [/research|lab\b|professor|faculty/i,               "research"],
+  [/free food|snack|food/i,                           "free food"],
+  [/study|homework|tutor|academic/i,                  "academics"],
+  [/\bclub\b|org(anization)?|\bjoin\b/i,              "clubs"],
+  [/social|hang(ing)?|party|fun/i,                    "social"],
+  [/tech|coding|programming|software|\bcs\b/i,        "tech/CS"],
+  [/art|design|creative|music|performance/i,          "arts"],
+  [/sport|athletic|gym|fitness/i,                     "sports"],
+  [/culture|cultural|diversity|identity/i,            "culture"],
+  [/volunteer|community service/i,                    "community service"],
+];
+
+function extractTopics(text: string): string[] {
+  return TOPIC_MAP.filter(([re]) => re.test(text)).map(([, topic]) => topic);
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface ChatAction {
@@ -187,15 +208,38 @@ function InputBar({ value, onChange, onSend, disabled }: {
 export default function SandboxPage() {
   const { user, token } = useAuth();
 
-  const [messages, setMessages]       = useState<Message[]>([]);
+  const storageKey = `jiti_chat_${user?.id ?? "guest"}`;
+
+  const [messages, setMessages]       = useState<Message[]>(() => {
+    try {
+      const saved = localStorage.getItem(`jiti_chat_${user?.id ?? "guest"}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [input, setInput]             = useState("");
   const [loading, setLoading]         = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [chatInterests, setChatInterests] = useState<string[]>([]);
+
+  // Load persisted chat interests on mount
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${AUTH_API}/api/chat-memory`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: { topic: string }[]) => setChatInterests(rows.map(r => r.topic)))
+      .catch(() => {});
+  }, [token]); // eslint-disable-line
 
   const cachedEventsRef = useRef<any[]>([]);
   const scrollRef       = useRef<HTMLDivElement>(null);
+
+  // Persist messages to localStorage whenever they change
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, JSON.stringify(messages)); }
+    catch { /* storage full — silent */ }
+  }, [messages, storageKey]);
 
   // Auto-scroll to bottom whenever messages or loading state change
   useEffect(() => {
@@ -203,6 +247,11 @@ export default function SandboxPage() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, loading]);
+
+  function clearHistory() {
+    setMessages([]);
+    localStorage.removeItem(storageKey);
+  }
 
   async function fetchContext() {
     const [upcomingRes, trendingRes, recsRes] = await Promise.all([
@@ -275,6 +324,23 @@ export default function SandboxPage() {
         year:        user?.year ?? null,
       };
 
+      // Record any topics found in this message (fire-and-forget)
+      const newTopics = extractTopics(text);
+      if (newTopics.length > 0 && token) {
+        fetch(`${AUTH_API}/api/chat-memory/record`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ topics: newTopics }),
+        }).then(() => {
+          // Optimistically merge new topics into local state
+          setChatInterests(prev => {
+            const merged = [...prev];
+            for (const t of newTopics) if (!merged.includes(t)) merged.push(t);
+            return merged;
+          });
+        }).catch(() => {});
+      }
+
       const res = await fetch(`${EVENTS_API}/sandbox/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -292,6 +358,7 @@ export default function SandboxPage() {
               skills:          profile.skills,
               looking_for:     profile.looking_for,
               graduation_year: user?.graduationYear ?? null,
+              chat_interests:  chatInterests,
             },
           },
         }),
@@ -375,6 +442,16 @@ export default function SandboxPage() {
           <img src={JITI_AVATAR} alt="" style={{ width: "28px", height: "28px", borderRadius: "50%", objectFit: "cover" }} />
           <h1 style={{ fontSize: "20px", fontWeight: 600, color: "#fff", margin: 0 }}>Sandbox</h1>
           <span style={{ fontSize: "11px", color: "#4B5563", marginLeft: "2px" }}>GPT-4o-mini</span>
+          {messages.length > 0 && (
+            <button
+              onClick={clearHistory}
+              style={{ marginLeft: "auto", fontSize: "12px", color: "#4B5563", background: "none", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: "6px" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "#9CA3AF")}
+              onMouseLeave={e => (e.currentTarget.style.color = "#4B5563")}
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {/* Messages */}

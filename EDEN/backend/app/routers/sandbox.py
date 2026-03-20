@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -30,6 +31,7 @@ class ProfileContext(BaseModel):
     skills: Optional[list[str]] = []
     looking_for: Optional[list[str]] = []
     graduation_year: Optional[int] = None
+    chat_interests: Optional[list[str]] = []
 
 class EventContext(BaseModel):
     event_id: Optional[int] = None
@@ -92,18 +94,22 @@ NJIT FACTS:
 
 RESPONSE RULES:
 1. ALWAYS respond with valid JSON: {"message": "...", "actions": [...]}
-2. actions is a list — each item has: type ("view_event"|"connect"|"view_profile"), label (short text), and either event_id (int) or user_id+user_name (string)
+2. actions is a list — each item has: type ("view_event"|"connect"|"view_profile"), label (short text), and either event_id (int) or user_id+user_name (string). NEVER include event IDs, user IDs, or any numeric IDs in the message text — IDs belong only in the actions array fields.
+2b. Every event you mention by name in the message MUST have a corresponding view_event action. Never say "here's the card for one of those events" — include a separate action pill for EVERY event you name.
 3. Be specific — tie every recommendation to the user's actual major, interests, skills, or looking_for. Never say "you might want to check out" without a concrete reason.
 4. Only draw genuine analogies. Social ≠ gardening. Community engagement ≠ gardening. Sustainability = gardening. AI + plant science = gardening + CS. If the connection requires two or more inferential leaps, do NOT make it — just say there's no match.
-5. When recommending a club, say WHY it fits this specific user based on hard facts: shared major, shared interest keywords, or a real past event. "Community events might lead to gardening" is NOT acceptable reasoning.
+5. When asked about a specific event type from a specific club (e.g. "networking events from ACM"): search CLUB HISTORY for that club. If no events of that type exist, say "I don't see past [type] events from [Club] in the data" — then immediately pivot to listing whatever events from that club ARE in CLUB HISTORY so the user can judge. Do NOT speculate about what the club "generally focuses on", "typically does", or "usually hosts". Do NOT suggest contacting them directly. Stop at the data; pivot to what you have.
 6. If no upcoming event matches: scan CLUB HISTORY for the closest past event, name it explicitly, include a view_event action. Say "Nothing upcoming for X, but [Club] hosted [Event Name] ([semester]) — here's the card."
 7. If nothing in history matches either: be honest ("I don't see anything on campus for X right now") and name only clubs whose mission is genuinely adjacent, with a specific reason.
 8. Keep message under 180 words, plain text only (no markdown, no bullet points).
 9. Never invent names or details not in the provided context. If a club has no events in CLUB HISTORY, say so — do NOT fabricate a past event or describe one as "specific past event not listed".
 10. Today's date is {today}. Current semester week: {week}. This calendar week runs {week_mon} to {week_sun}. "This week" means dates {week_mon} through {week_sun} ONLY — events on {week_mon_next} or later are NEXT week, not this week.
-11. When asked about "top", "best", or "most popular" events: use TOP EVENTS THIS SEMESTER — list #1, #2, #3 each on its own sentence with the event name and club. Include a separate view_event action for each. Do NOT say you lack rankings. Do NOT use CLUB HISTORY for current-semester top-event questions.
+11. When asked about "top", "best", or "most popular" EVENTS: use TOP EVENTS THIS SEMESTER — list #1, #2, #3 each on its own sentence with the event name and club. Include a separate view_event action for each. Do NOT say you lack rankings. Do NOT use CLUB HISTORY for current-semester top-event questions.
 12. When asked "what's trending" or "what's happening on campus": list the top 3 events from TOP EVENTS THIS SEMESTER by name and club, one sentence each, and include a view_event action for every one. Do not summarize into a single event.
 13. CLUB HISTORY contains past semesters only — use it when asked about past events or when nothing current matches. Events include a semester label like [Fall 2024] or [Spring 2025] — always state the semester when referencing them.
+14. When asked about popular, biggest, or most active CLUBS (not events): use TOP CLUBS BY POPULARITY. Rank by follower count first, then total engagement as a tiebreaker. If the question specifies a time range (e.g. "since 2023"), filter by the SINCE {year} ENGAGEMENT column. Never redirect a club question to the events list.
+15. "connect" actions are ONLY for individual students listed in CONNECTION RECOMMENDATIONS — they require a real user_id. NEVER emit a connect action for a club, organization, or any entity that is not a person in the recommendations list.
+16. Never emit duplicate actions. If your response mentions the same event or person more than once, include only one action for that entity. Each action must be unique.
 """.strip()
 
 def _semester_week(today: date) -> str:
@@ -141,7 +147,7 @@ def _build_club_history(club_history: list[dict]) -> str:
         lines.append(f"  {club}: {names}")
     return "\n".join(lines)
 
-def _build_system_prompt(context: ContextPayload, club_bios: list[dict], club_history: list[dict], today: date) -> str:
+def _build_system_prompt(context: ContextPayload, club_bios: list[dict], club_history: list[dict], club_popularity: list[dict], today: date) -> str:
     week_mon      = today - timedelta(days=today.weekday())          # Monday of current week
     week_sun      = week_mon + timedelta(days=6)                     # Sunday of current week
     week_mon_next = week_mon + timedelta(days=7)                     # Monday of next week
@@ -151,6 +157,16 @@ def _build_system_prompt(context: ContextPayload, club_bios: list[dict], club_hi
             .replace("{week_mon}", str(week_mon))
             .replace("{week_sun}", str(week_sun))
             .replace("{week_mon_next}", str(week_mon_next)))
+
+    # Club popularity ranking
+    if club_popularity:
+        lines = []
+        for i, c in enumerate(club_popularity):
+            followers  = f"{c['followers']:,}" if c['followers'] else "N/A"
+            eng_total  = f"{float(c['engagement_total']):.1f}" if c['engagement_total'] else "0"
+            eng_since  = f"{float(c['engagement_since_2023']):.1f}" if c['engagement_since_2023'] else "0"
+            lines.append(f"  #{i+1} | {c['name']} | {followers} followers | {eng_total} all-time engagement | {eng_since} since-2023 engagement")
+        base += "\n\nTOP CLUBS BY POPULARITY (ranked by Instagram followers; engagement = sum of post scores):\n" + "\n".join(lines)
 
     # Club knowledge block
     if club_bios:
@@ -185,6 +201,8 @@ def _build_system_prompt(context: ContextPayload, club_bios: list[dict], club_hi
         f"  Looking for: {', '.join(p.looking_for or []) or 'Not specified'}",
         f"  Graduation: {p.graduation_year or 'Unknown'}",
     ]
+    if p.chat_interests:
+        profile_lines.append(f"  Past chat interests (topics they repeatedly ask about): {', '.join(p.chat_interests)}")
     base += "\n" + "\n".join(profile_lines)
 
     # Upcoming events (compact one-liner per event)
@@ -230,7 +248,7 @@ async def sandbox_chat(body: ChatRequest, db: Session = Depends(get_db)):
     today = date.today()
 
     try:
-        # Fetch top 15 clubs with bios
+        # Fetch top clubs with bios
         club_rows = (
             db.query(models.Club.name, models.Club.bio)
             .filter(models.Club.bio.isnot(None))
@@ -238,6 +256,34 @@ async def sandbox_chat(body: ChatRequest, db: Session = Depends(get_db)):
             .all()
         )
         club_bios = [{"name": r.name, "bio": r.bio} for r in club_rows]
+
+        # Club popularity: follower count + cumulative engagement (all-time and since 2023)
+        cutoff = date(2023, 1, 1)
+        pop_rows = (
+            db.query(
+                models.Club.name,
+                models.Club.follower_count,
+                func.sum(models.EventPost.engagement_score).label("engagement_total"),
+                func.sum(
+                    func.coalesce(models.EventPost.engagement_score, 0)
+                ).filter(models.Event.date >= cutoff).label("engagement_since_2023"),
+            )
+            .outerjoin(models.Event, models.Event.club_id == models.Club.club_id)
+            .outerjoin(models.EventPost, models.EventPost.event_id == models.Event.event_id)
+            .group_by(models.Club.club_id, models.Club.name, models.Club.follower_count)
+            .order_by(models.Club.follower_count.desc().nullslast())
+            .limit(25)
+            .all()
+        )
+        club_popularity = [
+            {
+                "name":                r.name,
+                "followers":           r.follower_count,
+                "engagement_total":    r.engagement_total,
+                "engagement_since_2023": r.engagement_since_2023,
+            }
+            for r in pop_rows
+        ]
 
         # Fetch top past events by engagement for club history (capped to control token use)
         history_rows = (
@@ -266,7 +312,7 @@ async def sandbox_chat(body: ChatRequest, db: Session = Depends(get_db)):
             for r in history_rows
         ]
 
-        system_prompt = _build_system_prompt(body.context, club_bios, club_history, today)
+        system_prompt = _build_system_prompt(body.context, club_bios, club_history, club_popularity, today)
 
         messages = [{"role": "system", "content": system_prompt}]
         for h in body.history[-6:]:

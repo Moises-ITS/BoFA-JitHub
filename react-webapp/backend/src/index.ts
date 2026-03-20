@@ -7,7 +7,7 @@ const __dirname  = path.dirname(__filename)
 dotenv.config({ path: path.resolve(__dirname, "../.env") })
 
 // Dynamic imports ensure dotenv runs before any module that reads process.env
-const [expressModule, { default: cors }, , , graphMod, authMod, connMod, { runMigrations }, { ensureNodeIds }] =
+const [expressModule, { default: cors }, , , graphMod, authMod, connMod, chatMemMod, { runMigrations }, { ensureNodeIds }] =
   await Promise.all([
     import("express"),
     import("cors"),
@@ -16,6 +16,7 @@ const [expressModule, { default: cors }, , , graphMod, authMod, connMod, { runMi
     import("./routes/graph.js"),
     import("./routes/auth.js"),
     import("./routes/connections.js"),
+    import("./routes/chatMemory.js"),
     import("./db/migrate.js"),
     import("./services/graphService.js"),
   ])
@@ -44,9 +45,10 @@ app.use(cors({
 }))
 app.use(express.json())
 
-app.use("/api/graph",       graphMod.default)
-app.use("/api/auth",        authMod.default)
-app.use("/api/connections", connMod.default)
+app.use("/api/graph",        graphMod.default)
+app.use("/api/auth",         authMod.default)
+app.use("/api/connections",  connMod.default)
+app.use("/api/chat-memory",  chatMemMod.default)
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" })

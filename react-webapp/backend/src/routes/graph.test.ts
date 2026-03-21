@@ -30,7 +30,9 @@ const sampleNodes = [
   { id: 'club-hackclub',  label: 'Hack Club', type: 'club', details: {} },
 ]
 
-const sampleLinks = [
+type GraphLinksResponse = Awaited<ReturnType<typeof graphService.getLinks>>
+
+const sampleLinks: GraphLinksResponse = [
   { source: 'student-alice', target: 'club-hackclub', rel: 'MEMBER_OF', weight: 0.65, opacity: 0.75, style: 'solid' },
 ]
 

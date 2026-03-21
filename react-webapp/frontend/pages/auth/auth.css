@@ -67,6 +67,10 @@
   width: min(100%, 44rem);
 }
 
+.auth-card--clerk {
+  width: min(100%, 34rem);
+}
+
 .auth-header {
   display: grid;
   gap: 0.8rem;
@@ -470,6 +474,122 @@
 
 .auth-switch a:hover {
   color: #fff;
+}
+
+.auth-clerk-shell {
+  width: 100%;
+}
+
+.auth-clerk-shell .cl-rootBox,
+.auth-clerk-shell .cl-cardBox {
+  width: 100%;
+}
+
+.auth-clerk-shell .cl-card {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.auth-clerk-shell .cl-header,
+.auth-clerk-shell .cl-footer {
+  padding: 0;
+  margin: 0;
+}
+
+.auth-clerk-shell .cl-headerTitle,
+.auth-clerk-shell .cl-headerSubtitle {
+  display: none;
+}
+
+.auth-clerk-shell .cl-main {
+  gap: 1rem;
+}
+
+.auth-clerk-shell .cl-form {
+  gap: 1rem;
+}
+
+.auth-clerk-shell .cl-formFieldLabel,
+.auth-clerk-shell .cl-formFieldLabelRow {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.auth-clerk-shell .cl-formFieldInput,
+.auth-clerk-shell .cl-formFieldInputShowPasswordButton,
+.auth-clerk-shell .cl-formFieldAction,
+.auth-clerk-shell .cl-otpCodeFieldInput {
+  border-color: var(--border-default);
+  border-radius: 0.95rem;
+  background: rgba(9, 11, 16, 0.88);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+.auth-clerk-shell .cl-formFieldInput:focus,
+.auth-clerk-shell .cl-otpCodeFieldInput:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 0.25rem var(--brand-primary-soft);
+}
+
+.auth-clerk-shell .cl-formButtonPrimary {
+  min-height: 3.15rem;
+  border: 0;
+  border-radius: 1rem;
+  background: var(--brand-gradient);
+  color: #fff;
+  box-shadow: var(--shadow-brand);
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.auth-clerk-shell .cl-formButtonPrimary:hover {
+  background: var(--brand-gradient);
+  filter: brightness(1.02);
+}
+
+.auth-clerk-shell .cl-dividerLine {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.auth-clerk-shell .cl-dividerText,
+.auth-clerk-shell .cl-footerActionText,
+.auth-clerk-shell .cl-identityPreviewText,
+.auth-clerk-shell .cl-formFieldHintText,
+.auth-clerk-shell .cl-navbarButton,
+.auth-clerk-shell .cl-alertText,
+.auth-clerk-shell .cl-formResendCodeLink {
+  color: var(--text-muted);
+}
+
+.auth-clerk-shell .cl-footerActionLink,
+.auth-clerk-shell .cl-formFieldAction,
+.auth-clerk-shell .cl-navbarButton {
+  color: #ffe2e3;
+  font-weight: 700;
+}
+
+.auth-clerk-shell .cl-footerActionLink:hover,
+.auth-clerk-shell .cl-formFieldAction:hover,
+.auth-clerk-shell .cl-navbarButton:hover {
+  color: #fff;
+}
+
+.auth-clerk-shell .cl-socialButtonsBlockButton {
+  border-color: var(--border-default);
+  border-radius: 0.95rem;
+  background: rgba(23, 29, 44, 0.92);
+  color: var(--text-primary);
+}
+
+.auth-clerk-shell .cl-socialButtonsBlockButton:hover {
+  background: rgba(31, 39, 57, 0.98);
 }
 
 @media (max-width: 760px) {

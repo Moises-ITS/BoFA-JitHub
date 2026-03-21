@@ -5,7 +5,7 @@ interface StudentInput {
   name: string
   major: string
   gpa: number | null
-  graduationYear: number
+  graduationYear: number | null
   bio: string
   clubs: string[]
   companies: string[]
@@ -357,4 +357,3 @@ export async function getLinks() {
     session.close()
   }
 }
-

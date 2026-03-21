@@ -1,10 +1,13 @@
 import { Navigate, Outlet } from "react-router-dom"
+import { useAuth as useClerkAuth } from "@clerk/clerk-react"
 import { useAuth } from "../context/AuthContext"
 
 export default function ProtectedRoute() {
-  const { user, loading } = useAuth()
+  const { user, loading, needsProfileSetup } = useAuth()
+  const { isSignedIn, isLoaded } = useClerkAuth()
 
-  if (loading) {
+  // Wait for both Clerk and our context to finish loading
+  if (!isLoaded || loading) {
     return (
       <div style={{
         display: "flex",
@@ -26,9 +29,11 @@ export default function ProtectedRoute() {
     )
   }
 
-  if (!user) {
-    return <Navigate to="/" replace />
-  }
+  // Not signed in with Clerk at all → landing page
+  if (!isSignedIn) return <Navigate to="/" replace />
+
+  // Clerk session exists but no profile in DB yet → profile setup
+  if (needsProfileSetup || !user) return <Navigate to="/setup" replace />
 
   return <Outlet />
 }

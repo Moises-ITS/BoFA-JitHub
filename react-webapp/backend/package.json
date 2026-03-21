@@ -7,35 +7,31 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "start": "node dist/index.js"
   },
   "dependencies": {
+    "@types/node-cron": "^3.0.11",
     "bcryptjs": "^2.4.3",
-    "cookie-parser": "^1.4.7",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
     "express-rate-limit": "^7.5.1",
     "jsonwebtoken": "^9.0.2",
     "neo4j-driver": "^5.28.3",
+    "node-cron": "^4.2.1",
     "pg": "^8.20.0",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
-    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.25",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.19.37",
     "@types/pg": "^8.18.0",
-    "@types/supertest": "^6.0.2",
     "@types/uuid": "^10.0.0",
-    "supertest": "^7.1.0",
     "tsx": "^4.0.0",
-    "typescript": "^5.0.0",
-    "vitest": "^3.2.4"
+    "typescript": "^5.0.0"
   }
 }

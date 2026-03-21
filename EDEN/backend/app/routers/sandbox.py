@@ -1,12 +1,15 @@
 import os
 import json
+import asyncio
 from datetime import date, timedelta
-from typing import Optional
+from typing import Optional, AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, text as sa_text
 from sqlalchemy.orm import Session
-from openai import OpenAI
+import anthropic
+from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 
 from app.database import get_db
@@ -14,7 +17,9 @@ from app import models
 
 load_dotenv()
 router = APIRouter(prefix="/sandbox", tags=["sandbox"])
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client       = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
+async_client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
+CHAT_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
 
@@ -76,6 +81,276 @@ class ChatResponse(BaseModel):
     message: str
     actions: list[ChatAction] = []
 
+# ── Tools ──────────────────────────────────────────────────────────────────────
+
+TOOLS = [
+    {
+        "name": "search_events",
+        "description": (
+            "Search the full NJIT event database by club name, event category, and/or keyword. "
+            "Use this whenever asked about past events from a specific org, a specific type of event, or any event by name. "
+            "Categories: social, exposure, info session, workshop, recruiting, conference, general meeting, volunteering, fundraiser, study support, site tour, hackathon, other. "
+            "IMPORTANT: When asked about a specific club's events (e.g. 'what networking events has SHPE hosted'), "
+            "search by club_name WITHOUT a category filter to get ALL their events — clubs may categorize events inconsistently. "
+            "Only filter by category when searching across ALL clubs (e.g. 'what hackathons are happening on campus'). "
+            "Use past_only=true when the user asks what a club 'has hosted' or about past events. "
+            "For general networking: categories=['social','exposure','recruiting','conference']. "
+            "For general career: categories=['info session','workshop','recruiting','conference','site tour']."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "club_name": {
+                    "type": "string",
+                    "description": "Club or org name to filter by (partial match). E.g. 'SHPE', 'ACM', 'IEEE'."
+                },
+                "categories": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "One or more event categories (OR logic). Pass multiple in one call instead of separate calls."
+                },
+                "keyword": {
+                    "type": "string",
+                    "description": "Keyword to search in event name. E.g. 'networking', 'internship', 'hackathon'."
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results to return. Default 10, max 20."
+                },
+                "past_only": {
+                    "type": "boolean",
+                    "description": "If true, only return events that have already happened (date <= today). Use when the user asks what a club 'has hosted' or about past events."
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "get_event_details",
+        "description": "Get full details for a specific event by its event_id, including location, food, and caption.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "event_id": {
+                    "type": "integer",
+                    "description": "The numeric event ID."
+                }
+            },
+            "required": ["event_id"]
+        }
+    },
+    {
+        "name": "get_club_info",
+        "description": "Get background info about a specific NJIT club: bio/description, Instagram handle, and follower count. Use this when asked what a club is, what they do, or for general club info.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "club_name": {
+                    "type": "string",
+                    "description": "Club name to look up (partial match). E.g. 'ACM', 'SHPE', 'Robotics'."
+                }
+            },
+            "required": ["club_name"]
+        }
+    }
+]
+
+# ── Tool execution ─────────────────────────────────────────────────────────────
+
+CLUB_ACRONYMS = {
+    # Engineering & professional orgs
+    "acm":      "Computing Machinery",
+    "ieee":     "Electrical and Electronics",
+    "shpe":     "Hispanic Professional Engineers",
+    "nsbe":     "Black Engineers",
+    "swe":      "Women Engineers",
+    "haccs":    "Hispanic Association of Computing",
+    "alpfa":    "Latino Professionals",
+    "asme":     "Mechanical Engineers",
+    "asce":     "Civil Engineers",
+    "aiche":    "Chemical Engineers",
+    "aiaa":     "Aeronautics",
+    "acs":      "American Chemical Society",
+    "ashrae":   "Heating, Refrigerating",
+    "awwa":     "Water Works",
+    "bmes":     "Biomedical Engineering Society",
+    "gbmes":    "Graduate Biomedical",
+    "nomas":    "Minority Architecture",
+    "iida":     "Interior Design Association",
+    "igda":     "Game Developers Association",
+    "grss":     "Geoscience and Remote Sensing",
+    "sigchi":   "Computer-Human Interaction",
+    "arema":    "Railway Engineering",
+    "ewb":      "Engineers Without Borders",
+    "fsae":     "FormulaSAE",
+    "eop":      "Educational Opportunity",
+    "aaees":    "Environmental Engineers",
+    "idsa":     "Industrial Designers",
+    "asl":      "American Sign Language",
+    # Cultural & identity orgs
+    "ais":      "Indian Students",
+    "cusa":     "Chinese Undergraduate",
+    "ksa":      "Korean Students",
+    "jsa":      "Japanese Student",
+    "esa":      "Egyptian Student",
+    "bsu":      "Black Student Union",
+    "msa":      "Muslim Student",
+    "ica":      "Iranian Cultural",
+    "caribso":  "Caribbean Students",
+    "finest":   "Filipinos In Newark",
+    "nepsa":    "Nepali Student",
+    "colsa":    "Colombian Student",
+    "afsa":     "African Students",
+    "aaaea":    "Arab American",
+    "yuva":     "Hindu Youth",
+    "sanjit":   "Sikh Student",
+    "bgsa":     "Bangladeshi",
+    # Greek orgs
+    "aka":      "Alpha Kappa Alpha",
+    "akpsi":    "Alpha Kappa Psi",
+    "apd":      "Alpha Phi Delta",
+    "apo":      "Alpha Phi Omega",
+    "ast":      "Alpha Sigma Tau",
+    "depsi":    "Delta Epsilon Psi",
+    "dphie":    "Delta Phi Epsilon",
+    "kphig":    "Kappa Phi Gamma",
+    "lul":      "Lambda Upsilon Lambda",
+    "ltphi":    "Lambda Theta Phi",
+    "sam":      "Sigma Alpha Mu",
+    "spk":      "Sigma Psi Kappa",
+    "apx":      "Alpha Rho Chi",
+    "iota":     "Iota Phi Theta",
+    # Student government & campus orgs
+    "sac":      "Student Activities Council",
+    "gsa":      "Graduate Student Association",
+    "rha":      "Residence Hall Association",
+    "nrhh":     "National Residence Hall Honorary",
+    "hsc":      "Honors Student Council",
+    "hhc":      "Honors Hall Council",
+    "adhc":     "Albert Dorman Honors",
+    # Other clubs
+    "fbla":     "Future Business Leaders",
+    "hosa":     "Health Occupations",
+    "gdsc":     "Google Developer",
+    "gdg":      "Google Developer",
+    "cds":      "Career Development",
+    "fssa":     "Forensic Science",
+    "asl":      "American Sign Language",
+    "wjtb":     "WJTB Radio",
+}
+
+def _resolve_club_name(club_name: str) -> str:
+    """Expand known acronyms to searchable substrings."""
+    return CLUB_ACRONYMS.get(club_name.lower().strip(), club_name)
+
+def _execute_tool(name: str, args: dict, db: Session) -> dict:
+    if name == "search_events":
+        club_name  = _resolve_club_name(args["club_name"]) if args.get("club_name") else None
+        categories = args.get("categories") or ([args["category"]] if args.get("category") else [])
+        keyword    = args.get("keyword")
+        limit      = min(int(args.get("limit", 10)), 20)
+        past_only  = bool(args.get("past_only", False))
+
+        conditions, params = [], {}
+        # Always exclude interest-gauging posts
+        conditions.append("e.event_name NOT ILIKE '%interest%'")
+        if club_name:
+            conditions.append("(c.name ILIKE :club_name OR c.instagram_handle ILIKE :club_name)")
+            params["club_name"] = f"%{club_name}%"
+        if categories:
+            placeholders = ", ".join(f":cat{i}" for i in range(len(categories)))
+            conditions.append(f"e.event_category IN ({placeholders})")
+            for i, cat in enumerate(categories):
+                params[f"cat{i}"] = cat
+        if keyword:
+            conditions.append("(e.event_name ILIKE :keyword OR ep.caption ILIKE :keyword)")
+            params["keyword"] = f"%{keyword}%"
+        if past_only:
+            conditions.append("e.date <= CURRENT_DATE")
+
+        where = "WHERE " + " AND ".join(conditions)
+        params["limit"] = limit
+
+        rows = db.execute(sa_text(f"""
+            SELECT DISTINCT ON (e.event_id)
+                e.event_id, e.event_name, e.event_category, e.date,
+                c.name AS club_name, ep.caption, ep.engagement_score
+            FROM events e
+            JOIN clubs c ON e.club_id = c.club_id
+            LEFT JOIN event_posts ep ON ep.event_id = e.event_id
+            {where}
+            ORDER BY e.event_id, ep.engagement_score DESC NULLS LAST
+            LIMIT :limit
+        """), params).fetchall()
+
+        return {
+            "events": [
+                {
+                    "event_id":  r.event_id,
+                    "name":      r.event_name,
+                    "category":  r.event_category,
+                    "date":      str(r.date) if r.date else None,
+                    "club":      r.club_name,
+                    "description": (r.caption or "")[:120],
+                }
+                for r in rows
+            ]
+        }
+
+    if name == "get_event_details":
+        event_id = int(args["event_id"])
+        row = db.execute(sa_text("""
+            SELECT DISTINCT ON (e.event_id)
+                e.event_id, e.event_name, e.event_category, e.date,
+                e.campus_location, e.has_free_food, e.virtual,
+                c.name AS club_name, ep.caption
+            FROM events e
+            JOIN clubs c ON e.club_id = c.club_id
+            LEFT JOIN event_posts ep ON ep.event_id = e.event_id
+            WHERE e.event_id = :event_id
+            ORDER BY e.event_id, ep.engagement_score DESC NULLS LAST
+        """), {"event_id": event_id}).fetchone()
+
+        if not row:
+            return {"error": f"Event {event_id} not found"}
+        return {
+            "event_id":   row.event_id,
+            "name":       row.event_name,
+            "category":   row.event_category,
+            "date":       str(row.date) if row.date else None,
+            "club":       row.club_name,
+            "location":   row.campus_location,
+            "free_food":  row.has_free_food,
+            "virtual":    row.virtual,
+            "description": (row.caption or "")[:200],
+        }
+
+    if name == "get_club_info":
+        club_name = _resolve_club_name(args.get("club_name", ""))
+        rows = db.execute(sa_text("""
+            SELECT name, bio, instagram_handle, follower_count
+            FROM clubs
+            WHERE name ILIKE :club_name OR instagram_handle ILIKE :club_name
+            ORDER BY follower_count DESC NULLS LAST
+            LIMIT 3
+        """), {"club_name": f"%{club_name}%"}).fetchall()
+
+        if not rows:
+            return {"error": f"No club found matching '{club_name}'"}
+        return {
+            "clubs": [
+                {
+                    "name":             r.name,
+                    "bio":              (r.bio or "")[:300],
+                    "instagram":        r.instagram_handle,
+                    "follower_count":   r.follower_count,
+                }
+                for r in rows
+            ]
+        }
+
+    return {"error": f"Unknown tool: {name}"}
+
 # ── System prompt ──────────────────────────────────────────────────────────────
 
 NJIT_BASE = """
@@ -92,24 +367,52 @@ NJIT FACTS:
 - Newark location: NJ Transit accessible (Penn Station NY, ~20 min), near Branch Brook Park (largest cherry blossom park in US)
 - Highlanders are the sports teams; strong Greek life and cultural organizations
 
+DATA SCOPE:
+- All event and engagement data starts from Fall 2023. You have no data before that.
+- The limitation is NEVER a complete response on its own. Every response must include actual data.
+- CORRECT: "I only have data from Fall 2023 — here are the top clubs: • SHPE • IEEE • ACM ..."
+- WRONG: "I only have data from Fall 2023." (full stop, no data) — this is always wrong.
+- WRONG: "I only have data from Fall 2023. What do you want to know?" — never ask, just answer.
+
+EVENT CATEGORY GLOSSARY (these are the exact category values stored in the database):
+- social: parties, game nights, mixers, casual hangouts
+- exposure: involvement fairs, showcases, info tables, visibility events
+- info session: panels, presentations, how-to talks, speaker events
+- workshop: hands-on skill-building sessions, training
+- recruiting: career fairs, industry panels, alumni networking, internship/resume events
+- conference: multi-day or regional professional events
+- general meeting: club GBMs (General Body Meetings)
+- volunteering: community service, charity events
+- fundraiser: bake sales, raffles, fundraising events
+- study support: tutoring, exam prep, academic help
+- site tour: facility or company visits
+- hackathon: coding competitions
+
+TOOLS AVAILABLE:
+- search_events: query the full event database by club name, category, and/or keyword.
+- get_event_details: get full details for a specific event by event_id.
+- get_club_info: look up a club's description, Instagram, and follower count. Use this for "what is X club?" questions.
+
+MANDATORY TOOL USE: You MUST call search_events before answering ANY question about past events, specific clubs' event history, or types of events hosted on campus. You do NOT know this information from memory — the database is the only source of truth. Even if you think you know the answer, call the tool. Answering about past events without calling search_events first is an error.
+
 RESPONSE RULES:
-1. ALWAYS respond with valid JSON: {"message": "...", "actions": [...]}
-2. actions is a list — each item has: type ("view_event"|"connect"|"view_profile"), label (short text), and either event_id (int) or user_id+user_name (string). NEVER include event IDs, user IDs, or any numeric IDs in the message text — IDs belong only in the actions array fields.
-2b. Every event you mention by name in the message MUST have a corresponding view_event action. Never say "here's the card for one of those events" — include a separate action pill for EVERY event you name.
-3. Be specific — tie every recommendation to the user's actual major, interests, skills, or looking_for. Never say "you might want to check out" without a concrete reason.
-4. Only draw genuine analogies. Social ≠ gardening. Community engagement ≠ gardening. Sustainability = gardening. AI + plant science = gardening + CS. If the connection requires two or more inferential leaps, do NOT make it — just say there's no match.
-5. When asked about a specific event type from a specific club (e.g. "networking events from ACM"): search CLUB HISTORY for that club. If no events of that type exist, say "I don't see past [type] events from [Club] in the data" — then immediately pivot to listing whatever events from that club ARE in CLUB HISTORY so the user can judge. Do NOT speculate about what the club "generally focuses on", "typically does", or "usually hosts". Do NOT suggest contacting them directly. Stop at the data; pivot to what you have.
-6. If no upcoming event matches: scan CLUB HISTORY for the closest past event, name it explicitly, include a view_event action. Say "Nothing upcoming for X, but [Club] hosted [Event Name] ([semester]) — here's the card."
-7. If nothing in history matches either: be honest ("I don't see anything on campus for X right now") and name only clubs whose mission is genuinely adjacent, with a specific reason.
-8. Keep message under 180 words, plain text only (no markdown, no bullet points).
-9. Never invent names or details not in the provided context. If a club has no events in CLUB HISTORY, say so — do NOT fabricate a past event or describe one as "specific past event not listed".
-10. Today's date is {today}. Current semester week: {week}. This calendar week runs {week_mon} to {week_sun}. "This week" means dates {week_mon} through {week_sun} ONLY — events on {week_mon_next} or later are NEXT week, not this week.
-11. When asked about "top", "best", or "most popular" EVENTS: use TOP EVENTS THIS SEMESTER — list #1, #2, #3 each on its own sentence with the event name and club. Include a separate view_event action for each. Do NOT say you lack rankings. Do NOT use CLUB HISTORY for current-semester top-event questions.
-12. When asked "what's trending" or "what's happening on campus": list the top 3 events from TOP EVENTS THIS SEMESTER by name and club, one sentence each, and include a view_event action for every one. Do not summarize into a single event.
-13. CLUB HISTORY contains past semesters only — use it when asked about past events or when nothing current matches. Events include a semester label like [Fall 2024] or [Spring 2025] — always state the semester when referencing them.
-14. When asked about popular, biggest, or most active CLUBS (not events): use TOP CLUBS BY POPULARITY. Rank by follower count first, then total engagement as a tiebreaker. If the question specifies a time range (e.g. "since 2023"), filter by the SINCE {year} ENGAGEMENT column. Never redirect a club question to the events list.
-15. "connect" actions are ONLY for individual students listed in CONNECTION RECOMMENDATIONS — they require a real user_id. NEVER emit a connect action for a club, organization, or any entity that is not a person in the recommendations list.
-16. Never emit duplicate actions. If your response mentions the same event or person more than once, include only one action for that entity. Each action must be unique.
+CRITICAL: Output ZERO markdown. No asterisks, no **bold**, no *italic*, no `backticks`, no headers, no underscores for emphasis. Plain text only. Every ** you write is an error.
+1. Write your message as plain prose. Then on the VERY LAST LINE write ACTIONS:[...] with action objects (or ACTIONS:[] if none). Nothing comes after ACTIONS:[...]. No JSON envelope, no markdown fences.
+   EXAMPLE: ACM hosted Game Night and Algorithm Workshop in Spring 2024.
+   ACTIONS:[{"type":"view_event","label":"Game Night","event_id":123},{"type":"view_event","label":"Algorithm Workshop","event_id":456}]
+2. Action objects: type ("view_event"|"connect"), label, and either event_id (int) OR user_id+user_name. Event IDs are numeric internal references — NEVER write them in message text. BAD: "Mentorship Social (#6350)". GOOD: "Mentorship Social" with a view_event action using event_id 6350.
+3. Every event you name in the message MUST have its own view_event action. Never say "here's one of those events" — give an action for every event you mention.
+4. When asked about past events from a specific org: call search_events ONCE with club_name and categories as an array. For networking pass categories=["social","exposure","recruiting","conference"] in a single call — do NOT make separate calls per category.
+5. Be specific — tie recommendations to the user's major, interests, skills, or looking_for.
+5a. If the user says "come again?", "again", "repeat that", "say that again", or similar — look at the conversation history, find the last real question, and answer it with actual data. Never respond with only a limitation statement.
+6. Never invent event names or details. Only report what search_events actually returned. If a search returns 0 results, say so honestly.
+7. NEVER attribute an event returned by search_events to a different club than the one in the result. Each result row includes the club it belongs to.
+8. Keep message under 150 words. Use bullet points (• ) for listing events or people — one bullet per item, each 1-2 lines max. Lead with a 1-sentence intro, then bullets, then a 1-sentence closer if needed. No numbered lists, no headers, NO markdown (no **bold**, no *italic*, no backticks). Plain text only. BAD: "**IEEE** hosts workshops". GOOD: "IEEE hosts workshops".
+9. Today's date is {today}. Current semester week: {week}. "This week" = {week_mon} through {week_sun}. Events on {week_mon_next} or later are next week.
+10. For top/trending EVENT questions: use TOP EVENTS THIS SEMESTER. For top/popular CLUB questions: use TOP CLUBS BY POPULARITY. Do NOT volunteer rankings or numbers unless the user explicitly asks for stats. When recommending clubs unprompted, describe what they do — not where they rank. NEVER reference Instagram, engagement scores, follower counts, or internal ranking mechanics. DO acknowledge the Fall 2023 data cutoff when the user asks about "all time" or historical data — never silently substitute a different time frame. If asked "all time" and you only have since Fall 2023, say so and answer with that data. Do NOT add unsolicited personalized recommendations when the user asks a simple factual question.
+11. "connect" actions are ONLY for individual students in CONNECTION RECOMMENDATIONS with a real user_id. Never emit connect for a club or org.
+12. Never emit duplicate actions. One action per unique event or person.
+13. NEVER end a response with a question ("What would you like to know?", "Is there anything else?", "Let me know if..."). State your answer and stop.
 """.strip()
 
 def _semester_week(today: date) -> str:
@@ -124,33 +427,18 @@ def _semester_week(today: date) -> str:
     return "between semesters"
 
 def _semester_label(d) -> str:
-    """Return e.g. 'Fall 2024' or 'Spring 2025' from a date object or None."""
     if not d:
         return ""
-    month = d.month
-    year  = d.year
-    if 9 <= month <= 12:
-        return f"Fall {year}"
-    if 1 <= month <= 5:
-        return f"Spring {year}"
-    return f"Summer {year}"
+    if 9 <= d.month <= 12:
+        return f"Fall {d.year}"
+    if 1 <= d.month <= 5:
+        return f"Spring {d.year}"
+    return f"Summer {d.year}"
 
-def _build_club_history(club_history: list[dict]) -> str:
-    # Group events by club
-    by_club: dict[str, list[dict]] = {}
-    for row in club_history:
-        club = row["club"]
-        by_club.setdefault(club, []).append(row)
-    lines = []
-    for club, events in by_club.items():
-        names = ", ".join(e["name"] for e in events[:5])
-        lines.append(f"  {club}: {names}")
-    return "\n".join(lines)
-
-def _build_system_prompt(context: ContextPayload, club_bios: list[dict], club_history: list[dict], club_popularity: list[dict], today: date) -> str:
-    week_mon      = today - timedelta(days=today.weekday())          # Monday of current week
-    week_sun      = week_mon + timedelta(days=6)                     # Sunday of current week
-    week_mon_next = week_mon + timedelta(days=7)                     # Monday of next week
+def _build_system_prompt(context: ContextPayload, club_popularity: list[dict], today: date) -> str:
+    week_mon      = today - timedelta(days=today.weekday())
+    week_sun      = week_mon + timedelta(days=6)
+    week_mon_next = week_mon + timedelta(days=7)
     base = (NJIT_BASE
             .replace("{today}", str(today))
             .replace("{week}", _semester_week(today))
@@ -162,31 +450,10 @@ def _build_system_prompt(context: ContextPayload, club_bios: list[dict], club_hi
     if club_popularity:
         lines = []
         for i, c in enumerate(club_popularity):
-            followers  = f"{c['followers']:,}" if c['followers'] else "N/A"
-            eng_total  = f"{float(c['engagement_total']):.1f}" if c['engagement_total'] else "0"
-            eng_since  = f"{float(c['engagement_since_2023']):.1f}" if c['engagement_since_2023'] else "0"
-            lines.append(f"  #{i+1} | {c['name']} | {followers} followers | {eng_total} all-time engagement | {eng_since} since-2023 engagement")
-        base += "\n\nTOP CLUBS BY POPULARITY (ranked by Instagram followers; engagement = sum of post scores):\n" + "\n".join(lines)
-
-    # Club knowledge block
-    if club_bios:
-        bio_lines = [f"  {b['name']}: {b['bio']}" for b in club_bios if b.get("bio")]
-        base += "\n\nCLUB KNOWLEDGE:\n" + "\n".join(bio_lines)
-
-    # Club history — past events grouped by club (use event_id for view_event actions)
-    if club_history:
-        history_by_club: dict[str, list[dict]] = {}
-        for row in club_history:
-            history_by_club.setdefault(row["club"], []).append(row)
-        history_lines = []
-        for club, events in history_by_club.items():
-            entries = []
-            for e in events[:4]:  # max 4 events per club to control tokens
-                sem  = f" [{_semester_label(e.get('date'))}]" if e.get("date") else ""
-                desc = f" — {e['description']}" if e.get("description") else ""
-                entries.append(f"{e['name']} (ID:{e['event_id']}){sem}{desc}")
-            history_lines.append(f"  {club}:\n" + "\n".join(f"    - {en}" for en in entries))
-        base += "\n\nCLUB HISTORY — past events (reference by event_id in view_event actions):\n" + "\n".join(history_lines)
+            followers = f"{c['followers']:,}" if c['followers'] else "N/A"
+            sem_eng   = f"{float(c['semester_engagement']):.1f}" if c['semester_engagement'] else "0"
+            lines.append(f"  #{i+1} | {c['name']} | {followers} followers | {sem_eng} semester engagement")
+        base += "\n\nTOP CLUBS BY POPULARITY (ranked by this semester's engagement):\n" + "\n".join(lines)
 
     # User profile
     p = context.profile
@@ -202,10 +469,10 @@ def _build_system_prompt(context: ContextPayload, club_bios: list[dict], club_hi
         f"  Graduation: {p.graduation_year or 'Unknown'}",
     ]
     if p.chat_interests:
-        profile_lines.append(f"  Past chat interests (topics they repeatedly ask about): {', '.join(p.chat_interests)}")
+        profile_lines.append(f"  Past chat interests: {', '.join(p.chat_interests)}")
     base += "\n" + "\n".join(profile_lines)
 
-    # Upcoming events (compact one-liner per event)
+    # Upcoming events
     if context.upcoming_events:
         lines = []
         for e in context.upcoming_events[:12]:
@@ -214,124 +481,189 @@ def _build_system_prompt(context: ContextPayload, club_bios: list[dict], club_hi
             if e.virtual: extras.append("virtual")
             if e.campus_location: extras.append(e.campus_location)
             extra = f" [{', '.join(extras)}]" if extras else ""
-            lines.append(f"  ID:{e.event_id} | {e.event_name} | {e.club_name} | {e.event_category or 'general'} | {e.date or 'TBD'}{extra}")
-        base += "\n\nUPCOMING EVENTS (use event_id for view_event actions):\n" + "\n".join(lines)
+            lines.append(f"  eid:{e.event_id} | {e.event_name} | {e.club_name} | {e.event_category or 'general'} | {e.date or 'TBD'}{extra}")
+        base += "\n\nUPCOMING EVENTS (eid = event_id for view_event actions):\n" + "\n".join(lines)
 
-    # Trending events — ranked #1 to #5 by real student engagement score (current semester only)
+    # Trending events
     if context.trending_events:
         sem = _semester_label(today)
-        lines = [f"  #{i+1} | ID:{e.event_id} | {e.event_name} | {e.club_name} | {e.event_category or 'general'}" for i, e in enumerate(context.trending_events[:5])]
-        base += f"\n\nTOP EVENTS THIS SEMESTER ({sem}) — ranked by real student engagement, current semester only:\n" + "\n".join(lines)
+        lines = [f"  #{i+1} | eid:{e.event_id} | {e.event_name} | {e.club_name} | {e.event_category or 'general'}"
+                 for i, e in enumerate(context.trending_events[:10])]
+        base += f"\n\nTOP EVENTS THIS SEMESTER ({sem}) — ranked by student engagement:\n" + "\n".join(lines)
 
     # Connection recommendations
     if context.recommendations:
         lines = []
         for r in context.recommendations[:5]:
             shared = []
-            if r.shared_clubs: shared.append(f"clubs: {', '.join(r.shared_clubs)}")
+            if r.shared_clubs:     shared.append(f"clubs: {', '.join(r.shared_clubs)}")
             if r.shared_interests: shared.append(f"interests: {', '.join(r.shared_interests)}")
-            if r.shared_skills: shared.append(f"skills: {', '.join(r.shared_skills)}")
-            if r.looking_for: shared.append(f"also looking for: {', '.join(r.looking_for)}")
+            if r.shared_skills:    shared.append(f"skills: {', '.join(r.shared_skills)}")
+            if r.looking_for:      shared.append(f"also looking for: {', '.join(r.looking_for)}")
             shared_str = " | ".join(shared) if shared else "general match"
             lines.append(f"  user_id:{r.id} | {r.name} | {r.major or 'Unknown major'} | {r.year or ''} | score:{r.score} | {shared_str}")
-        base += "\n\nCONNECTION RECOMMENDATIONS (use user_id+user_name for connect actions):\n" + "\n".join(lines)
+        base += "\n\nCONNECTION RECOMMENDATIONS:\n" + "\n".join(lines)
     else:
         base += "\n\nCONNECTION RECOMMENDATIONS:\n  None available right now."
 
     return base
 
-# ── Endpoint ───────────────────────────────────────────────────────────────────
+# ── Shared setup ───────────────────────────────────────────────────────────────
 
-@router.post("/chat", response_model=ChatResponse)
-async def sandbox_chat(body: ChatRequest, db: Session = Depends(get_db)):
+def _build_context(body: ChatRequest, db: Session, today: date):
+    m = today.month
+    sem_start = date(today.year, 1, 1) if m <= 5 else date(today.year, 9, 1)
+    pop_rows = (
+        db.query(
+            models.Club.name,
+            models.Club.follower_count,
+            func.sum(models.EventPost.engagement_score).label("engagement_total"),
+            func.sum(func.coalesce(models.EventPost.engagement_score, 0))
+                .filter(models.EventPost.post_datetime >= sem_start).label("semester_engagement"),
+        )
+        .outerjoin(models.Event, models.Event.club_id == models.Club.club_id)
+        .outerjoin(models.EventPost, models.EventPost.event_id == models.Event.event_id)
+        .group_by(models.Club.club_id, models.Club.name, models.Club.follower_count)
+        .order_by(func.sum(func.coalesce(models.EventPost.engagement_score, 0))
+                  .filter(models.EventPost.post_datetime >= sem_start).desc().nullslast())
+        .limit(15)
+        .all()
+    )
+    club_popularity = [
+        {
+            "name":               r.name,
+            "followers":          r.follower_count,
+            "engagement_total":   r.engagement_total,
+            "semester_engagement": r.semester_engagement,
+        }
+        for r in pop_rows
+    ]
+
+    system_prompt = _build_system_prompt(body.context, club_popularity, today)
+
+    messages = []
+    for h in body.history[-6:]:
+        messages.append({"role": h.role, "content": h.content})
+    messages.append({"role": "user", "content": body.message})
+
+    return system_prompt, messages
+
+
+async def _async_tool_loop(system_prompt: str, messages: list, db: Session):
+    """
+    Fully async tool loop.
+    Returns (messages, direct_text):
+      - If the model responded with text directly (no tools): (messages, text_string)
+      - If tool calls were made: (messages_with_tool_results, None)
+    """
+    for _ in range(4):
+        response = await async_client.messages.create(
+            model=CHAT_MODEL,
+            max_tokens=512,
+            system=system_prompt,
+            messages=messages,
+            tools=TOOLS,
+        )
+        if response.stop_reason != "tool_use":
+            text = next((b.text for b in response.content if hasattr(b, "text")), "")
+            return messages, text
+
+        messages.append({"role": "assistant", "content": response.content})
+        tool_results = []
+        for block in response.content:
+            if block.type == "tool_use":
+                result = _execute_tool(block.name, block.input, db)
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": block.id,
+                    "content":     json.dumps(result),
+                })
+        messages.append({"role": "user", "content": tool_results})
+
+    return messages, None
+
+
+# ── Streaming endpoint ─────────────────────────────────────────────────────────
+
+@router.post("/chat/stream")
+async def sandbox_chat_stream(body: ChatRequest, db: Session = Depends(get_db)):
     import traceback as tb
     today = date.today()
 
-    try:
-        # Fetch top clubs with bios
-        club_rows = (
-            db.query(models.Club.name, models.Club.bio)
-            .filter(models.Club.bio.isnot(None))
-            .order_by(models.Club.follower_count.desc())
-            .all()
-        )
-        club_bios = [{"name": r.name, "bio": r.bio} for r in club_rows]
+    async def generate() -> AsyncGenerator[str, None]:
+        try:
+            print("[sandbox] request received")
+            system_prompt, messages = _build_context(body, db, today)
+            print("[sandbox] context built")
 
-        # Club popularity: follower count + cumulative engagement (all-time and since 2023)
-        cutoff = date(2023, 1, 1)
-        pop_rows = (
-            db.query(
-                models.Club.name,
-                models.Club.follower_count,
-                func.sum(models.EventPost.engagement_score).label("engagement_total"),
-                func.sum(
-                    func.coalesce(models.EventPost.engagement_score, 0)
-                ).filter(models.Event.date >= cutoff).label("engagement_since_2023"),
-            )
-            .outerjoin(models.Event, models.Event.club_id == models.Club.club_id)
-            .outerjoin(models.EventPost, models.EventPost.event_id == models.Event.event_id)
-            .group_by(models.Club.club_id, models.Club.name, models.Club.follower_count)
-            .order_by(models.Club.follower_count.desc().nullslast())
-            .limit(25)
-            .all()
-        )
-        club_popularity = [
-            {
-                "name":                r.name,
-                "followers":           r.follower_count,
-                "engagement_total":    r.engagement_total,
-                "engagement_since_2023": r.engagement_since_2023,
-            }
-            for r in pop_rows
-        ]
+            # Async tool loop — fully non-blocking
+            messages, direct_text = await _async_tool_loop(system_prompt, messages, db)
+            print("[sandbox] tool loop done")
 
-        # Fetch top past events by engagement for club history (capped to control token use)
-        history_rows = (
-            db.query(
-                models.Event.event_id,
-                models.Event.event_name,
-                models.Event.date,
-                models.Club.name.label("club_name"),
-                models.EventPost.caption,
-                models.EventPost.engagement_score,
-            )
-            .join(models.Club, models.Event.club_id == models.Club.club_id)
-            .join(models.EventPost, models.EventPost.event_id == models.Event.event_id)
-            .order_by(models.EventPost.engagement_score.desc().nullslast())
-            .limit(120)
-            .all()
-        )
-        club_history = [
-            {
-                "event_id":   r.event_id,
-                "name":       r.event_name,
-                "club":       r.club_name,
-                "date":       r.date,
-                "description": (r.caption or "")[:80],
-            }
-            for r in history_rows
-        ]
+            MARKER = "ACTIONS:"
+            mlen = len(MARKER)
+            pending = ""
+            found_actions = False
+            actions_str = ""
 
-        system_prompt = _build_system_prompt(body.context, club_bios, club_history, club_popularity, today)
+            def _strip_md(text: str) -> str:
+                return text.replace("**", "").replace("__", "")
 
-        messages = [{"role": "system", "content": system_prompt}]
-        for h in body.history[-6:]:
-            messages.append({"role": h.role, "content": h.content})
-        messages.append({"role": "user", "content": body.message})
+            if direct_text is not None:
+                # Model responded directly without tools — parse and word-stream it
+                pending = _strip_md(direct_text)
+            else:
+                # Tool results are in messages — real streaming final call
+                async with async_client.messages.stream(
+                    model=CHAT_MODEL,
+                    max_tokens=1024,
+                    system=system_prompt,
+                    messages=messages,
+                ) as stream:
+                    async for chunk in stream.text_stream:
+                        if found_actions:
+                            actions_str += chunk
+                            continue
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=600,
-            response_format={"type": "json_object"},
-        )
-        raw = response.choices[0].message.content
-        data = json.loads(raw)
-        return ChatResponse(
-            message=data.get("message", "Sorry, I couldn't process that."),
-            actions=[ChatAction(**a) for a in data.get("actions", [])],
-        )
-    except Exception as e:
-        tb.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+                        pending += _strip_md(chunk)
+                        idx = pending.find(MARKER)
+                        if idx != -1:
+                            found_actions = True
+                            before = pending[:idx].rstrip("\n")
+                            if before:
+                                yield f"data: {json.dumps({'type': 'text', 'text': before})}\n\n"
+                            actions_str = pending[idx + mlen:]
+                            pending = ""
+                            continue
+
+                        # Yield safe portion — hold back (mlen-1) chars in case
+                        # the current chunk is the leading bytes of the ACTIONS: marker
+                        safe_len = max(0, len(pending) - mlen + 1)
+                        if safe_len > 0:
+                            yield f"data: {json.dumps({'type': 'text', 'text': pending[:safe_len]})}\n\n"
+                            pending = pending[safe_len:]
+
+            # Handle any remaining buffer after stream ends
+            if not found_actions:
+                idx = pending.find(MARKER)
+                if idx != -1:
+                    before = pending[:idx].rstrip("\n")
+                    if before:
+                        yield f"data: {json.dumps({'type': 'text', 'text': before})}\n\n"
+                    actions_str = pending[idx + mlen:]
+                elif pending.strip():
+                    yield f"data: {json.dumps({'type': 'text', 'text': pending})}\n\n"
+
+            # Parse and send actions
+            try:
+                actions = json.loads(actions_str.strip() or "[]")
+            except Exception:
+                actions = []
+
+            yield f"data: {json.dumps({'type': 'done', 'actions': actions})}\n\n"
+
+        except Exception as e:
+            tb.print_exc()
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})

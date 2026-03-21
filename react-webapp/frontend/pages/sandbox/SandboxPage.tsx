@@ -145,6 +145,7 @@ function MessageBubble({ message, onViewEvent, onConnect, onDisconnect, connecte
           color: "#E5E7EB",
           fontSize: "14px",
           lineHeight: "1.6",
+          whiteSpace: "pre-wrap",
         }}>
           {message.content}
         </div>
@@ -221,6 +222,8 @@ export default function SandboxPage() {
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
+  const [rsvpingId, setRsvpingId] = useState<number | null>(null);
   const [chatInterests, setChatInterests] = useState<string[]>([]);
 
   // Load persisted chat interests on mount
@@ -253,12 +256,28 @@ export default function SandboxPage() {
     localStorage.removeItem(storageKey);
   }
 
+  function isContextRelevant(text: string): boolean {
+    return /event|club|org|connect|network|people|trending|popular|semester|happening|rsvp|attend|hackathon|workshop|panel|social|recruit|intern|research|food|talk|meet|who should|what'?s? (going|up|on)|top|shpe|ieee|acm|wics|nsbe|swe|greek|fraternity|sorority/i.test(text);
+  }
+
+  function emptyContext() {
+    return { upcoming_events: [], trending_events: [], recommendations: [] };
+  }
+
+  function fetchWithTimeout(url: string, options: RequestInit = {}, ms = 5000): Promise<Response | null> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    return fetch(url, { ...options, signal: controller.signal })
+      .finally(() => clearTimeout(timer))
+      .catch(() => null);
+  }
+
   async function fetchContext() {
     const [upcomingRes, trendingRes, recsRes] = await Promise.all([
-      fetch(`${EVENTS_API}/events/upcoming?limit=12`).catch(() => null),
-      fetch(`${EVENTS_API}/events/trending?limit=5`).catch(() => null),
+      fetchWithTimeout(`${EVENTS_API}/events/upcoming?limit=12`),
+      fetchWithTimeout(`${EVENTS_API}/events/top-risers?limit=10`),
       token
-        ? fetch(`${AUTH_API}/api/connections/recommendations`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null)
+        ? fetchWithTimeout(`${AUTH_API}/api/connections/recommendations`, { headers: { Authorization: `Bearer ${token}` } })
         : Promise.resolve(null),
     ]);
 
@@ -268,15 +287,7 @@ export default function SandboxPage() {
 
     const upcomingList = (upcoming.events ?? upcoming).slice(0, 12);
 
-    // Filter trending to current semester only (Spring = Jan–May, Fall = Sep–Dec)
-    const now = new Date();
-    const m = now.getMonth() + 1;
-    const y = now.getFullYear();
-    const semStart = m <= 5 ? `${y}-01-01` : `${y}-09-01`;
-    const semEnd   = m <= 5 ? `${y}-05-31` : `${y}-12-31`;
-    const trendingList = (trending.events ?? trending)
-      .filter((e: any) => !e.date || (e.date >= semStart && e.date <= semEnd))
-      .slice(0, 5);
+    const trendingList = (trending.events ?? trending).slice(0, 10);
 
     // Cache full event objects for EventDetailModal
     cachedEventsRef.current = [...upcomingList, ...trendingList];
@@ -312,7 +323,7 @@ export default function SandboxPage() {
     setLoading(true);
 
     try {
-      const context = await fetchContext();
+      const context = isContextRelevant(text) ? await fetchContext() : emptyContext();
       const history = messages.slice(-6).map(m => ({ role: m.role, content: m.content }));
 
       const profile: UserProfile = {
@@ -341,38 +352,69 @@ export default function SandboxPage() {
         }).catch(() => {});
       }
 
-      const res = await fetch(`${EVENTS_API}/sandbox/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          history,
-          context: {
-            ...context,
-            profile: {
-              name:            user?.name ?? "Student",
-              major:           profile.major,
-              year:            profile.year,
-              interests:       profile.interests,
-              clubs:           profile.clubs,
-              skills:          profile.skills,
-              looking_for:     profile.looking_for,
-              graduation_year: user?.graduationYear ?? null,
-              chat_interests:  chatInterests,
-            },
+      const body = JSON.stringify({
+        message: text,
+        history,
+        context: {
+          ...context,
+          profile: {
+            name:            user?.name ?? "Student",
+            major:           profile.major,
+            year:            profile.year,
+            interests:       profile.interests,
+            clubs:           profile.clubs,
+            skills:          profile.skills,
+            looking_for:     profile.looking_for,
+            graduation_year: user?.graduationYear ?? null,
+            chat_interests:  chatInterests,
           },
-        }),
+        },
       });
 
-      const data = await res.json();
-      const raw = (data.message ?? "").replace(/\*\*(.+?)\*\*/g, "$1").replace(/\*(.+?)\*/g, "$1");
-      setMessages(prev => [...prev, {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: raw || "Something went wrong.",
-        actions: data.actions ?? [],
-        error: !raw,
-      }]);
+      const res = await fetch(`${EVENTS_API}/sandbox/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      if (!res.ok || !res.body) throw new Error("Stream failed");
+
+      // Add empty assistant bubble we'll fill as tokens arrive
+      const assistantId = crypto.randomUUID();
+      setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", actions: [] }]);
+      setLoading(false); // hide typing indicator — we're streaming now
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            if (event.type === "text") {
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId ? { ...m, content: m.content + event.text } : m
+              ));
+            } else if (event.type === "done") {
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId ? { ...m, actions: event.actions ?? [] } : m
+              ));
+            } else if (event.type === "error") {
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId ? { ...m, content: `Error: ${event.message}`, error: true } : m
+              ));
+            }
+          } catch { /* malformed chunk */ }
+        }
+      }
     } catch {
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
@@ -387,16 +429,30 @@ export default function SandboxPage() {
 
   async function handleViewEvent(eventId: number) {
     const cached = cachedEventsRef.current.find(e => e.event_id === eventId);
-    if (cached) { setSelectedEvent(cached); return; }
-    // Past events aren't in the cache — fetch from API
-    try {
-      const res = await fetch(`${EVENTS_API}/events/${eventId}`);
-      if (res.ok) {
-        const event = await res.json();
-        cachedEventsRef.current = [...cachedEventsRef.current, event];
-        setSelectedEvent(event);
-      }
-    } catch { /* silent */ }
+    if (cached) { setSelectedEvent(cached); } else {
+      try {
+        const res = await fetch(`${EVENTS_API}/events/${eventId}`);
+        if (res.ok) {
+          const event = await res.json();
+          cachedEventsRef.current = [...cachedEventsRef.current, event];
+          setSelectedEvent(event);
+        }
+      } catch { /* silent */ }
+    }
+    // Load RSVP status from DB if user is logged in
+    if (user) {
+      try {
+        const res = await fetch(`${EVENTS_API}/rsvp/batch-status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: user.id, event_ids: [eventId] }),
+        });
+        if (res.ok) {
+          const data: Record<string, string> = await res.json();
+          setRsvpMap(prev => ({ ...prev, [eventId]: data[String(eventId)] ?? null }));
+        }
+      } catch { /* silent */ }
+    }
   }
 
   async function handleConnect(action: ChatAction) {
@@ -428,6 +484,33 @@ export default function SandboxPage() {
     }
   }
 
+  async function handleRsvp(eventId: number) {
+    if (!user) return;
+    const current = rsvpMap[eventId] ?? null;
+    const newStatus = current === "going" ? null : "going";
+    setRsvpMap(prev => ({ ...prev, [eventId]: newStatus }));
+    setRsvpingId(eventId);
+    try {
+      if (newStatus === null) {
+        await fetch(`${EVENTS_API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, { method: "DELETE" });
+      } else {
+        await fetch(`${EVENTS_API}/rsvp/${eventId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: user.id, user_name: user.name,
+            user_major: user.major ?? null,
+            status: "going",
+          }),
+        });
+      }
+    } catch {
+      setRsvpMap(prev => ({ ...prev, [eventId]: current }));
+    } finally {
+      setRsvpingId(null);
+    }
+  }
+
   const profile: UserProfile = {
     major: user?.major ?? "", interests: user?.interests ?? [], clubs: user?.clubs ?? [],
     skills: user?.skills ?? [], looking_for: user?.looking_for ?? [], year: user?.year ?? null,
@@ -441,7 +524,7 @@ export default function SandboxPage() {
         <div style={{ flexShrink: 0, paddingBottom: "14px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: "10px" }}>
           <img src={JITI_AVATAR} alt="" style={{ width: "28px", height: "28px", borderRadius: "50%", objectFit: "cover" }} />
           <h1 style={{ fontSize: "20px", fontWeight: 600, color: "#fff", margin: 0 }}>Sandbox</h1>
-          <span style={{ fontSize: "11px", color: "#4B5563", marginLeft: "2px" }}>GPT-4o-mini</span>
+          <span style={{ fontSize: "11px", color: "#4B5563", marginLeft: "2px" }}>Claude Haiku</span>
           {messages.length > 0 && (
             <button
               onClick={clearHistory}
@@ -484,8 +567,8 @@ export default function SandboxPage() {
           event={selectedEvent}
           attendees={null as unknown as AttendeeInfo}
           connectionIds={new Set()}
-          rsvpStatus={null}
-          onRsvpToggle={undefined}
+          rsvpStatus={selectedEvent ? (rsvpMap[selectedEvent.event_id] ?? null) : null}
+          onRsvpToggle={handleRsvp}
           profile={profile}
           onClose={() => setSelectedEvent(null)}
           forceReadOnly={false}

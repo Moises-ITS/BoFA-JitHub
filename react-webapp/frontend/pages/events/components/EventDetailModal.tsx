@@ -263,8 +263,11 @@ export function EventDetailModal({ event, attendees, connectionIds, rsvpStatus, 
         </div>
 
         {onRsvpToggle && !isPast && (
-          <button onClick={() => onRsvpToggle(event.event_id)} style={{ width: "100%", padding: "10px", borderRadius: "10px", border: `1px solid ${isGoing ? "#2ECC71" : "rgba(255,255,255,0.15)"}`, backgroundColor: isGoing ? "rgba(46,204,113,0.12)" : "rgba(255,255,255,0.05)", color: isGoing ? "#2ECC71" : "#E5E7EB", fontSize: "14px", fontWeight: 500, cursor: "pointer" }}>
-            {isGoing ? "✓ You're going!" : "Are you going?"}
+          <button onClick={() => onRsvpToggle(event.event_id)}
+            onMouseEnter={e => { if (isGoing) { e.currentTarget.textContent = "Cancel RSVP"; e.currentTarget.style.color = "#E74C3C"; e.currentTarget.style.borderColor = "rgba(231,76,60,0.4)"; e.currentTarget.style.backgroundColor = "rgba(231,76,60,0.08)"; } }}
+            onMouseLeave={e => { if (isGoing) { e.currentTarget.textContent = "✓ Going"; e.currentTarget.style.color = "#2ECC71"; e.currentTarget.style.borderColor = "rgba(46,204,113,0.3)"; e.currentTarget.style.backgroundColor = "rgba(46,204,113,0.12)"; } }}
+            style={{ width: "100%", padding: "10px", borderRadius: "10px", border: `1px solid ${isGoing ? "rgba(46,204,113,0.3)" : "rgba(255,255,255,0.15)"}`, backgroundColor: isGoing ? "rgba(46,204,113,0.12)" : "rgba(255,255,255,0.05)", color: isGoing ? "#2ECC71" : "#E5E7EB", fontSize: "14px", fontWeight: 500, cursor: "pointer", transition: "all 0.15s" }}>
+            {isGoing ? "✓ Going" : "RSVP"}
           </button>
         )}
 

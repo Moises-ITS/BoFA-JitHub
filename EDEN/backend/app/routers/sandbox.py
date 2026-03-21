@@ -413,6 +413,7 @@ CRITICAL: Output ZERO markdown. No asterisks, no **bold**, no *italic*, no `back
 11. "connect" actions are ONLY for individual students in CONNECTION RECOMMENDATIONS with a real user_id. Never emit connect for a club or org.
 12. Never emit duplicate actions. One action per unique event or person.
 13. NEVER end a response with a question ("What would you like to know?", "Is there anything else?", "Let me know if..."). State your answer and stop.
+14. NEVER pre-announce a count ("I found 5..."). List the items first, then optionally summarize after. Counts stated before the list are always wrong.
 """.strip()
 
 def _semester_week(today: date) -> str:

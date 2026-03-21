@@ -1,70 +1,38 @@
-import { useState, FormEvent } from "react"
-import { useNavigate, Link } from "react-router-dom"
+import { useEffect } from "react"
+import { SignIn, useAuth as useClerkAuth, useClerk } from "@clerk/clerk-react"
 import { useAuth } from "../../context/AuthContext"
-import "./auth.css"
 
 export default function LoginPage() {
-  const { login } = useAuth()
-  const navigate   = useNavigate()
+  const { isSignedIn, isLoaded } = useClerkAuth()
+  const { signOut } = useClerk()
+  const { user, loading } = useAuth()
 
-  const [email, setEmail]       = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError]       = useState("")
-  const [loading, setLoading]   = useState(false)
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    setError("")
-    setLoading(true)
-    try {
-      await login(email, password)
-      navigate("/home")
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Login failed")
-    } finally {
-      setLoading(false)
+  // If already signed in with Clerk but no DB profile (stale session from a
+  // failed setup attempt), sign out so the login form actually shows.
+  useEffect(() => {
+    if (isLoaded && isSignedIn && !loading && !user) {
+      signOut()
     }
-  }
+  }, [isLoaded, isSignedIn, loading, user, signOut])
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <h1 className="auth-title">Welcome back</h1>
-        <p className="auth-subtitle">Sign in to your CampusGraph account</p>
-
-        {error && <div className="auth-error">{error}</div>}
-
-        <form onSubmit={handleSubmit} className="auth-form">
-          <label>
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              autoFocus
-            />
-          </label>
-
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-            />
-          </label>
-
-          <button type="submit" className="auth-btn-primary" disabled={loading}>
-            {loading ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
-
-        <p className="auth-switch">
-          Don't have an account? <Link to="/signup">Sign up</Link>
-        </p>
-      </div>
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "center",
+      minHeight: "100vh", background: "#0f1117",
+    }}>
+      <SignIn
+        routing="path"
+        path="/login"
+        forceRedirectUrl="/home"
+        signUpUrl="/signup"
+        appearance={{
+          variables: {
+            colorPrimary: "#C0392B",
+            colorBackground: "#111827",
+            colorText: "#F0F0F0",
+          },
+        }}
+      />
     </div>
   )
 }

@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { motion } from "motion/react";
 import { Target, Award, Edit2, Calendar, Briefcase, Users, Star } from "lucide-react";
 import { mockEvents, mockOpportunities } from "../home/mock-data";
 import { useAuth } from "../../context/AuthContext";
+import EditProfileModal from "../node/components/EditProfileModal";
 
 export default function Profile() {
   const { user } = useAuth();
+  const [editOpen, setEditOpen] = useState(false);
   const savedEvents = mockEvents.slice(0, 3);
   const savedOpportunities = mockOpportunities.slice(0, 2);
 
@@ -53,7 +56,9 @@ export default function Profile() {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                onClick={() => setEditOpen(true)}
                 className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                title="Edit profile"
               >
                 <Edit2 className="w-5 h-5 text-[#9CA3AF]" />
               </motion.button>
@@ -267,6 +272,7 @@ export default function Profile() {
           </motion.div>
         </div>
       </div>
+      <EditProfileModal open={editOpen} onClose={() => setEditOpen(false)} />
     </div>
   );
 }

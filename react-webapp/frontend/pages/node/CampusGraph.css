@@ -95,7 +95,12 @@
 /* ── Graph SVG ── */
 #graph-svg {
   flex: 1; cursor: grab;
-  background: radial-gradient(ellipse at 50% 38%, #0e1524 0%, #060810 68%);
+  background:
+    repeating-linear-gradient(0deg,  transparent, transparent 49px, rgba(255,255,255,0.018) 50px),
+    repeating-linear-gradient(90deg, transparent, transparent 49px, rgba(255,255,255,0.018) 50px),
+    radial-gradient(ellipse at 25% 15%, rgba(20,35,70,0.55) 0%, transparent 55%),
+    radial-gradient(ellipse at 75% 85%, rgba(15,25,50,0.55) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 40%, #0e1524 0%, #060810 70%);
 }
 #graph-svg:active { cursor: grabbing; }
 
@@ -113,8 +118,17 @@
 .link-t3 { stroke: #253448; }
 .link-dashed { stroke-dasharray: 5,4; }
 
-/* Student↔student CONNECTED_TO edges */
-.link-direct { stroke: #a78bfa !important; stroke-dasharray: 3,3; }
+/* Student↔student CONNECTED_TO edges — traveling light-ball effect */
+@keyframes flowBall {
+  to { stroke-dashoffset: -58; }
+}
+.link-direct {
+  stroke: #a78bfa !important;
+  stroke-dasharray: 3, 55;
+  stroke-linecap: round;
+  animation: flowBall 2.2s linear infinite;
+  filter: drop-shadow(0 0 2.5px rgba(167,139,250,0.9));
+}
 
 /* Path pulse — JS applies color + filter; class marks membership */
 .link.path-pulse { stroke: #e879f9; }
@@ -123,7 +137,26 @@
 .node circle:hover { filter: brightness(1.25); }
 .node.dimmed circle { opacity: 0.07; }
 .node.dimmed text   { opacity: 0.04; }
-.node.selected circle.main-circle { stroke-width: 3px; stroke: white; }
+
+/* Selected node: breathing glow animation */
+@keyframes breathe {
+  0%, 100% { filter: drop-shadow(0 0 5px rgba(167,139,250,0.45)); }
+  50%       { filter: drop-shadow(0 0 15px rgba(167,139,250,0.85)); }
+}
+.node.selected circle.main-circle {
+  stroke-width: 3px; stroke: white;
+  animation: breathe 2.5s ease-in-out infinite;
+}
+
+/* Discovery highlight — flash green then settle */
+@keyframes discoveryPop {
+  0%   { filter: drop-shadow(0 0 0px  rgba(52,211,153,0));    }
+  30%  { filter: drop-shadow(0 0 20px rgba(52,211,153,0.95)); }
+  100% { filter: drop-shadow(0 0 6px  rgba(52,211,153,0.35)); }
+}
+.node.discovery-glow circle.main-circle {
+  animation: discoveryPop 0.9s ease-out forwards;
+}
 
 /* Current logged-in user node highlight */
 .node-current-user circle.main-circle {
@@ -179,6 +212,8 @@
 .connItem:hover { color: white; }
 .connDot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .connRel { font-size: 0.7rem; color: #718096; margin-top: 1px; }
+.connExpandBtn { margin-top: 8px; background: none; border: none; color: #5b7bab; font-size: 0.75rem; cursor: pointer; padding: 0; transition: color 0.15s; }
+.connExpandBtn:hover { color: #a0bfdf; }
 
 /* ── Legend ── */
 .legend {
@@ -189,22 +224,34 @@
 .legendTitle { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.5px; color: #718096; margin-bottom: 8px; font-weight: 600; }
 .legendItem  { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 0.78rem; }
 
-/* ── Top Connected Panel ── */
-.topConnected {
+/* ── Top Connected Inline Preview Card ── */
+.tcPreview {
   position: absolute; bottom: 20px; left: 158px;
-  background: rgba(10,13,22,0.9); border: 1px solid #1a2030; border-radius: 10px;
-  padding: 12px 14px; backdrop-filter: blur(8px); pointer-events: all; cursor: default;
-  min-width: 148px;
+  background: rgba(10,13,22,0.9); border: 1px solid #1a2030; border-radius: 12px;
+  padding: 10px 14px; backdrop-filter: blur(8px); pointer-events: all;
+  min-width: 195px; color: #e2e8f0; transition: border-color 0.2s;
 }
-.topConnectedItem {
-  display: flex; align-items: center; gap: 7px;
-  padding: 3px 0; font-size: 0.76rem; cursor: pointer;
-  transition: opacity 0.15s;
+.tcPreview:hover { border-color: rgba(255,215,0,0.25); }
+.tcPreviewHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.tcPreviewTitle  { font-size: 0.75rem; font-weight: 700; }
+.tcSeeAllBtn     { background: none; border: none; color: #a78bfa; font-size: 0.68rem; cursor: pointer; font-family: inherit; padding: 0; }
+.tcSeeAllBtn:hover { color: #c4b5fd; }
+.tcRow           { display: flex; align-items: center; gap: 7px; padding: 3px 0; cursor: pointer; border-radius: 5px; }
+.tcRow:hover .tcRowName { color: #c4b5fd; }
+.tcRowBadge      { width: 20px; font-size: 0.78rem; text-align: center; flex-shrink: 0; }
+.tcRowName       { font-size: 0.75rem; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #e2e8f0; transition: color 0.15s; }
+.tcRowCount      { font-size: 0.68rem; flex-shrink: 0; }
+
+/* ── Animated background depth overlay ── */
+@keyframes depthPulse {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50%       { opacity: 0.9;  transform: scale(1.06); }
 }
-.topConnectedItem:hover { opacity: 0.75; }
-.topConnectedMedal  { font-size: 0.72rem; width: 14px; text-align: center; flex-shrink: 0; }
-.topConnectedName   { color: #e2e8f0; flex: 1; }
-.topConnectedCount  { font-size: 0.68rem; color: #60a5fa; font-weight: 700; }
+.bgGlow {
+  position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: radial-gradient(ellipse at 50% 45%, rgba(124,58,237,0.07) 0%, transparent 60%);
+  animation: depthPulse 9s ease-in-out infinite;
+}
 
 /* ── Connection UI (SidePanel) ── */
 .connectSection { margin-bottom: 16px; }
@@ -233,36 +280,6 @@
 .connectIncoming { display: flex; flex-direction: column; gap: 8px; }
 .connectActions  { display: flex; gap: 8px; }
 
-/* ── Recommended Connections (SidePanel) ── */
-.recItem {
-  display: flex; align-items: center; gap: 10px; padding: 8px 6px;
-  border-radius: 8px; cursor: pointer; transition: background 0.15s;
-}
-.recItem:hover { background: #131720; }
-
-.recAvatar {
-  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.85rem; font-weight: 700; color: #fff;
-}
-
-.recInfo   { flex: 1; min-width: 0; }
-.recName   { font-size: 0.84rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.recReason { font-size: 0.72rem; color: #718096; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* ── Recommendation glow rings (D3 appended) ── */
-.rec-ring {
-  fill: none;
-  stroke: #818cf8;
-  stroke-width: 2;
-  stroke-opacity: 0;
-  animation: recPulse 2.4s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes recPulse {
-  0%, 100% { stroke-opacity: 0;    r: var(--rec-r-start, 18px); }
-  50%       { stroke-opacity: 0.6; r: var(--rec-r-end, 28px);   }
-}
 
 /* ── Loading / Error ── */
 .loadingState, .errorState {
@@ -354,137 +371,3 @@
 .hoverCardIcon { font-size: 0.7rem; flex-shrink: 0; margin-top: 2px; opacity: 0.7; }
 .hoverCardText { font-size: 0.76rem; color: #94a3b8; line-height: 1.45; }
 
-/* ── Network Insights — right-edge tab + popout card ── */
-
-/* Tab: small pill attached to the right edge of .main */
-.insightTab {
-  position: absolute;
-  right: 0; top: 38%;
-  transform: translateY(-50%);
-  width: 32px;
-  background: rgba(10, 13, 22, 0.92);
-  border: 1px solid rgba(129, 140, 248, 0.28);
-  border-right: none;
-  border-radius: 8px 0 0 8px;
-  padding: 10px 6px;
-  cursor: pointer;
-  z-index: 15;
-  display: flex; flex-direction: column; align-items: center; gap: 5px;
-  backdrop-filter: blur(10px);
-  transition: background 0.15s, border-color 0.15s;
-  font-family: inherit;
-}
-.insightTab:hover {
-  background: rgba(18, 22, 36, 0.97);
-  border-color: rgba(129, 140, 248, 0.5);
-}
-.insightTab.open { border-color: rgba(129, 140, 248, 0.5); }
-
-.insightTabIcon  { font-size: 0.78rem; color: #a5b4fc; }
-.insightTabArrow { font-size: 0.65rem; color: #4a5568; line-height: 1; }
-
-/* Card: slides in from the right when open */
-.insightCard {
-  position: absolute;
-  right: 32px; top: 38%;
-  transform: translateY(-50%) translateX(16px);
-  opacity: 0;
-  pointer-events: none;
-  transition: transform 0.22s cubic-bezier(0.16,1,0.3,1), opacity 0.18s ease;
-  width: 242px;
-  background: rgba(10, 13, 22, 0.96);
-  border: 1px solid #1a2030;
-  border-radius: 12px;
-  padding: 14px 15px;
-  z-index: 14;
-  backdrop-filter: blur(16px);
-  box-shadow: -6px 0 28px rgba(0, 0, 0, 0.5);
-}
-.insightCard.open {
-  transform: translateY(-50%) translateX(0);
-  opacity: 1;
-  pointer-events: all;
-}
-
-.insightCardHeader {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 11px;
-}
-.insightCardLabel {
-  font-size: 0.62rem; text-transform: uppercase;
-  letter-spacing: 1.5px; color: #718096; font-weight: 600;
-}
-.insightCardClose {
-  background: none; border: none; color: #4a5568;
-  font-size: 0.75rem; cursor: pointer; font-family: inherit;
-  padding: 1px 4px; border-radius: 4px; line-height: 1;
-  transition: color 0.12s;
-}
-.insightCardClose:hover { color: #e2e8f0; }
-
-.insightCardPerson {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 11px;
-}
-.insightCardAvatar {
-  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.8rem; font-weight: 700; color: #fff;
-}
-.insightCardPersonInfo { min-width: 0; }
-.insightCardName {
-  font-size: 0.88rem; font-weight: 700; color: #e2e8f0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.insightCardMajor {
-  font-size: 0.71rem; color: #60a5fa; margin-top: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-.insightCardReasons { margin-bottom: 12px; }
-.insightCardReasonLabel {
-  font-size: 0.7rem; color: #718096; margin-bottom: 5px;
-}
-.insightCardReasonList {
-  list-style: none; margin: 0; padding: 0;
-}
-.insightCardReasonList li {
-  font-size: 0.74rem; color: #94a3b8; padding: 2px 0;
-}
-.insightCardReasonList li::before { content: "· "; color: #4a5568; }
-
-.insightCardActions {
-  display: flex; gap: 7px;
-  border-top: 1px solid #1a2030; padding-top: 10px;
-}
-.insightCardSkip {
-  background: none; border: 1px solid #1e2a42; color: #718096;
-  padding: 5px 10px; border-radius: 7px;
-  font-size: 0.73rem; cursor: pointer; font-family: inherit;
-  transition: all 0.13s;
-}
-.insightCardSkip:hover { border-color: #2a3a50; color: #94a3b8; }
-
-.insightCardConnect {
-  flex: 1;
-  background: rgba(99, 102, 241, 0.18);
-  border: 1px solid rgba(99, 102, 241, 0.32);
-  color: #a5b4fc;
-  padding: 5px 10px; border-radius: 7px;
-  font-size: 0.73rem; font-weight: 600;
-  cursor: pointer; font-family: inherit;
-  transition: all 0.13s; white-space: nowrap;
-}
-.insightCardConnect:hover {
-  background: rgba(99, 102, 241, 0.3);
-  border-color: rgba(99, 102, 241, 0.55);
-}
-
-/* ── Discovery glow — pulsed by "Discover" action ── */
-.node.discovery-glow circle.main-circle {
-  animation: discoveryPulse 1.5s ease-in-out 3;
-}
-@keyframes discoveryPulse {
-  0%, 100% { filter: none; }
-  50%       { filter: drop-shadow(0 0 10px rgba(129, 140, 248, 0.85)); }
-}

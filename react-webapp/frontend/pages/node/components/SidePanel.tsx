@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 // ─────────────────────────────────────────────────────────────────────────────
 // components/SidePanel.tsx
-// Shows node details, Add Connection button, and Recommended Connections
+// Shows node details and connection status (view-only on own node)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
@@ -11,16 +11,6 @@ import { getNodeId } from "../utils/getNodeId";
 import { useAuth } from "../../../context/AuthContext";
 
 const API = import.meta.env.VITE_API_URL ?? "";
-
-interface Recommendation {
-  id:              string;
-  name:            string;
-  major:           string;
-  sharedClubs:     number;
-  sharedInterests: number;
-  sameMajor:       boolean;
-  score:           number;
-}
 
 type ConnStatus = "none" | "pending-sent" | "pending-received" | "connected";
 
@@ -37,11 +27,9 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
   const isOwnNode = node?.id === user?.id;
 
   // ── Connection status state ───────────────────────────────────────────────
-  const [connStatus,  setConnStatus]  = useState<ConnStatus>("none");
-  const [connLoading, setConnLoading] = useState(false);
-
-  // ── Recommendations (shown on own node) ───────────────────────────────────
-  const [recs, setRecs] = useState<Recommendation[]>([]);
+  const [connStatus,    setConnStatus]    = useState<ConnStatus>("none");
+  const [connLoading,   setConnLoading]   = useState(false);
+  const [connExpanded,  setConnExpanded]  = useState(false);
 
   // Fetch connection status whenever the selected node changes
   useEffect(() => {
@@ -60,15 +48,6 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       .catch(() => setConnStatus("none"));
   }, [node?.id, user, isOwnNode]); // eslint-disable-line
 
-  // Fetch recommendations when viewing own node
-  useEffect(() => {
-    if (!isOwnNode || !user) { setRecs([]); return; }
-    fetch(`${API}/api/connections/recommendations`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : [])
-      .then((data: Recommendation[]) => setRecs(data))
-      .catch(() => setRecs([]));
-  }, [isOwnNode, user]);
-
   // ── Connection actions ────────────────────────────────────────────────────
   const sendRequest = async () => {
     if (!node || !user) return;
@@ -80,34 +59,6 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
         body:    JSON.stringify({ toUserId: node.id }),
       });
       if (res.ok) setConnStatus("pending-sent");
-    } catch { /* silent */ }
-    setConnLoading(false);
-  };
-
-  const acceptRequest = async () => {
-    if (!node || !user) return;
-    setConnLoading(true);
-    try {
-      const res = await fetch(`${API}/api/connections/accept`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ fromUserId: node.id }),
-      });
-      if (res.ok) setConnStatus("connected");
-    } catch { /* silent */ }
-    setConnLoading(false);
-  };
-
-  const rejectRequest = async () => {
-    if (!node || !user) return;
-    setConnLoading(true);
-    try {
-      await fetch(`${API}/api/connections/reject`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ fromUserId: node.id }),
-      });
-      setConnStatus("none");
     } catch { /* silent */ }
     setConnLoading(false);
   };
@@ -144,11 +95,6 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
           {node.type === "student" && node.details?.bio && (
             <div className="panelBio">{node.details.bio as string}</div>
           )}
-          {node.details?.linkedinUrl && (
-            <a href={node.details.linkedinUrl as string} target="_blank" rel="noopener noreferrer" className="panelLinkedin">
-              LinkedIn ↗
-            </a>
-          )}
         </div>
       </div>
 
@@ -169,18 +115,24 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
             <span className="connectChip connectChip--pending">Request Sent</span>
           )}
           {connStatus === "pending-received" && (
-            <div className="connectIncoming">
-              <span className="connectChip connectChip--incoming">Wants to connect</span>
-              <div className="connectActions">
-                <button className="connectBtn connectBtn--accept"   onClick={acceptRequest} disabled={connLoading}>Accept</button>
-                <button className="connectBtn connectBtn--decline"  onClick={rejectRequest} disabled={connLoading}>Decline</button>
-              </div>
-            </div>
+            <span className="connectChip connectChip--incoming">Wants to connect with you</span>
           )}
           {connStatus === "connected" && (
             <span className="connectChip connectChip--connected">✓ Connected</span>
           )}
+          {node.details?.linkedinUrl && (
+            <a href={node.details.linkedinUrl as string} target="_blank" rel="noopener noreferrer" className="panelLinkedin">
+              LinkedIn ↗
+            </a>
+          )}
         </div>
+      )}
+
+      {/* LinkedIn for own node or non-student nodes */}
+      {(isOwnNode || node.type !== "student") && node.details?.linkedinUrl && (
+        <a href={node.details.linkedinUrl as string} target="_blank" rel="noopener noreferrer" className="panelLinkedin" style={{ margin: "6px 16px 0" }}>
+          LinkedIn ↗
+        </a>
       )}
 
       {/* Details */}
@@ -202,7 +154,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       {/* Connections */}
       <div className="section">
         <h4 className="sectionTitle">Connections ({connLinks.length})</h4>
-        {connLinks.map((l, i) => {
+        {(connExpanded ? connLinks : connLinks.slice(0, 5)).map((l, i) => {
           const otherId = getNodeId(l.source) === node.id ? getNodeId(l.target) : getNodeId(l.source);
           const other   = nodes.find(n => n.id === otherId);
           if (!other) return null;
@@ -216,31 +168,15 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
             </div>
           );
         })}
+        {connLinks.length > 5 && (
+          <button
+            className="connExpandBtn"
+            onClick={() => setConnExpanded(e => !e)}
+          >
+            {connExpanded ? "← Show less" : `Show ${connLinks.length - 5} more →`}
+          </button>
+        )}
       </div>
-
-      {/* ── Recommended Connections (own profile only) ─────────────────────── */}
-      {isOwnNode && recs.length > 0 && (
-        <div className="section">
-          <h4 className="sectionTitle">Recommended for You</h4>
-          {recs.map(rec => {
-            const reasons: string[] = [];
-            if (rec.sameMajor)          reasons.push(`Same major (${rec.major})`);
-            if (rec.sharedInterests > 0) reasons.push(`${rec.sharedInterests} shared interest${rec.sharedInterests > 1 ? "s" : ""}`);
-            if (rec.sharedClubs > 0)     reasons.push(`${rec.sharedClubs} shared club${rec.sharedClubs > 1 ? "s" : ""}`);
-            return (
-              <div key={rec.id} className="recItem" onClick={() => onSelectNode(rec.id)}>
-                <div className="recAvatar" style={{ background: TYPE_COLOR.student }}>
-                  {rec.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
-                </div>
-                <div className="recInfo">
-                  <div className="recName">{rec.name}</div>
-                  <div className="recReason">{reasons.join(" · ")}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
 
     </div>
   );

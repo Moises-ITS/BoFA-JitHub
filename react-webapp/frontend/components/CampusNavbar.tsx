@@ -12,14 +12,12 @@ interface CampusNavbarProps {
   readonly mode: GraphMode;
   readonly userConnCount: number;
   readonly onExitMode: () => void;
-  readonly onOpenProfile: () => void;
 }
 
 export default function CampusNavbar({
   mode,
   userConnCount,
   onExitMode,
-  onOpenProfile,
 }: CampusNavbarProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -51,33 +49,37 @@ export default function CampusNavbar({
           <circle cx="18"   cy="18"   r="4" fill="white" />
         </svg>
         <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          <span>JitHub</span>
+          <span className="navLogoText">JitHub</span>
           <span className="navTagline">Map your network · Discover your opportunities</span>
         </div>
       </div>
       <div className="navRight">
-        <span className={`modeBadge mode-${mode}`}>{modeBadge}</span>
-        {mode !== "free" && (
-          <button className="exitModeBtn" onClick={onExitMode}>← Free Explore</button>
-        )}
-        <span className="navChip">{userConnCount} Connections</span>
-        <button
-          type="button"
-          className="profileAvatarBtn"
-          onClick={onOpenProfile}
-          title="Edit profile"
-        >
-          {user?.name?.charAt(0).toUpperCase() ?? "?"}
-        </button>
-        <button
-          type="button"
-          className="logoutBtn"
-          onClick={() => {
-            navigate("/", { replace: true });
-          }}
-        >
-          Home
-        </button>
+        <div className="navStats">
+          <span className={`modeBadge mode-${mode}`}>{modeBadge}</span>
+          {mode !== "free" && (
+            <button className="exitModeBtn" onClick={onExitMode}>← Free Explore</button>
+          )}
+          <span className="navChip">{userConnCount} Connections</span>
+        </div>
+        <div className="navActions">
+          <button
+            type="button"
+            className="profileAvatarBtn"
+            onClick={() => navigate("/profile")}
+            title="Go to profile"
+          >
+            {user?.name?.charAt(0).toUpperCase() ?? "?"}
+          </button>
+          <button
+            type="button"
+            className="logoutBtn"
+            onClick={() => {
+              navigate("/", { replace: true });
+            }}
+          >
+            ← Home
+          </button>
+        </div>
       </div>
     </nav>
   );

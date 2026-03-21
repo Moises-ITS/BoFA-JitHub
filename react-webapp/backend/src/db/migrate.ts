@@ -70,6 +70,27 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
     name: "005_linkedin",
     sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS linkedin_url VARCHAR;`,
   },
+  {
+    name: "006_password_reset",
+    sql: `
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id          SERIAL PRIMARY KEY,
+        user_id     VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        code        VARCHAR(6) NOT NULL,
+        expires_at  TIMESTAMP NOT NULL,
+        used        BOOLEAN DEFAULT FALSE,
+        created_at  TIMESTAMP DEFAULT NOW()
+      );
+    `,
+  },
+  {
+    name: "007_clerk_id",
+    sql: `
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS clerk_id VARCHAR UNIQUE;
+      CREATE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_id);
+    `,
+  },
 ]
 
 export async function runMigrations() {

@@ -3,13 +3,19 @@ import { useAuth } from "../../../context/AuthContext"
 import "./EditProfileModal.css"
 
 const NJIT_MAJORS = [
-  "Actuarial Mathematics", "Applied Mathematics", "Applied Statistics", "Architecture",
-  "Biomedical Engineering", "Biology", "Business Administration", "Chemical Engineering",
-  "Chemistry", "Civil Engineering", "Communication Studies", "Computer Engineering",
-  "Computer Science", "Construction Management", "Data Science", "Digital Marketing",
-  "Electrical Engineering", "Environmental Engineering", "Environmental Science", "Finance",
-  "History", "Humanities", "Industrial Engineering", "Information Technology", "Management",
-  "Mechanical Engineering", "Music Technology", "Physics", "Pre-Medical Studies", "Urban Systems",
+  "Accounting", "Actuarial Mathematics", "Applied Mathematics", "Applied Statistics",
+  "Architecture", "Biomedical Engineering", "Biomedical Sciences", "Biology",
+  "Business Administration", "Chemical Biology", "Chemical Engineering", "Chemistry",
+  "Civil Engineering", "Communication Studies", "Computer Engineering", "Computer Science",
+  "Construction Management", "Criminal Justice", "Data Science", "Digital Design",
+  "Digital Marketing", "Electrical Engineering", "Engineering Science", "Engineering Technology",
+  "Environmental Engineering", "Environmental Science", "Finance", "Health Informatics",
+  "History", "Humanities", "Imaging Science", "Industrial Engineering", "Information Systems",
+  "Information Technology", "Interior Design", "Liberal Studies", "Management",
+  "Materials Science and Engineering", "Mathematics", "Mechanical Engineering",
+  "Medical Informatics", "Music Technology", "Nursing", "Physics", "Pre-Medical Studies",
+  "Professional and Technical Communication", "Real Estate Development",
+  "Science Technology and Society", "Statistics", "Urban Systems",
 ]
 
 const KNOWN_INTERESTS = [
@@ -24,17 +30,26 @@ const KNOWN_INTERESTS = [
 ]
 
 const NJIT_CLUBS = [
-  "American Institute of Chemical Engineers", "American Society of Civil Engineers",
-  "American Society of Mechanical Engineers", "Association for Computing Machinery",
-  "Biomedical Engineering Society", "Caribbean Student Association", "Chinese Student Association",
-  "Cyber Defense Organization", "Data Science Club", "Entrepreneurship Club", "Finance Club",
-  "Google Developer Student Club", "Hack@NJIT",
-  "Institute of Electrical and Electronics Engineers", "Investment Club",
-  "Korean Student Association", "Latino American Student Organization", "Mathematics Club",
-  "Muslim Student Association", "National Society of Black Engineers", "Physics Club",
-  "Pre-Medical Society", "Robotics Club", "Society of Hispanic Professional Engineers",
-  "Society of Women Engineers", "Software Engineering Club", "Student Government Association",
-  "Theatre Arts Group", "Vietnamese Student Association", "Women in Computer Science",
+  "American Institute of Aeronautics and Astronautics", "American Institute of Chemical Engineers",
+  "American Chemical Society", "American Society of Civil Engineers",
+  "American Society of Mechanical Engineers", "Alpha Phi Omega",
+  "Association for Computing Machinery", "Biomedical Engineering Society",
+  "Caribbean Student Association", "Chess Club", "Chinese Student Association",
+  "Climbing Club", "Computer Science Honors Society", "Cooking Club",
+  "Cyber Defense Organization", "Data Science Club", "Debate Club",
+  "Engineering Without Borders", "Entrepreneurship Club", "ESports Club", "Film Club",
+  "Finance Club", "Google Developer Student Club", "Hack@NJIT",
+  "Indian Student Association", "Institute of Electrical and Electronics Engineers",
+  "International Students Organization", "Investment Club", "Korean Student Association",
+  "Latino American Student Organization", "Martial Arts Club", "Mathematics Club",
+  "Mathematics Honor Society", "Model United Nations", "Muslim Student Association",
+  "National Society of Black Engineers", "Pakistani Student Association", "Photography Club",
+  "Physics Club", "Pre-Medical Society", "Robotics Club", "Rugby Club", "Soccer Club",
+  "Society of Hispanic Professional Engineers", "Society of Women Engineers",
+  "Software Engineering Club", "Step Team", "Student Government Association",
+  "Table Tennis Club", "Tau Beta Pi", "Tennis Club", "Theatre Arts Group",
+  "Turkish Student Association", "Vietnamese Student Association", "Volleyball Club",
+  "Women in Computer Science", "Women in Engineering",
 ]
 
 interface Props {

@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import * as d3 from "d3";
 
 import type { GraphNode, GraphLink, NodeType } from "./types/graphNodes";
@@ -15,9 +16,7 @@ import FilterBar                          from "./components/FilterBar";
 import SearchBar                          from "./components/SearchBar";
 import Legend                             from "./components/Legend";
 import TopConnected                       from "./components/TopConnected";
-import NetworkInsights                    from "./components/NetworkInsights";
 import HoverCard                          from "./components/HoverCard";
-import EditProfileModal                   from "./components/EditProfileModal";
 import { useAuth }                        from "../../context/AuthContext";
 import { NetworkIntro }                   from "../../components/NetworkTransition";
 import CampusNavbar                       from "../../components/CampusNavbar";
@@ -34,7 +33,7 @@ type GraphMode = "free" | "locked" | "path";
 export default function CampusGraph() {
 
   const { user } = useAuth();
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const { nodes, links, loading, error } = useGraphData();
   const [introComplete, setIntroComplete] = useState(false);
@@ -50,7 +49,7 @@ export default function CampusGraph() {
   const [pathStatus,          setPathStatus]          = useState<"idle"|"searching"|"found"|"notfound">("idle");
   const [visibleCount,        setVisibleCount]        = useState(0);
   const [hoverCard,           setHoverCard]           = useState<{ node: GraphNode; x: number; y: number } | null>(null);
-  const [discoveryHighlights, setDiscoveryHighlights] = useState<Set<string>>(new Set());
+  const [d3Ready,             setD3Ready]             = useState(false);
 
   // ── D3 Refs ───────────────────────────────────────────────────────────────
   const svgRef     = useRef<SVGSVGElement>(null);
@@ -63,16 +62,6 @@ export default function CampusGraph() {
 
   // ── Clear hover card when leaving free mode ───────────────────────────────
   useEffect(() => { if (mode !== "free") setHoverCard(null); }, [mode]);
-
-  // ── Discovery highlight effect (pulse 3× then clear) ─────────────────────
-  useEffect(() => {
-    const nodeSel = nodeSelRef.current;
-    if (!nodeSel) return;
-    nodeSel.classed("discovery-glow", (d: GraphNode) => discoveryHighlights.has(d.id));
-    if (discoveryHighlights.size === 0) return;
-    const timer = setTimeout(() => setDiscoveryHighlights(new Set()), 5000);
-    return () => clearTimeout(timer);
-  }, [discoveryHighlights]);
 
   // ── Stable-ref callbacks (avoids D3 setup re-running on mode changes) ─────
   const modeRef          = useRef<GraphMode>("free");
@@ -203,6 +192,29 @@ export default function CampusGraph() {
     setPathStatus("idle");
     exitToFree();
   }, [exitToFree]);
+
+  // ── Auto-select node from ?select= URL param ──────────────────────────────
+  useEffect(() => {
+    const selectId = searchParams.get("select");
+    // Wait for nodes to load, intro to finish, AND D3 refs to be initialized
+    if (!selectId || nodes.length === 0 || !introComplete || !d3Ready) return;
+    if (!svgRef.current || !zoomRef.current) return;
+
+    const target = nodes.find(n => n.id === selectId);
+    if (!target) { setSearchParams({}, { replace: true }); return; }
+
+    selectNodeFn(target);
+
+    // enterLocked places the selected node at graph center (w/2, h/2).
+    // The intro flyover zoom may be mid-flight targeting the current user's node.
+    // Interrupt it and reset the viewport to identity so graph center is visible.
+    d3.select(svgRef.current)
+      .interrupt()
+      .transition().duration(600).ease(d3.easeCubicInOut)
+      .call(zoomRef.current.transform, d3.zoomIdentity);
+
+    setSearchParams({}, { replace: true });
+  }, [searchParams, nodes, introComplete, d3Ready, selectNodeFn, setSearchParams]);
 
   // ── Company path search ───────────────────────────────────────────────────
   const findPath = useCallback(async (overrideLabel?: string) => {
@@ -505,6 +517,7 @@ export default function CampusGraph() {
     nodeSelRef.current = nodeSel;
     linkSelRef.current = linkSel as d3.Selection<SVGPathElement, GraphLink, SVGGElement, unknown>;
     simRef.current     = sim;
+    setD3Ready(true);
 
     svg.on("click", () => { if (modeRef.current !== "free") deselectAll(); });
 
@@ -518,6 +531,7 @@ export default function CampusGraph() {
     window.addEventListener("resize", onResize);
 
     return () => {
+      setD3Ready(false);
       clearTimeout(timer);
       window.removeEventListener("resize", onResize);
       sim.stop();
@@ -645,7 +659,6 @@ export default function CampusGraph() {
         mode={mode}
         userConnCount={userConnCount}
         onExitMode={deselectAll}
-        onOpenProfile={() => setProfileOpen(true)}
       />
 
       {/* Toolbar */}
@@ -687,6 +700,7 @@ export default function CampusGraph() {
 
       {/* Main */}
       <div className="main">
+        <div className="bgGlow" />
         <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} />
         <SidePanel
           node={selectedNode}
@@ -699,15 +713,8 @@ export default function CampusGraph() {
         <TopConnected
           nodes={nodes}
           links={links}
+          currentUserId={user?.id ?? ""}
           onSelectNode={id => { const n = nodes.find(x => x.id === id); if (n) selectNodeFn(n); }}
-        />
-        <NetworkInsights
-          nodes={nodes}
-          links={links}
-          currentUserId={user?.id}
-          selectedNode={selectedNode}
-          onSelectNode={id => { const n = nodes.find(x => x.id === id); if (n) selectNodeFn(n); }}
-          onDiscoverNodes={ids => setDiscoveryHighlights(new Set(ids))}
         />
       </div>
 
@@ -724,8 +731,6 @@ export default function CampusGraph() {
           &nbsp;·&nbsp;<span>click background to exit</span>
         </div>
       )}
-
-      <EditProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
 
       {/* Node hover card — fixed to cursor, only in free mode */}
       {hoverCard && mode === "free" && (

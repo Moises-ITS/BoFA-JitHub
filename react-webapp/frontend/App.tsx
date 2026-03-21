@@ -4,6 +4,7 @@ import ProtectedRoute from "./pages/SharedComponents/ProtectedRoute"
 import CampusGraph from "./pages/node/CampusGraph"
 import LoginPage from "./pages/auth/LoginPage"
 import SignupPage from "./pages/auth/SignupPage"
+import OpportunitiesPage from "./pages/opportunities/OpportunitiesPage"
 
 export default function App() {
   return (
@@ -17,7 +18,17 @@ export default function App() {
           {/* Protected */}
           <Route path="/" element={
             <ProtectedRoute>
+              <OpportunitiesPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/graph" element={
+            <ProtectedRoute>
               <CampusGraph />
+            </ProtectedRoute>
+          } />
+          <Route path="/opportunities" element={
+            <ProtectedRoute>
+              <OpportunitiesPage />
             </ProtectedRoute>
           } />
 

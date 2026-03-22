@@ -73,11 +73,11 @@ export function HeatmapCalendar() {
   const getEvents = (day: string, hour: number): SlotEvent[] => grid[`${day}:${hour}`] ?? [];
   const getCellStyle = (count: number): CSSProperties => {
     if (count === 0) return { backgroundColor: "rgba(255,255,255,0.05)" };
-    if (count === 1) return { backgroundColor: "rgba(192,57,43,0.30)" };
-    if (count === 2) return { backgroundColor: "rgba(192,57,43,0.50)" };
-    if (count === 3) return { backgroundColor: "rgba(192,57,43,0.70)" };
-    if (count === 4) return { backgroundColor: "rgba(192,57,43,0.85)" };
-    return { backgroundColor: "rgb(192,57,43)" };
+    if (count === 1) return { backgroundColor: "rgba(215,25,32,0.30)" };
+    if (count === 2) return { backgroundColor: "rgba(215,25,32,0.50)" };
+    if (count === 3) return { backgroundColor: "rgba(215,25,32,0.70)" };
+    if (count === 4) return { backgroundColor: "rgba(215,25,32,0.85)" };
+    return { backgroundColor: "var(--brand-primary)" };
   };
 
   const selectedEvents = selected ? (grid[selected.key] ?? []) : [];
@@ -92,7 +92,7 @@ export function HeatmapCalendar() {
     : "";
 
   return (
-    <div className="bg-[#1A1A1A] border border-white/10 rounded-xl p-5">
+    <div className="rounded-xl p-5" style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-white text-sm">Event Heatmap</h3>
@@ -104,21 +104,21 @@ export function HeatmapCalendar() {
               style={{ opacity: weekIdx === 0 ? 0.25 : 1, cursor: weekIdx === 0 ? "not-allowed" : "pointer" }}
               className="p-1 rounded hover:bg-white/10 transition-colors"
             >
-              <ChevronLeft className="w-3.5 h-3.5 text-[#9CA3AF]" />
+              <ChevronLeft className="w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
             </button>
-            <span className="text-xs text-[#9CA3AF] min-w-[90px] text-center">{weekLabel}</span>
+            <span className="text-xs min-w-[90px] text-center" style={{ color: "var(--text-muted)" }}>{weekLabel}</span>
             <button
               onClick={() => setWeekIdx((i) => Math.min(availableWeeks.length - 1, i + 1))}
               disabled={weekIdx === availableWeeks.length - 1}
               style={{ opacity: weekIdx === availableWeeks.length - 1 ? 0.25 : 1, cursor: weekIdx === availableWeeks.length - 1 ? "not-allowed" : "pointer" }}
               className="p-1 rounded hover:bg-white/10 transition-colors"
             >
-              <ChevronRight className="w-3.5 h-3.5 text-[#9CA3AF]" />
+              <ChevronRight className="w-3.5 h-3.5" style={{ color: "var(--text-muted)" }} />
             </button>
           </div>
         )}
         {availableWeeks.length <= 1 && (
-          <span className="text-xs text-[#9CA3AF]">{weekLabel}</span>
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>{weekLabel}</span>
         )}
       </div>
 
@@ -128,7 +128,7 @@ export function HeatmapCalendar() {
           <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: "3rem repeat(7, 1fr)" }}>
             <div />
             {days.map((day) => (
-              <div key={day} className="text-xs text-[#9CA3AF] text-center font-medium">
+              <div key={day} className="text-xs text-center font-medium" style={{ color: "var(--text-muted)" }}>
                 {day}
               </div>
             ))}
@@ -137,7 +137,7 @@ export function HeatmapCalendar() {
           {/* Time rows */}
           {times.map((time, timeIdx) => (
             <div key={time} className="grid gap-1 mb-1" style={{ gridTemplateColumns: "3rem repeat(7, 1fr)" }}>
-              <div className="text-xs text-[#9CA3AF] text-right pr-2 flex items-center justify-end leading-none">
+              <div className="text-xs text-right pr-2 flex items-center justify-end leading-none" style={{ color: "var(--text-muted)" }}>
                 {time}
               </div>
               {days.map((day, dayIdx) => {
@@ -168,7 +168,7 @@ export function HeatmapCalendar() {
           ))}
 
           {/* Legend */}
-          <div className="flex items-center gap-2 mt-3 text-xs text-[#9CA3AF]">
+          <div className="flex items-center gap-2 mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
             <span>Less</span>
             <div className="flex gap-1">
               {[0, 1, 2, 3, 4, 5].map((val) => (
@@ -189,14 +189,15 @@ export function HeatmapCalendar() {
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--border-default)" }}>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-white">
                   {selected.day} @ {selected.time} — {selectedEvents.length} event{selectedEvents.length !== 1 ? "s" : ""}
                 </p>
                 <button
                   onClick={() => setSelected(null)}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="hover:text-white transition-colors"
+                  style={{ color: "var(--text-muted)" }}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -209,7 +210,7 @@ export function HeatmapCalendar() {
                   >
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-white truncate">{ev.event_name}</p>
-                      <p className="text-xs text-[#9CA3AF]">
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                         {ev.club_name}{ev.start_time ? ` · ${fmt12(ev.start_time)}` : ""}
                       </p>
                     </div>
@@ -219,7 +220,8 @@ export function HeatmapCalendar() {
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="text-[#9CA3AF] hover:text-white shrink-0 mt-0.5"
+                        className="hover:text-white shrink-0 mt-0.5"
+                        style={{ color: "var(--text-muted)" }}
                       >
                         <ExternalLink className="w-3 h-3" />
                       </a>

@@ -12,10 +12,10 @@ export function DeadlineChip({ deadline, className = "" }: DeadlineChipProps) {
   const hoursLeft = differenceInHours(deadline, now);
 
   const getUrgencyColor = () => {
-    if (daysLeft < 1) return "bg-[#C0392B] text-white";
-    if (daysLeft < 3) return "bg-[#E67E22] text-white";
-    if (daysLeft < 7) return "bg-[#F39C12] text-white";
-    return "bg-[#2A2A2A] text-[#9CA3AF]";
+    if (daysLeft < 1) return { backgroundColor: "var(--brand-primary)", color: "#FFFFFF" };
+    if (daysLeft < 3) return { backgroundColor: "var(--status-warning)", color: "#FFFFFF" };
+    if (daysLeft < 7) return { backgroundColor: "var(--accent-events)", color: "#FFFFFF" };
+    return { backgroundColor: "var(--bg-elevated)", color: "var(--text-muted)" };
   };
 
   const getTimeText = () => {
@@ -27,7 +27,10 @@ export function DeadlineChip({ deadline, className = "" }: DeadlineChipProps) {
   };
 
   return (
-    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${getUrgencyColor()} ${className}`}>
+    <div
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${className}`}
+      style={getUrgencyColor()}
+    >
       <Clock className="w-3 h-3" />
       {getTimeText()}
     </div>

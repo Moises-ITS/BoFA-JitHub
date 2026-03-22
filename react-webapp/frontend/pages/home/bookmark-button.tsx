@@ -27,7 +27,8 @@ export function BookmarkButton({ initialBookmarked = false, onToggle, className 
       className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${className}`}
     >
       <Bookmark
-        className={`w-4 h-4 ${bookmarked ? 'fill-[#C0392B] text-[#C0392B]' : 'text-[#9CA3AF]'}`}
+        className="w-4 h-4"
+        style={bookmarked ? { fill: "var(--brand-primary)", color: "var(--brand-primary)" } : { color: "var(--text-muted)" }}
       />
     </motion.button>
   );

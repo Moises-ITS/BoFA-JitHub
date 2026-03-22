@@ -6,12 +6,12 @@ interface NetworkIntroProps {
 }
 
 const NODES = [
-  { cx: 150, cy: 60, r: 6, color: "#3498DB", delay: 0 },
-  { cx: 240, cy: 120, r: 5, color: "#5DADE2", delay: 0.06 },
-  { cx: 220, cy: 220, r: 5, color: "#2ECC71", delay: 0.12 },
-  { cx: 120, cy: 240, r: 4.5, color: "#E67E22", delay: 0.18 },
-  { cx: 60, cy: 160, r: 5, color: "#9B59B6", delay: 0.24 },
-  { cx: 150, cy: 150, r: 8, color: "#C0392B", delay: 0.08 },
+  { cx: 150, cy: 60, r: 6, color: "var(--accent-networking)", delay: 0 },
+  { cx: 240, cy: 120, r: 5, color: "var(--status-info)", delay: 0.06 },
+  { cx: 220, cy: 220, r: 5, color: "var(--accent-opportunities)", delay: 0.12 },
+  { cx: 120, cy: 240, r: 4.5, color: "var(--accent-events)", delay: 0.18 },
+  { cx: 60, cy: 160, r: 5, color: "var(--accent-orgs)", delay: 0.24 },
+  { cx: 150, cy: 150, r: 8, color: "var(--brand-primary)", delay: 0.08 },
 ];
 
 const LINES = [
@@ -57,7 +57,7 @@ export function NetworkIntro({ onComplete }: NetworkIntroProps) {
             alignItems: "center",
             justifyContent: "center",
             overflow: "hidden",
-            background: "#0a0a0f",
+            background: "var(--bg-canvas)",
           }}
         >
           {/* Radial glow */}
@@ -70,7 +70,7 @@ export function NetworkIntro({ onComplete }: NetworkIntroProps) {
               width: 400,
               height: 400,
               borderRadius: "50%",
-              background: "radial-gradient(circle, rgba(52,152,219,0.3) 0%, rgba(52,152,219,0) 70%)",
+              background: "radial-gradient(circle, rgba(122,132,240,0.28) 0%, rgba(122,132,240,0) 70%)",
             }}
           />
 
@@ -81,7 +81,7 @@ export function NetworkIntro({ onComplete }: NetworkIntroProps) {
               <motion.path
                 key={`line-${i}`}
                 d={`M${x1},${y1} L${x2},${y2}`}
-                stroke="#3498DB"
+                stroke="var(--accent-networking)"
                 strokeWidth="1.5"
                 fill="none"
                 initial={{ pathLength: 0, opacity: 0 }}
@@ -109,8 +109,8 @@ export function NetworkIntro({ onComplete }: NetworkIntroProps) {
 
             {/* Glow rings */}
             {[
-              { cx: 150, cy: 150, color: "#C0392B" },
-              { cx: 150, cy: 60, color: "#3498DB" },
+              { cx: 150, cy: 150, color: "var(--brand-primary)" },
+              { cx: 150, cy: 60, color: "var(--accent-networking)" },
             ].map((ring, i) => (
               <motion.circle
                 key={`ring-${i}`}

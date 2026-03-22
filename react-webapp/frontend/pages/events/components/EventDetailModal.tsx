@@ -79,18 +79,18 @@ const YEAR_BOOSTS: Record<string, Record<string, number>> = {
 };
 
 export const CATEGORY_STYLE: Record<string, { bg: string; color: string }> = {
-  hackathon:         { bg: "rgba(192,57,43,0.2)",    color: "#E74C3C" },
-  workshop:          { bg: "rgba(52,152,219,0.2)",   color: "#5DADE2" },
-  recruiting:        { bg: "rgba(39,174,96,0.2)",    color: "#2ECC71" },
-  conference:        { bg: "rgba(155,89,182,0.2)",   color: "#BB8FCE" },
-  "info session":    { bg: "rgba(230,126,34,0.2)",   color: "#F39C12" },
-  "general meeting": { bg: "rgba(255,255,255,0.07)", color: "#9CA3AF" },
-  social:            { bg: "rgba(241,196,15,0.2)",   color: "#F4D03F" },
-  volunteering:      { bg: "rgba(26,188,156,0.2)",   color: "#1ABC9C" },
-  "site tour":       { bg: "rgba(230,126,34,0.2)",   color: "#E67E22" },
-  fundraiser:        { bg: "rgba(231,76,60,0.15)",   color: "#E74C3C" },
-  exposure:          { bg: "rgba(52,73,94,0.4)",     color: "#AAB7B8" },
-  "study support":   { bg: "rgba(52,152,219,0.15)",  color: "#85C1E9" },
+  hackathon:         { bg: "var(--brand-primary-soft)",        color: "var(--brand-primary)" },
+  workshop:          { bg: "var(--accent-networking-soft)",    color: "var(--accent-networking)" },
+  recruiting:        { bg: "var(--accent-opportunities-soft)", color: "var(--accent-opportunities)" },
+  conference:        { bg: "var(--accent-orgs-soft)",          color: "var(--accent-orgs)" },
+  "info session":    { bg: "var(--accent-events-soft)",        color: "var(--accent-events)" },
+  "general meeting": { bg: "rgba(255,255,255,0.06)",           color: "var(--text-muted)" },
+  social:            { bg: "var(--accent-orgs-soft)",          color: "var(--accent-orgs)" },
+  volunteering:      { bg: "var(--status-success-soft)",       color: "var(--status-success)" },
+  "site tour":       { bg: "var(--accent-events-soft)",        color: "var(--accent-events)" },
+  fundraiser:        { bg: "var(--status-error-soft)",         color: "var(--status-error)" },
+  exposure:          { bg: "var(--status-info-soft)",          color: "var(--status-info)" },
+  "study support":   { bg: "var(--accent-networking-soft)",    color: "var(--status-info)" },
 };
 
 /** Extract a short, readable blurb from a raw Instagram caption. */
@@ -184,59 +184,59 @@ export function EventDetailModal({ event, attendees, connectionIds, rsvpStatus, 
 }) {
   const score = matchScore(event, profile);
   const isGoing = rsvpStatus === "going";
-  const catStyle = CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.07)", color: "#9CA3AF" };
+  const catStyle = CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" };
   // Past events: hide RSVP. forceReadOnly overrides date check (e.g. events with no date that are still past).
   const isPast = forceReadOnly || (event.date ? new Date(event.date + "T23:59:59") < new Date() : false);
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "20px" }}>
-      <div onClick={e => e.stopPropagation()} style={{ backgroundColor: "#1A1A1A", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "16px", width: "100%", maxWidth: "520px", maxHeight: "85vh", overflowY: "auto", padding: "24px" }}>
+      <div onClick={e => e.stopPropagation()} style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "16px", width: "100%", maxWidth: "520px", maxHeight: "85vh", overflowY: "auto", padding: "24px" }}>
 
         <div style={{ display: "flex", alignItems: "flex-start", gap: "14px", marginBottom: "20px" }}>
           <ClubAvatar clubId={event.club_id} clubName={event.club_name} index={0} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 style={{ color: "#fff", fontWeight: 600, fontSize: "18px", lineHeight: 1.3, margin: "0 0 2px" }}>{event.event_name}</h2>
-            <p style={{ color: "#9CA3AF", fontSize: "14px", margin: 0 }}>{event.club_name}</p>
+            <p style={{ color: "var(--text-muted)", fontSize: "14px", margin: 0 }}>{event.club_name}</p>
           </div>
-          <button onClick={onClose} style={{ color: "#9CA3AF", background: "none", border: "none", cursor: "pointer", fontSize: "20px", padding: "2px", lineHeight: 1 }}>✕</button>
+          <button onClick={onClose} style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", fontSize: "20px", padding: "2px", lineHeight: 1 }}>✕</button>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "16px" }}>
-          <span style={{ color: "#E5E7EB", fontSize: "14px" }}>
+          <span style={{ color: "var(--text-primary)", fontSize: "14px" }}>
             📅 {event.date ? format(new Date(event.date + "T00:00:00"), "EEEE, MMMM d") : "Date TBD"}
             {event.start_time ? ` at ${fmt12(event.start_time.slice(0, 5))}` : ""}
             {event.end_time ? ` – ${fmt12(event.end_time.slice(0, 5))}` : ""}
           </span>
           {event.campus_location && (
-            <span style={{ color: "#E5E7EB", fontSize: "14px" }}>📍 {event.campus_location}{event.event_room ? `, ${event.event_room}` : ""}</span>
+            <span style={{ color: "var(--text-primary)", fontSize: "14px" }}>📍 {event.campus_location}{event.event_room ? `, ${event.event_room}` : ""}</span>
           )}
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "16px" }}>
           {event.event_category && <span style={{ backgroundColor: catStyle.bg, color: catStyle.color, fontSize: "12px", padding: "3px 10px", borderRadius: "6px", fontWeight: 500, textTransform: "capitalize" as const }}>{event.event_category}</span>}
-          {event.has_free_food && <span style={{ backgroundColor: "rgba(230,126,34,0.2)", color: "#F39C12", fontSize: "12px", padding: "3px 10px", borderRadius: "6px" }}>Free Food</span>}
-          {event.virtual && <span style={{ backgroundColor: "rgba(155,89,182,0.2)", color: "#BB8FCE", fontSize: "12px", padding: "3px 10px", borderRadius: "6px" }}>Virtual</span>}
-          {event.is_open_to_public && <span style={{ backgroundColor: "rgba(52,152,219,0.15)", color: "#5DADE2", fontSize: "12px", padding: "3px 10px", borderRadius: "6px" }}>Open to Public</span>}
+          {event.has_free_food && <span style={{ backgroundColor: "var(--accent-events-soft)", color: "var(--accent-events)", fontSize: "12px", padding: "3px 10px", borderRadius: "6px" }}>Free Food</span>}
+          {event.virtual && <span style={{ backgroundColor: "var(--accent-orgs-soft)", color: "var(--accent-orgs)", fontSize: "12px", padding: "3px 10px", borderRadius: "6px" }}>Virtual</span>}
+          {event.is_open_to_public && <span style={{ backgroundColor: "var(--status-info-soft)", color: "var(--status-info)", fontSize: "12px", padding: "3px 10px", borderRadius: "6px" }}>Open to Public</span>}
         </div>
 
         {event.caption && (
-          <p style={{ color: "#9CA3AF", fontSize: "13px", lineHeight: 1.6, borderLeft: "2px solid rgba(255,255,255,0.1)", paddingLeft: "12px", marginBottom: "16px" }}>
+          <p style={{ color: "var(--text-muted)", fontSize: "13px", lineHeight: 1.6, borderLeft: "2px solid var(--border-default)", paddingLeft: "12px", marginBottom: "16px" }}>
             {captionBlurb(event.caption)}
           </p>
         )}
 
         {score >= 70 && (
-          <div style={{ backgroundColor: "rgba(46,204,113,0.08)", border: "1px solid rgba(46,204,113,0.2)", borderRadius: "10px", padding: "12px 14px", marginBottom: "16px", display: "flex", gap: "10px", alignItems: "flex-start" }}>
-            <span style={{ color: "#2ECC71", fontSize: "15px" }}>✦</span>
+          <div style={{ backgroundColor: "var(--status-success-soft)", border: "1px solid rgba(63,199,141,0.28)", borderRadius: "10px", padding: "12px 14px", marginBottom: "16px", display: "flex", gap: "10px", alignItems: "flex-start" }}>
+            <span style={{ color: "var(--status-success)", fontSize: "15px" }}>✦</span>
             <div>
-              <p style={{ color: "#2ECC71", fontSize: "12px", fontWeight: 600, margin: "0 0 4px" }}>Strong Match</p>
-              <p style={{ color: "#A9DFBF", fontSize: "13px", lineHeight: 1.5, margin: 0 }}>{explainMatch(event, profile)}</p>
+              <p style={{ color: "var(--status-success)", fontSize: "12px", fontWeight: 600, margin: "0 0 4px" }}>Strong Match</p>
+              <p style={{ color: "var(--text-secondary)", fontSize: "13px", lineHeight: 1.5, margin: 0 }}>{explainMatch(event, profile)}</p>
             </div>
           </div>
         )}
 
         <div style={{ marginBottom: "20px" }}>
-          <p style={{ color: "#6B7280", fontSize: "11px", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", margin: "0 0 10px" }}>
+          <p style={{ color: "var(--text-subtle)", fontSize: "11px", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", margin: "0 0 10px" }}>
             {attendees?.count ?? 0} {isPast ? "Attended" : "Going"}
           </p>
           {attendees && attendees.preview.length > 0 ? (
@@ -245,18 +245,18 @@ export function EventDetailModal({ event, attendees, connectionIds, rsvpStatus, 
                 const isConn = connectionIds.has(p.user_id);
                 return (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <div style={{ width: "30px", height: "30px", borderRadius: "50%", backgroundColor: isConn ? "rgba(46,204,113,0.15)" : "rgba(255,255,255,0.07)", border: `1px solid ${isConn ? "rgba(46,204,113,0.3)" : "rgba(255,255,255,0.1)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 600, color: isConn ? "#2ECC71" : "#9CA3AF", flexShrink: 0 }}>
+                    <div style={{ width: "30px", height: "30px", borderRadius: "50%", backgroundColor: isConn ? "var(--status-success-soft)" : "rgba(255,255,255,0.07)", border: `1px solid ${isConn ? "rgba(63,199,141,0.28)" : "var(--border-default)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 600, color: isConn ? "var(--status-success)" : "var(--text-muted)", flexShrink: 0 }}>
                       {p.user_name.charAt(0).toUpperCase()}
                     </div>
-                    <span style={{ color: "#E5E7EB", fontSize: "14px" }}>{p.user_name}</span>
-                    {p.user_major && <span style={{ color: "#9CA3AF", fontSize: "12px" }}>· {p.user_major}</span>}
-                    {isConn && <span style={{ color: "#2ECC71", fontSize: "11px", marginLeft: "2px" }}>connection</span>}
+                    <span style={{ color: "var(--text-primary)", fontSize: "14px" }}>{p.user_name}</span>
+                    {p.user_major && <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>· {p.user_major}</span>}
+                    {isConn && <span style={{ color: "var(--status-success)", fontSize: "11px", marginLeft: "2px" }}>connection</span>}
                   </div>
                 );
               })}
             </div>
           ) : (
-            <p style={{ color: "#6B7280", fontSize: "13px", margin: 0 }}>
+            <p style={{ color: "var(--text-subtle)", fontSize: "13px", margin: 0 }}>
               {isPast ? "No attendance data recorded for this event." : "No one has RSVP'd yet — be the first!"}
             </p>
           )}
@@ -264,9 +264,9 @@ export function EventDetailModal({ event, attendees, connectionIds, rsvpStatus, 
 
         {onRsvpToggle && !isPast && (
           <button onClick={() => onRsvpToggle(event.event_id)}
-            onMouseEnter={e => { if (isGoing) { e.currentTarget.textContent = "Cancel RSVP"; e.currentTarget.style.color = "#E74C3C"; e.currentTarget.style.borderColor = "rgba(231,76,60,0.4)"; e.currentTarget.style.backgroundColor = "rgba(231,76,60,0.08)"; } }}
-            onMouseLeave={e => { if (isGoing) { e.currentTarget.textContent = "✓ Going"; e.currentTarget.style.color = "#2ECC71"; e.currentTarget.style.borderColor = "rgba(46,204,113,0.3)"; e.currentTarget.style.backgroundColor = "rgba(46,204,113,0.12)"; } }}
-            style={{ width: "100%", padding: "10px", borderRadius: "10px", border: `1px solid ${isGoing ? "rgba(46,204,113,0.3)" : "rgba(255,255,255,0.15)"}`, backgroundColor: isGoing ? "rgba(46,204,113,0.12)" : "rgba(255,255,255,0.05)", color: isGoing ? "#2ECC71" : "#E5E7EB", fontSize: "14px", fontWeight: 500, cursor: "pointer", transition: "all 0.15s" }}>
+            onMouseEnter={e => { if (isGoing) { e.currentTarget.textContent = "Cancel RSVP"; e.currentTarget.style.color = "var(--status-error)"; e.currentTarget.style.borderColor = "rgba(243,111,111,0.3)"; e.currentTarget.style.backgroundColor = "var(--status-error-soft)"; } }}
+            onMouseLeave={e => { if (isGoing) { e.currentTarget.textContent = "✓ Going"; e.currentTarget.style.color = "var(--status-success)"; e.currentTarget.style.borderColor = "rgba(63,199,141,0.28)"; e.currentTarget.style.backgroundColor = "var(--status-success-soft)"; } }}
+            style={{ width: "100%", padding: "10px", borderRadius: "10px", border: `1px solid ${isGoing ? "rgba(63,199,141,0.28)" : "var(--border-default)"}`, backgroundColor: isGoing ? "var(--status-success-soft)" : "rgba(255,255,255,0.05)", color: isGoing ? "var(--status-success)" : "var(--text-primary)", fontSize: "14px", fontWeight: 500, cursor: "pointer", transition: "all 0.15s" }}>
             {isGoing ? "✓ Going" : "RSVP"}
           </button>
         )}

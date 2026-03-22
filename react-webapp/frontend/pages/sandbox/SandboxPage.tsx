@@ -102,6 +102,10 @@ function ActionPill({ action, onViewEvent, onConnect, onDisconnect, isConnected,
   isConnected: boolean;
   isConnecting: boolean;
 }) {
+  if (action.type === "connect" && !action.label?.trim()) {
+    action.label = action.user_name?.trim() || "Connect";
+  }
+
   if (action.type === "view_event") {
     return (
       <motion.button whileHover={{ scale: 1.03 }} onClick={onViewEvent}

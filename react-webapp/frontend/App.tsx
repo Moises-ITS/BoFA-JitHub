@@ -33,7 +33,7 @@ export default function App() {
             <Route path="/network" element={
               <ErrorBoundary>
                 <Suspense fallback={
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0f1117", color:"#718096" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"var(--bg-canvas)", color:"var(--text-muted)" }}>
                     Loading graph…
                   </div>
                 }>
@@ -50,7 +50,7 @@ export default function App() {
               <Route path="/opportunities" element={<OpportunitiesPage />} />
               <Route path="/research"      element={<ResearchPage />} />
               <Route path="/sandbox"       element={
-                <Suspense fallback={<div style={{ color: "#6B7280", padding: "40px" }}>Loading…</div>}>
+                <Suspense fallback={<div style={{ color: "var(--text-muted)", padding: "40px" }}>Loading…</div>}>
                   <SandboxPage />
                 </Suspense>
               } />

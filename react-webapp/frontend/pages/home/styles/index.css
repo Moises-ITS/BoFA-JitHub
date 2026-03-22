@@ -5,7 +5,7 @@
 /* Custom scrollbar styling */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(192, 57, 43, 0.5) rgba(255, 255, 255, 0.05);
+  scrollbar-color: var(--brand-primary) rgba(255, 255, 255, 0.05);
 }
 
 *::-webkit-scrollbar {
@@ -19,12 +19,12 @@
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(192, 57, 43, 0.5);
+  background: color-mix(in srgb, var(--brand-primary) 72%, transparent);
   border-radius: 4px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(192, 57, 43, 0.7);
+  background: color-mix(in srgb, var(--brand-primary) 88%, transparent);
 }
 
 /* Smooth scrolling */
@@ -34,6 +34,71 @@ html {
 
 /* Selection color */
 ::selection {
-  background: rgba(192, 57, 43, 0.3);
+  background: var(--brand-primary-soft-strong);
   color: white;
+}
+
+.home-welcome-heading {
+  letter-spacing: -0.02em;
+}
+
+.home-welcome-prefix {
+  color: color-mix(in srgb, var(--text-primary) 72%, var(--text-muted) 28%);
+}
+
+.home-welcome-name {
+  display: inline-block;
+  font-style: italic;
+  color: transparent;
+  background-image: linear-gradient(
+    110deg,
+    rgba(225, 232, 242, 0.82) 0%,
+    rgba(225, 232, 242, 0.82) 36%,
+    rgba(255, 255, 255, 0.99) 48%,
+    rgba(245, 248, 255, 0.97) 54%,
+    rgba(247, 241, 255, 0.95) 62%,
+    rgba(228, 235, 245, 0.86) 72%,
+    rgba(228, 235, 245, 0.86) 100%
+  );
+  background-size: 240% 100%;
+  background-position: 140% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow:
+    0 0 18px rgba(255, 255, 255, 0.08),
+    0 0 28px rgba(186, 123, 176, 0.08);
+  animation: home-name-glimmer 1.8s ease-out 0.2s forwards;
+}
+
+@keyframes home-name-glimmer {
+  0% {
+    background-position: 140% 0;
+  }
+
+  72% {
+    background-position: -60% 0;
+  }
+
+  100% {
+    background-image: linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0.99) 0%,
+      rgba(248, 251, 255, 0.99) 58%,
+      rgba(246, 241, 255, 0.97) 100%
+    );
+    background-position: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-welcome-name {
+    animation: none;
+    background-image: linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0.99) 0%,
+      rgba(248, 251, 255, 0.99) 58%,
+      rgba(246, 241, 255, 0.97) 100%
+    );
+    background-position: 0 0;
+  }
 }

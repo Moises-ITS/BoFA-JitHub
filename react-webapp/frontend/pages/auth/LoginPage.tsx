@@ -5,12 +5,12 @@ import "./auth.css"
 
 export default function LoginPage() {
   const { login } = useAuth()
-  const navigate   = useNavigate()
+  const navigate = useNavigate()
 
-  const [email, setEmail]       = useState("")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [error, setError]       = useState("")
-  const [loading, setLoading]   = useState(false)
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -29,8 +29,13 @@ export default function LoginPage() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1 className="auth-title">Welcome back</h1>
-        <p className="auth-subtitle">Sign in to your CampusGraph account</p>
+        <div className="auth-header">
+          <span className="auth-eyebrow">NJIT Student OS</span>
+          <h1 className="auth-title">Welcome back</h1>
+          <p className="auth-subtitle">
+            Sign in to JitHub and jump back into events, connections, and opportunities.
+          </p>
+        </div>
 
         {error && <div className="auth-error">{error}</div>}
 
@@ -43,6 +48,7 @@ export default function LoginPage() {
               onChange={e => setEmail(e.target.value)}
               required
               autoFocus
+              autoComplete="email"
             />
           </label>
 
@@ -53,11 +59,12 @@ export default function LoginPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
             />
           </label>
 
           <button type="submit" className="auth-btn-primary" disabled={loading}>
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
 

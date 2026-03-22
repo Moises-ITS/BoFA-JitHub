@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import asyncio
 from datetime import date, timedelta
@@ -607,14 +608,22 @@ async def sandbox_chat_stream(body: ChatRequest, db: Session = Depends(get_db)):
             found_actions = False
             actions_str = ""
 
-            def _strip_md(text: str) -> str:
-                return text.replace("**", "").replace("__", "")
+            _COUNT_INTRO = re.compile(
+                r'^(I found|Here are|There are|I\'ve found|I identified|I\'ve identified'
+                r'|Below are|Check out these|These are)\s+\d+[^\n]*\n+(?=\s*[•\-])',
+                re.IGNORECASE,
+            )
+
+            def _clean_text(text: str) -> str:
+                text = text.replace("**", "").replace("__", "")
+                text = _COUNT_INTRO.sub("", text)
+                return text
 
             if direct_text is not None:
-                # Model responded directly without tools — parse and word-stream it
-                pending = _strip_md(direct_text)
+                # Model responded directly without tools — clean and send
+                pending = direct_text
             else:
-                # Tool results are in messages — real streaming final call
+                # Tool results are in messages — buffer full stream then clean
                 async with async_client.messages.stream(
                     model=CHAT_MODEL,
                     max_tokens=1024,
@@ -622,38 +631,21 @@ async def sandbox_chat_stream(body: ChatRequest, db: Session = Depends(get_db)):
                     messages=messages,
                 ) as stream:
                     async for chunk in stream.text_stream:
-                        if found_actions:
-                            actions_str += chunk
-                            continue
+                        pending += chunk
 
-                        pending += _strip_md(chunk)
-                        idx = pending.find(MARKER)
-                        if idx != -1:
-                            found_actions = True
-                            before = pending[:idx].rstrip("\n")
-                            if before:
-                                yield f"data: {json.dumps({'type': 'text', 'text': before})}\n\n"
-                            actions_str = pending[idx + mlen:]
-                            pending = ""
-                            continue
+            # Split message text from ACTIONS: block
+            idx = pending.find(MARKER)
+            if idx != -1:
+                message_text = pending[:idx].rstrip("\n")
+                actions_str = pending[idx + mlen:]
+                found_actions = True
+            else:
+                message_text = pending
 
-                        # Yield safe portion — hold back (mlen-1) chars in case
-                        # the current chunk is the leading bytes of the ACTIONS: marker
-                        safe_len = max(0, len(pending) - mlen + 1)
-                        if safe_len > 0:
-                            yield f"data: {json.dumps({'type': 'text', 'text': pending[:safe_len]})}\n\n"
-                            pending = pending[safe_len:]
-
-            # Handle any remaining buffer after stream ends
-            if not found_actions:
-                idx = pending.find(MARKER)
-                if idx != -1:
-                    before = pending[:idx].rstrip("\n")
-                    if before:
-                        yield f"data: {json.dumps({'type': 'text', 'text': before})}\n\n"
-                    actions_str = pending[idx + mlen:]
-                elif pending.strip():
-                    yield f"data: {json.dumps({'type': 'text', 'text': pending})}\n\n"
+            # Clean and emit the full message text
+            cleaned = _clean_text(message_text)
+            if cleaned.strip():
+                yield f"data: {json.dumps({'type': 'text', 'text': cleaned})}\n\n"
 
             # Parse and send actions
             try:

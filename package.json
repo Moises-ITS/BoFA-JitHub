@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "clerk": "^0.8.3"
+  }
+}

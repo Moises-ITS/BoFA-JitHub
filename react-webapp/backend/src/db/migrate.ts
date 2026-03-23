@@ -70,6 +70,15 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
     name: "005_linkedin",
     sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS linkedin_url VARCHAR;`,
   },
+  {
+    name: "006_skills_looking_for_year",
+    sql: `
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS skills       TEXT[]      DEFAULT '{}',
+        ADD COLUMN IF NOT EXISTS looking_for  TEXT[]      DEFAULT '{}',
+        ADD COLUMN IF NOT EXISTS year         VARCHAR(20);
+    `,
+  },
 ]
 
 export async function runMigrations() {

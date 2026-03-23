@@ -17,7 +17,10 @@ const [
   authMod,
   connMod,
   oppMod,
+  chatMemMod,
   { startScheduler },
+  { runMigrations },
+  { ensureNodeIds },
 ] = await Promise.all([
   import("express"),
   import("cors"),
@@ -27,8 +30,19 @@ const [
   import("./routes/auth.js"),
   import("./routes/connections.js"),
   import("./routes/opportunities.js"),
+  import("./routes/chatMemory.js"),
   import("./scrapers/runner.js"),
+  import("./db/migrate.js"),
+  import("./services/graphService.js"),
 ])
+
+try {
+  await runMigrations()
+  await ensureNodeIds()
+} catch (err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err)
+  console.error("Startup migration/setup failed:", msg)
+}
 
 // Run the opportunities migration on startup
 try {
@@ -49,10 +63,11 @@ const app = express()
 app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173" }))
 app.use(express.json())
 
-app.use("/api/graph",         graphMod.default)
-app.use("/api/auth",          authMod.default)
-app.use("/api/connections",   connMod.default)
+app.use("/api/graph", graphMod.default)
+app.use("/api/auth", authMod.default)
+app.use("/api/connections", connMod.default)
 app.use("/api/opportunities", oppMod.default)
+app.use("/api/chat-memory", chatMemMod.default)
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" })

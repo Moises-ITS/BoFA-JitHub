@@ -13,8 +13,9 @@ import ResearchPage from "./pages/research/ResearchPage"
 import LandingPage from "./pages/landing/LandingPage"
 import ProtectedRoute from "./components/ProtectedRoute"
 
-// Lazy-load the heavy D3 graph page — keeps initial bundle small
+// Lazy-load heavy pages — keeps initial bundle small
 const CampusGraph = lazy(() => import("./pages/node/CampusGraph"))
+const SandboxPage = lazy(() => import("./pages/sandbox/SandboxPage"))
 
 export default function App() {
   return (
@@ -32,7 +33,7 @@ export default function App() {
             <Route path="/network" element={
               <ErrorBoundary>
                 <Suspense fallback={
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0f1117", color:"#718096" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"var(--bg-canvas)", color:"var(--text-muted)" }}>
                     Loading graph…
                   </div>
                 }>
@@ -48,6 +49,11 @@ export default function App() {
               <Route path="/events"         element={<EventsPage />} />
               <Route path="/opportunities" element={<OpportunitiesPage />} />
               <Route path="/research"      element={<ResearchPage />} />
+              <Route path="/sandbox"       element={
+                <Suspense fallback={<div style={{ color: "var(--text-muted)", padding: "40px" }}>Loading…</div>}>
+                  <SandboxPage />
+                </Suspense>
+              } />
             </Route>
           </Route>
 

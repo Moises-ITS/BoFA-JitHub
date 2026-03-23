@@ -23,6 +23,19 @@ const KNOWN_INTERESTS = [
   "Structural Engineering", "Sustainability", "Technical Sales",
 ]
 
+const KNOWN_SKILLS = [
+  "C++", "CAD", "Data Analysis", "Excel", "Figma", "Java", "JavaScript",
+  "Leadership", "MATLAB", "Photoshop", "Public Speaking", "Python",
+  "React", "Research", "Rust", "SQL", "TypeScript", "Writing",
+]
+
+const LOOKING_FOR_OPTIONS = [
+  "Co-op", "Hackathon Partner", "Internship", "Job",
+  "Networking", "New Friends", "Research Opportunity", "Study Group",
+]
+
+const YEAR_OPTIONS = ["Freshman", "Sophomore", "Junior", "Senior", "Graduate"]
+
 const NJIT_CLUBS = [
   "AIChE", "ASCE",
   "ASME", "ACM",
@@ -57,6 +70,9 @@ export default function EditProfileModal({ open, onClose }: Props) {
   const [interests, setInterests]   = useState<string[]>([])
   const [companies, setCompanies]   = useState<string[]>([])
   const [companyInput, setCompanyInput] = useState("")
+  const [skills, setSkills]           = useState<string[]>([])
+  const [lookingFor, setLookingFor]   = useState<string[]>([])
+  const [year, setYear]               = useState("")
   const [saving, setSaving]         = useState(false)
   const [error, setError]           = useState("")
   const [success, setSuccess]       = useState(false)
@@ -73,6 +89,9 @@ export default function EditProfileModal({ open, onClose }: Props) {
       setClubs(user.clubs ?? [])
       setInterests(user.interests ?? [])
       setCompanies(user.companies ?? [])
+      setSkills(user.skills ?? [])
+      setLookingFor(user.looking_for ?? [])
+      setYear(user.year ?? "")
       setCompanyInput("")
       setError("")
       setSuccess(false)
@@ -112,7 +131,7 @@ export default function EditProfileModal({ open, onClose }: Props) {
     }
     setSaving(true)
     try {
-      await updateProfile({ gpa: gpaNum, major, graduationYear: gradNum, bio, clubs, companies, interests, linkedinUrl: linkedinUrl.trim() || null })
+      await updateProfile({ gpa: gpaNum, major, graduationYear: gradNum, bio, clubs, companies, interests, linkedinUrl: linkedinUrl.trim() || null, skills, looking_for: lookingFor, year: year || null })
       setSuccess(true)
       setTimeout(onClose, 900)
     } catch (e: unknown) {
@@ -185,6 +204,12 @@ export default function EditProfileModal({ open, onClose }: Props) {
                 value={gradYear}
                 onChange={e => setGradYear(e.target.value)}
               />
+
+              <label className="epLabel">Year</label>
+              <select className="epSelect" value={year} onChange={e => setYear(e.target.value)}>
+                <option value="">Select year…</option>
+                {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
             </div>
           )}
 
@@ -212,6 +237,32 @@ export default function EditProfileModal({ open, onClose }: Props) {
                     onClick={() => toggleItem(interests, i, setInterests)}
                   >
                     {i}
+                  </button>
+                ))}
+              </div>
+
+              <label className="epLabel" style={{ marginTop: 20 }}>Skills</label>
+              <div className="epChipGrid">
+                {KNOWN_SKILLS.map(s => (
+                  <button
+                    key={s}
+                    className={`epChip${skills.includes(s) ? " epChipOn" : ""}`}
+                    onClick={() => toggleItem(skills, s, setSkills)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+
+              <label className="epLabel" style={{ marginTop: 20 }}>Looking for</label>
+              <div className="epChipGrid">
+                {LOOKING_FOR_OPTIONS.map(opt => (
+                  <button
+                    key={opt}
+                    className={`epChip${lookingFor.includes(opt) ? " epChipOn" : ""}`}
+                    onClick={() => toggleItem(lookingFor, opt, setLookingFor)}
+                  >
+                    {opt}
                   </button>
                 ))}
               </div>

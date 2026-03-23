@@ -31,9 +31,9 @@ const FILTERS = [
 function MatchSignal({ score }: { score: number }) {
   if (score < 0) return null;
   const [color, title] =
-    score >= 70 ? ["#2ECC71", "Strong match"] :
-    score >= 40 ? ["#F39C12", "Moderate match"] :
-                  ["#E74C3C", "Weak match"];
+    score >= 70 ? ["var(--status-success)", "Strong match"] :
+    score >= 40 ? ["var(--status-warning)", "Moderate match"] :
+                  ["var(--status-error)", "Weak match"];
   return (
     <span
       title={title}
@@ -69,7 +69,7 @@ function EventCard({
 }) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const score = matchScore(event, profile);
-  const catStyle = CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.07)", color: "#9CA3AF" };
+  const catStyle = CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" };
   const isGoing = rsvpStatus === "going";
   const friendsGoing = attendees?.preview.filter(p => connectionIds?.has(p.user_id)).length ?? 0;
 
@@ -80,7 +80,8 @@ function EventCard({
       transition={{ delay: index * 0.04 }}
       whileHover={{ x: 4 }}
       onClick={() => onSelect?.(event)}
-      className="bg-[#1A1A1A] border border-white/10 rounded-xl p-5 hover:border-white/20 hover:bg-[#222222] transition-all cursor-pointer"
+      className="rounded-xl p-5 transition-all cursor-pointer"
+      style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
     >
       <div className="flex gap-4">
         <ClubAvatar clubId={event.club_id} clubName={event.club_name} index={index} />
@@ -88,7 +89,7 @@ function EventCard({
           <div className="flex items-start justify-between gap-3 mb-1">
             <div>
               <h3 className="font-semibold text-white">{event.event_name}</h3>
-              <p className="text-sm text-[#9CA3AF]">{event.club_name}</p>
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>{event.club_name}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0 mt-1">
               <MatchSignal score={score} />
@@ -101,8 +102,8 @@ function EventCard({
                 {event.event_category}
               </span>
             )}
-            {event.has_free_food && <span className="text-xs px-2 py-0.5 rounded-md" style={{ backgroundColor: "rgba(230,126,34,0.2)", color: "#F39C12" }}>Free Food</span>}
-            {event.virtual && <span className="text-xs px-2 py-0.5 rounded-md" style={{ backgroundColor: "rgba(155,89,182,0.2)", color: "#BB8FCE" }}>Virtual</span>}
+            {event.has_free_food && <span className="text-xs px-2 py-0.5 rounded-md" style={{ backgroundColor: "var(--accent-events-soft)", color: "var(--accent-events)" }}>Free Food</span>}
+            {event.virtual && <span className="text-xs px-2 py-0.5 rounded-md" style={{ backgroundColor: "var(--accent-orgs-soft)", color: "var(--accent-orgs)" }}>Virtual</span>}
           </div>
           <p className="text-sm text-white mt-2">
             {event.date ? format(new Date(event.date + "T00:00:00"), "EEE, MMM d") : "Date TBD"}
@@ -110,7 +111,7 @@ function EventCard({
           </p>
 
           {friendsGoing > 0 && (
-            <div style={{ marginTop: "10px", fontSize: "12px", color: "#2ECC71", display: "flex", alignItems: "center", gap: "5px" }}>
+            <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--status-success)", display: "flex", alignItems: "center", gap: "5px" }}>
               <span>👥</span>
               <span>{friendsGoing === 1 ? "1 of your connections is going" : `${friendsGoing} of your connections are going`}</span>
             </div>
@@ -121,9 +122,9 @@ function EventCard({
               <button
                 onClick={() => onRsvpToggle(event.event_id)}
                 style={{
-                  border: `1px solid ${isGoing ? "#2ECC71" : "rgba(255,255,255,0.15)"}`,
-                  backgroundColor: isGoing ? "rgba(46,204,113,0.12)" : "transparent",
-                  color: isGoing ? "#2ECC71" : "#9CA3AF",
+                  border: `1px solid ${isGoing ? "rgba(63,199,141,0.28)" : "var(--border-default)"}`,
+                  backgroundColor: isGoing ? "var(--status-success-soft)" : "transparent",
+                  color: isGoing ? "var(--status-success)" : "var(--text-muted)",
                   borderRadius: "8px", padding: "4px 10px",
                   fontSize: "12px", fontWeight: 500, cursor: "pointer", transition: "all 0.15s",
                 }}
@@ -136,15 +137,15 @@ function EventCard({
                   onMouseEnter={() => setTooltipVisible(true)}
                   onMouseLeave={() => setTooltipVisible(false)}
                 >
-                  <span style={{ fontSize: "12px", color: "#9CA3AF", cursor: "default" }}>
+                  <span style={{ fontSize: "12px", color: "var(--text-muted)", cursor: "default" }}>
                     {attendees.count} going
                   </span>
                   {tooltipVisible && attendees.preview.length > 0 && (
-                    <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: 0, backgroundColor: "#2A2A2A", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", padding: "8px 10px", minWidth: "160px", zIndex: 50, pointerEvents: "none" }}>
+                    <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: 0, backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 10px", minWidth: "160px", zIndex: 50, pointerEvents: "none" }}>
                       {attendees.preview.map((p, idx) => (
-                        <div key={idx} style={{ fontSize: "12px", color: "#E5E7EB", lineHeight: "1.7" }}>
+                        <div key={idx} style={{ fontSize: "12px", color: "var(--text-primary)", lineHeight: "1.7" }}>
                           {p.user_name}
-                          {p.user_major && <span style={{ color: "#9CA3AF" }}> · {p.user_major}</span>}
+                          {p.user_major && <span style={{ color: "var(--text-muted)" }}> · {p.user_major}</span>}
                         </div>
                       ))}
                     </div>
@@ -162,9 +163,9 @@ function EventCard({
 function TrendingPodium({ clubs }: { clubs: any[] }) {
   if (clubs.length < 3) return null;
   const podium = [
-    { club: clubs[1], rank: 2, height: 58, bg: "rgba(189,195,199,0.15)", border: "rgba(189,195,199,0.3)", color: "#BDC3C7", delay: 0.05 },
-    { club: clubs[0], rank: 1, height: 88, bg: "rgba(192,57,43,0.2)",    border: "rgba(230,126,34,0.5)",  color: "#E67E22",  delay: 0 },
-    { club: clubs[2], rank: 3, height: 40, bg: "rgba(160,82,45,0.15)",   border: "rgba(160,82,45,0.3)",   color: "#CD853F",  delay: 0.1 },
+    { club: clubs[1], rank: 2, height: 58, bg: "rgba(255,255,255,0.08)", border: "var(--border-default)", color: "var(--text-secondary)", delay: 0.05 },
+    { club: clubs[0], rank: 1, height: 88, bg: "var(--brand-primary-soft)", border: "var(--brand-primary-soft-strong)", color: "var(--accent-events)", delay: 0 },
+    { club: clubs[2], rank: 3, height: 40, bg: "var(--accent-events-soft)", border: "rgba(226,154,59,0.28)", color: "var(--accent-events)", delay: 0.1 },
   ];
   const medals = ["🥈", "🥇", "🥉"];
 
@@ -175,7 +176,7 @@ function TrendingPodium({ clubs }: { clubs: any[] }) {
           <div style={{ textAlign: "center", marginBottom: "6px" }}>
             <div style={{ fontSize: "18px", marginBottom: "3px" }}>{medals[i]}</div>
             <p style={{ color: "#fff", fontSize: "10px", fontWeight: 600, lineHeight: 1.3, margin: 0, wordBreak: "break-word" as const }}>{club.club_name}</p>
-            <p style={{ color: "#6B7280", fontSize: "9px", margin: "2px 0 0" }}>❤️ {club.total_likes}</p>
+            <p style={{ color: "var(--text-subtle)", fontSize: "9px", margin: "2px 0 0" }}>❤️ {club.total_likes}</p>
           </div>
           <motion.div
             initial={{ height: 0, opacity: 0 }}
@@ -199,23 +200,25 @@ function SidebarClubRow({ club, index, showScore }: { club: any; index: number; 
       transition={{ delay: index * 0.05 }}
       className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0"
     >
-      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-        index === 0 ? "bg-gradient-to-br from-[#C0392B] to-[#E74C3C] text-white" :
-        index === 1 ? "bg-white/10 text-white" : "bg-white/5 text-[#9CA3AF]"
-      }`}>{index + 1}</div>
+      <div
+        className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${index === 1 ? "bg-white/10 text-white" : "bg-white/5"}`}
+        style={index === 0 ? { background: "var(--brand-gradient)", color: "#FFFFFF" } : index === 1 ? undefined : { color: "var(--text-muted)" }}
+      >
+        {index + 1}
+      </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-white truncate">{club.club_name}</p>
-        <p className="text-xs text-[#9CA3AF]">{club.event_count} events</p>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>{club.event_count} events</p>
       </div>
       {showScore
-        ? <span className="text-xs text-[#E67E22] shrink-0 font-medium">{club.avg_score}x</span>
-        : <span className="text-xs text-[#9CA3AF] shrink-0">❤️ {club.total_likes}</span>}
+        ? <span className="text-xs shrink-0 font-medium" style={{ color: "var(--accent-events)" }}>{club.avg_score}x</span>
+        : <span className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>❤️ {club.total_likes}</span>}
     </motion.div>
   );
 }
 
 function TopEventRow({ event, index, onSelect }: { event: any; index: number; onSelect: (e: any) => void }) {
-  const catStyle = CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.07)", color: "#9CA3AF" };
+  const catStyle = CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" };
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
@@ -225,12 +228,12 @@ function TopEventRow({ event, index, onSelect }: { event: any; index: number; on
       style={{ display: "flex", alignItems: "flex-start", gap: "10px", paddingTop: "10px", paddingBottom: "10px", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}
       className="last:border-0 hover:opacity-80 transition-opacity"
     >
-      <div style={{ width: "22px", height: "22px", borderRadius: "6px", backgroundColor: index === 0 ? "rgba(192,57,43,0.25)" : "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 700, color: index === 0 ? "#E74C3C" : "#9CA3AF", flexShrink: 0, marginTop: "1px" }}>
+      <div style={{ width: "22px", height: "22px", borderRadius: "6px", backgroundColor: index === 0 ? "var(--brand-primary-soft)" : "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 700, color: index === 0 ? "var(--brand-primary)" : "var(--text-muted)", flexShrink: 0, marginTop: "1px" }}>
         {index + 1}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ color: "#E5E7EB", fontSize: "13px", fontWeight: 500, margin: "0 0 3px", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{event.event_name}</p>
-        <p style={{ color: "#6B7280", fontSize: "11px", margin: 0 }}>{event.club_name}</p>
+        <p style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: 500, margin: "0 0 3px", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{event.event_name}</p>
+        <p style={{ color: "var(--text-subtle)", fontSize: "11px", margin: 0 }}>{event.club_name}</p>
       </div>
       {event.event_category && (
         <span style={{ backgroundColor: catStyle.bg, color: catStyle.color, fontSize: "10px", padding: "2px 7px", borderRadius: "4px", flexShrink: 0, marginTop: "2px", textTransform: "capitalize" as const }}>{event.event_category}</span>
@@ -241,7 +244,7 @@ function TopEventRow({ event, index, onSelect }: { event: any; index: number; on
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function EventsPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const profile: UserProfile = {
     major: user?.major ?? "",
     interests: user?.interests ?? [],
@@ -277,7 +280,7 @@ export default function EventsPage() {
 
   useEffect(() => {
     if (!user?.id) return;
-    fetch(`${AUTH_API}/api/connections`, { credentials: "include" })
+    fetch(`${AUTH_API}/api/connections`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then((data: { id: string }[]) => setConnectionIds(new Set(data.map(c => c.id))))
       .catch(() => {});
@@ -353,7 +356,10 @@ export default function EventsPage() {
     }
     fetch(`${API}/rsvp/${eventId}/attendees`)
       .then(r => r.json())
-      .then((data: AttendeeInfo) => setAttendeeMap(prev => ({ ...prev, [eventId]: data })))
+      .then((data: AttendeeInfo) => {
+        setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
+        if (selectedEvent?.event_id === eventId) setModalAttendees(data);
+      })
       .catch(() => {});
   }
 
@@ -368,23 +374,24 @@ export default function EventsPage() {
     <div className="max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-semibold mb-1">
-          <span className="bg-gradient-to-r from-[#C0392B] to-[#E67E22] bg-clip-text text-transparent">Events</span>
+          <span className="bg-clip-text text-transparent" style={{ backgroundImage: "var(--brand-gradient)" }}>Events</span>
         </h1>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
 
-          <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1" style={{ width: "fit-content" }}>
+          <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1" style={{ width: "fit-content", border: "1px solid var(--border-default)" }}>
             {VIEW_TABS.map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setView(key)}
                 className={`text-sm px-4 py-1.5 rounded-md font-medium transition-all ${
                   view === key
-                    ? "bg-[#C0392B] text-white"
-                    : "text-[#9CA3AF] hover:text-white"
+                    ? "text-white"
+                    : "hover:text-white"
                 }`}
+                style={view === key ? { backgroundColor: "var(--brand-primary)" } : { color: "var(--text-muted)" }}
               >
                 {label}
               </button>
@@ -395,8 +402,8 @@ export default function EventsPage() {
             <select
               value={activeFilter ?? ""}
               onChange={(e) => setActiveFilter(e.target.value || null)}
-              className="text-sm bg-[#1A1A1A] border border-white/10 text-white rounded-lg px-3 py-2 focus:outline-none focus:border-white/30 cursor-pointer"
-              style={{ colorScheme: "dark" }}
+              className="text-sm text-white rounded-lg px-3 py-2 focus:outline-none cursor-pointer"
+              style={{ colorScheme: "dark", backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
             >
               <option value="">All categories</option>
               {FILTERS.map((f) => (
@@ -405,9 +412,9 @@ export default function EventsPage() {
             </select>
           )}
 
-          {loading && <p className="text-[#9CA3AF] text-sm">Loading...</p>}
+          {loading && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>}
           {!loading && displayEvents.length === 0 && (
-            <div className="text-center py-16 text-[#9CA3AF]">
+            <div className="text-center py-16" style={{ color: "var(--text-muted)" }}>
               <p className="text-4xl mb-3">📅</p>
               <p className="font-medium text-white">
                 {view === "top-match" ? "Set up your profile to see matches" : "No events found"}
@@ -435,28 +442,28 @@ export default function EventsPage() {
         {/* Sidebar */}
         <div style={{ display: "flex", flexDirection: "column", gap: "40px" }}>
           <HeatmapCalendar />
-          <div style={{ backgroundColor: "#1A1A1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "24px" }}>
+          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
             <div className="flex items-center gap-2" style={{ marginBottom: "12px" }}>
-              <TrendingUp className="w-4 h-4 text-[#C0392B]" />
+              <TrendingUp className="w-4 h-4" style={{ color: "var(--brand-primary)" }} />
               <h3 className="font-semibold text-white text-sm">Trending This Semester</h3>
             </div>
             <TrendingPodium clubs={sidebarTrending} />
             {sidebarTrending.length > 3 && (
-              <div style={{ marginTop: "18px", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "14px" }}>
+              <div style={{ marginTop: "18px", borderTop: "1px solid var(--border-default)", paddingTop: "14px" }}>
                 {sidebarTrending.slice(3).map((c, i) => <SidebarClubRow key={c.club_name} club={c} index={i + 3} />)}
               </div>
             )}
           </div>
-          <div style={{ backgroundColor: "#1A1A1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "24px" }}>
+          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
             <div className="flex items-center gap-2" style={{ marginBottom: "16px" }}>
-              <Zap className="w-4 h-4 text-[#E67E22]" />
+              <Zap className="w-4 h-4" style={{ color: "var(--accent-events)" }} />
               <h3 className="font-semibold text-white text-sm">Top Risers This Semester</h3>
             </div>
             {topRisers.map((c, i) => <SidebarClubRow key={c.club_name} club={c} index={i} showScore />)}
           </div>
-          <div style={{ backgroundColor: "#1A1A1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "24px" }}>
+          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
             <div className="flex items-center gap-2" style={{ marginBottom: "4px" }}>
-              <Flame className="w-4 h-4 text-[#E74C3C]" />
+              <Flame className="w-4 h-4" style={{ color: "var(--status-error)" }} />
               <h3 className="font-semibold text-white text-sm">Top Events of the Semester</h3>
             </div>
             <div>

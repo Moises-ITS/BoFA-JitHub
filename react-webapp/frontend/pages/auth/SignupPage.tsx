@@ -120,21 +120,50 @@ const NJIT_CLUBS = [
   "WiCS",
 ]
 
+const KNOWN_SKILLS = [
+  "C++", "CAD", "Data Analysis", "Excel", "Figma", "Java", "JavaScript",
+  "Leadership", "MATLAB", "Photoshop", "Public Speaking", "Python",
+  "React", "Research", "Rust", "SQL", "TypeScript", "Writing",
+]
+
+const LOOKING_FOR_OPTIONS = [
+  "Co-op", "Hackathon Partner", "Internship", "Job",
+  "Networking", "New Friends", "Research Opportunity", "Study Group",
+]
+
+const YEAR_OPTIONS = ["Freshman", "Sophomore", "Junior", "Senior", "Graduate"]
+
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
-    // Eye open — Feather-style stroke icon
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-      <circle cx="12" cy="12" r="3"/>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   ) : (
-    // Eye closed — slash through it
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-      <line x1="1" y1="1" x2="23" y2="23"/>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <line x1="1" y1="1" x2="23" y2="23" />
     </svg>
   )
 }
@@ -145,48 +174,50 @@ function toTitleCase(s: string) {
 
 export default function SignupPage() {
   const { signup } = useAuth()
-  const navigate    = useNavigate()
+  const navigate = useNavigate()
 
   const [step, setStep] = useState<Step>(0)
-  const [error, setError]     = useState("")
+  const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
-  // Step 0 — Account
-  const [name, setName]               = useState("")
-  const [email, setEmail]             = useState("")
-  const [password, setPassword]       = useState("")
-  const [confirm, setConfirm]         = useState("")
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirm, setConfirm] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirm,  setShowConfirm]  = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
-  // Step 1 — Academic
-  const [major, setMajor]             = useState("")
-  const [gpa, setGpa]                 = useState("")
+  const [major, setMajor] = useState("")
+  const [gpa, setGpa] = useState("")
   const [graduationYear, setGradYear] = useState("")
+  const [year, setYear] = useState("")
 
-  // Step 2 — Campus Life
-  const [clubInput, setClubInput]             = useState("")
-  const [clubs, setClubs]                     = useState<string[]>([])
-  const [companyInput, setCompanyInput]       = useState("")
-  const [companies, setCompanies]             = useState<string[]>([])
-  const [interestInput, setInterestInput]     = useState("")
-  const [interests, setInterests]             = useState<string[]>([])
-  const [customInterest, setCustomInterest]   = useState("")
+  const [clubInput, setClubInput] = useState("")
+  const [clubs, setClubs] = useState<string[]>([])
+  const [companyInput, setCompanyInput] = useState("")
+  const [companies, setCompanies] = useState<string[]>([])
+  const [interestInput, setInterestInput] = useState("")
+  const [interests, setInterests] = useState<string[]>([])
+  const [customInterest, setCustomInterest] = useState("")
   const [availableInterests, setAvailableInterests] = useState<string[]>(KNOWN_INTERESTS)
 
-  // Merge hardcoded baseline with any custom interests added by previous users
   useEffect(() => {
     fetch(`${API}/api/auth/interests`)
-      .then(r => r.ok ? r.json() : [])
+      .then(r => (r.ok ? r.json() : []))
       .then((fetched: string[]) => {
         const merged = Array.from(new Set([...KNOWN_INTERESTS, ...fetched])).sort()
         setAvailableInterests(merged)
       })
-      .catch(() => {/* keep baseline on failure */})
+      .catch(() => {
+        // Keep the baseline set when the interest fetch fails.
+      })
   }, [])
 
-  // Step 3 — Profile
-  const [bio, setBio]               = useState("")
+  const [skillInput, setSkillInput] = useState("")
+  const [skills, setSkills] = useState<string[]>([])
+  const [lookingFor, setLookingFor] = useState<string[]>([])
+
+  const [bio, setBio] = useState("")
   const [linkedinUrl, setLinkedinUrl] = useState("")
 
   function addItem(
@@ -196,7 +227,9 @@ export default function SignupPage() {
     setInput: (v: string) => void
   ) {
     const val = input.trim()
-    if (val && !list.some(x => x.toLowerCase() === val.toLowerCase())) setList([...list, val])
+    if (val && !list.some(x => x.toLowerCase() === val.toLowerCase())) {
+      setList([...list, val])
+    }
     setInput("")
   }
 
@@ -206,25 +239,30 @@ export default function SignupPage() {
 
   function validateStep(): string {
     if (step === 0) {
-      if (!name.trim())    return "Name is required"
-      if (!email.trim())   return "Email is required"
+      if (!name.trim()) return "Name is required"
+      if (!email.trim()) return "Email is required"
       const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRx.test(email.trim())) return "Please enter a valid email address"
       if (!email.trim().toLowerCase().endsWith("@njit.edu")) return "Only @njit.edu email addresses are allowed"
       if (password.length < 8) return "Password must be at least 8 characters"
-      if (password !== confirm)  return "Passwords do not match"
+      if (password !== confirm) return "Passwords do not match"
     }
+
     if (step === 1) {
-      if (!major.trim())          return "Major is required"
+      if (!major.trim()) return "Major is required"
       if (!graduationYear.trim()) return "Graduation year is required"
       if (gpa && (parseFloat(gpa) < 0 || parseFloat(gpa) > 4.0)) return "GPA must be between 0.0 and 4.0"
     }
+
     return ""
   }
 
   function handleNext() {
     const err = validateStep()
-    if (err) { setError(err); return }
+    if (err) {
+      setError(err)
+      return
+    }
     setError("")
     setStep((step + 1) as Step)
   }
@@ -235,17 +273,20 @@ export default function SignupPage() {
     setLoading(true)
 
     const data: SignupData = {
-      name:           name.trim(),
-      email:          email.trim(),
+      name: name.trim(),
+      email: email.trim(),
       password,
-      major:          major.trim(),
-      gpa:            gpa ? parseFloat(gpa) : null,
-      graduationYear: parseInt(graduationYear),
-      bio:            bio.trim(),
+      major: major.trim(),
+      gpa: gpa ? parseFloat(gpa) : null,
+      graduationYear: parseInt(graduationYear, 10),
+      bio: bio.trim(),
       clubs,
       companies,
       interests,
-      linkedinUrl:    linkedinUrl.trim() || null,
+      linkedinUrl: linkedinUrl.trim() || null,
+      skills,
+      looking_for: lookingFor,
+      year: year || null,
     }
 
     try {
@@ -261,13 +302,19 @@ export default function SignupPage() {
   return (
     <div className="auth-page">
       <div className="auth-card auth-card--wide">
-        <h1 className="auth-title">Create your account</h1>
+        <div className="auth-header">
+          <span className="auth-eyebrow">NJIT Student OS</span>
+          <h1 className="auth-title">Build your profile</h1>
+          <p className="auth-subtitle">
+            Create your JitHub account in a few quick steps so the platform can personalize
+            your campus experience.
+          </p>
+        </div>
 
-        {/* Step indicator */}
         <div className="auth-steps">
           {STEPS.map((label, i) => (
             <div key={label} className={`auth-step ${i === step ? "active" : i < step ? "done" : ""}`}>
-              <span className="auth-step-num">{i < step ? "✓" : i + 1}</span>
+              <span className="auth-step-num">{i < step ? "OK" : i + 1}</span>
               <span className="auth-step-label">{label}</span>
             </div>
           ))}
@@ -275,18 +322,34 @@ export default function SignupPage() {
 
         {error && <div className="auth-error">{error}</div>}
 
-        <form onSubmit={step === 3 ? handleSubmit : e => { e.preventDefault(); handleNext() }} className="auth-form">
-
-          {/* ── Step 0: Account ── */}
+        <form
+          onSubmit={step === 3 ? handleSubmit : e => {
+            e.preventDefault()
+            handleNext()
+          }}
+          className="auth-form"
+        >
           {step === 0 && (
             <>
               <label>
                 Full name
-                <input value={name} onChange={e => setName(e.target.value)} required autoFocus />
+                <input
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  required
+                  autoFocus
+                  autoComplete="name"
+                />
               </label>
               <label>
                 Email
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
               </label>
               <label>
                 Password <span className="auth-hint">(min 8 characters)</span>
@@ -296,8 +359,14 @@ export default function SignupPage() {
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     required
+                    autoComplete="new-password"
                   />
-                  <button type="button" className="auth-pw-eye" onClick={() => setShowPassword(p => !p)} aria-label={showPassword ? "Hide password" : "Show password"}>
+                  <button
+                    type="button"
+                    className="auth-pw-eye"
+                    onClick={() => setShowPassword(p => !p)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
                     <EyeIcon open={showPassword} />
                   </button>
                 </div>
@@ -310,8 +379,14 @@ export default function SignupPage() {
                     value={confirm}
                     onChange={e => setConfirm(e.target.value)}
                     required
+                    autoComplete="new-password"
                   />
-                  <button type="button" className="auth-pw-eye" onClick={() => setShowConfirm(p => !p)} aria-label={showConfirm ? "Hide password" : "Show password"}>
+                  <button
+                    type="button"
+                    className="auth-pw-eye"
+                    onClick={() => setShowConfirm(p => !p)}
+                    aria-label={showConfirm ? "Hide password" : "Show password"}
+                  >
                     <EyeIcon open={showConfirm} />
                   </button>
                 </div>
@@ -319,60 +394,89 @@ export default function SignupPage() {
             </>
           )}
 
-          {/* ── Step 1: Academic ── */}
           {step === 1 && (
             <>
               <label>
                 Major
                 <select value={major} onChange={e => setMajor(e.target.value)} required autoFocus>
-                  <option value="">Select your major…</option>
-                  {NJIT_MAJORS.map(m => <option key={m} value={m}>{m}</option>)}
+                  <option value="">Select your major...</option>
+                  {NJIT_MAJORS.map(m => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
-                GPA <span className="auth-hint">(optional, 0.0 – 4.0)</span>
+                GPA <span className="auth-hint">(optional, 0.0 - 4.0)</span>
                 <input
-                  type="number" step="0.01" min="0" max="4.0"
-                  value={gpa} onChange={e => setGpa(e.target.value)}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="4.0"
+                  value={gpa}
+                  onChange={e => setGpa(e.target.value)}
                   placeholder="e.g. 3.5"
                 />
               </label>
               <label>
                 Graduation year
                 <input
-                  type="number" min="2024" max="2035"
-                  value={graduationYear} onChange={e => setGradYear(e.target.value)}
-                  required placeholder="e.g. 2027"
+                  type="number"
+                  min="2024"
+                  max="2035"
+                  value={graduationYear}
+                  onChange={e => setGradYear(e.target.value)}
+                  required
+                  placeholder="e.g. 2027"
                 />
+              </label>
+              <label>
+                Year <span className="auth-hint">(optional)</span>
+                <select value={year} onChange={e => setYear(e.target.value)}>
+                  <option value="">Select year...</option>
+                  {YEAR_OPTIONS.map(y => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
               </label>
             </>
           )}
 
-          {/* ── Step 2: Campus Life ── */}
           {step === 2 && (
             <>
               <fieldset className="auth-fieldset">
-                <legend>Clubs / Organizations <span className="auth-hint">(optional)</span></legend>
+                <legend>
+                  Clubs / Organizations <span className="auth-hint">(optional)</span>
+                </legend>
                 <div className="auth-tag-input">
                   <select value={clubInput} onChange={e => setClubInput(e.target.value)}>
-                    <option value="">Select a club…</option>
+                    <option value="">Select a club...</option>
                     {NJIT_CLUBS.filter(c => !clubs.includes(c)).map(c => (
-                      <option key={c} value={c}>{c}</option>
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
                     ))}
                   </select>
-                  <button type="button" onClick={() => addItem(clubInput, clubs, setClubs, setClubInput)}>Add</button>
+                  <button type="button" onClick={() => addItem(clubInput, clubs, setClubs, setClubInput)}>
+                    Add
+                  </button>
                 </div>
                 <div className="auth-tags">
                   {clubs.map(c => (
                     <span key={c} className="auth-tag">
-                      {c} <button type="button" onClick={() => removeItem(c, clubs, setClubs)}>×</button>
+                      {c} <button type="button" onClick={() => removeItem(c, clubs, setClubs)}>x</button>
                     </span>
                   ))}
                 </div>
               </fieldset>
 
               <fieldset className="auth-fieldset">
-                <legend>Companies / Internships <span className="auth-hint">(optional)</span></legend>
+                <legend>
+                  Companies / Internships <span className="auth-hint">(optional)</span>
+                </legend>
                 <div className="auth-tag-input">
                   <input
                     value={companyInput}
@@ -395,14 +499,16 @@ export default function SignupPage() {
                 <div className="auth-tags">
                   {companies.map(c => (
                     <span key={c} className="auth-tag">
-                      {c} <button type="button" onClick={() => removeItem(c, companies, setCompanies)}>×</button>
+                      {c} <button type="button" onClick={() => removeItem(c, companies, setCompanies)}>x</button>
                     </span>
                   ))}
                 </div>
               </fieldset>
 
               <fieldset className="auth-fieldset">
-                <legend>Interests <span className="auth-hint">(optional)</span></legend>
+                <legend>
+                  Interests <span className="auth-hint">(optional)</span>
+                </legend>
                 <div className="auth-tag-input">
                   <select
                     value={interestInput}
@@ -411,11 +517,13 @@ export default function SignupPage() {
                       setCustomInterest("")
                     }}
                   >
-                    <option value="">Select an interest…</option>
+                    <option value="">Select an interest...</option>
                     {availableInterests.filter(i => !interests.includes(i)).map(i => (
-                      <option key={i} value={i}>{i}</option>
+                      <option key={i} value={i}>
+                        {i}
+                      </option>
                     ))}
-                    <option value="custom">Custom interest…</option>
+                    <option value="custom">Custom interest...</option>
                   </select>
                   <button
                     type="button"
@@ -449,7 +557,77 @@ export default function SignupPage() {
                 <div className="auth-tags">
                   {interests.map(i => (
                     <span key={i} className="auth-tag">
-                      {i} <button type="button" onClick={() => removeItem(i, interests, setInterests)}>×</button>
+                      {i} <button type="button" onClick={() => removeItem(i, interests, setInterests)}>x</button>
+                    </span>
+                  ))}
+                </div>
+              </fieldset>
+
+              <fieldset className="auth-fieldset">
+                <legend>
+                  Skills <span className="auth-hint">(optional)</span>
+                </legend>
+                <div className="auth-tag-input">
+                  <select value={skillInput} onChange={e => setSkillInput(e.target.value)}>
+                    <option value="">Select a skill...</option>
+                    {KNOWN_SKILLS.filter(s => !skills.includes(s)).map(s => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                    <option value="custom">Custom skill...</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => addItem(skillInput === "custom" ? "" : skillInput, skills, setSkills, setSkillInput)}
+                  >
+                    Add
+                  </button>
+                </div>
+                {skillInput === "custom" && (
+                  <div className="auth-tag-input" style={{ marginTop: "0.5rem" }}>
+                    <input
+                      placeholder="Type a skill and press Enter"
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          addItem(
+                            toTitleCase((e.target as HTMLInputElement).value),
+                            skills,
+                            setSkills,
+                            () => setSkillInput("")
+                          )
+                          ;(e.target as HTMLInputElement).value = ""
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="auth-tags">
+                  {skills.map(s => (
+                    <span key={s} className="auth-tag">
+                      {s} <button type="button" onClick={() => removeItem(s, skills, setSkills)}>x</button>
+                    </span>
+                  ))}
+                </div>
+              </fieldset>
+
+              <fieldset className="auth-fieldset">
+                <legend>
+                  Looking for <span className="auth-hint">(optional)</span>
+                </legend>
+                <div className="auth-tags" style={{ marginTop: "0.5rem" }}>
+                  {LOOKING_FOR_OPTIONS.map(opt => (
+                    <span
+                      key={opt}
+                      className={`auth-tag auth-tag--toggle ${lookingFor.includes(opt) ? "is-selected" : ""}`}
+                      onClick={() =>
+                        setLookingFor(prev =>
+                          prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt]
+                        )
+                      }
+                    >
+                      {opt}
                     </span>
                   ))}
                 </div>
@@ -457,7 +635,6 @@ export default function SignupPage() {
             </>
           )}
 
-          {/* ── Step 3: Profile ── */}
           {step === 3 && (
             <>
               <label>
@@ -466,7 +643,7 @@ export default function SignupPage() {
                   value={bio}
                   onChange={e => setBio(e.target.value)}
                   rows={4}
-                  placeholder="Tell people a bit about yourself…"
+                  placeholder="Tell people a bit about yourself..."
                   autoFocus
                 />
               </label>
@@ -482,15 +659,21 @@ export default function SignupPage() {
             </>
           )}
 
-          {/* Navigation buttons */}
           <div className="auth-nav">
             {step > 0 && (
-              <button type="button" className="auth-btn-secondary" onClick={() => { setError(""); setStep((step - 1) as Step) }}>
+              <button
+                type="button"
+                className="auth-btn-secondary"
+                onClick={() => {
+                  setError("")
+                  setStep((step - 1) as Step)
+                }}
+              >
                 Back
               </button>
             )}
             <button type="submit" className="auth-btn-primary" disabled={loading}>
-              {step === 3 ? (loading ? "Creating account…" : "Create account") : "Next"}
+              {step === 3 ? (loading ? "Creating account..." : "Create account") : "Next"}
             </button>
           </div>
         </form>

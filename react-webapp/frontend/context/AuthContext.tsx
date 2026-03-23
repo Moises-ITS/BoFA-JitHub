@@ -14,6 +14,9 @@ export interface User {
   companies: string[]
   interests: string[]
   linkedinUrl: string | null
+  skills: string[]
+  looking_for: string[]
+  year: string | null
 }
 
 export interface ProfileUpdate {
@@ -25,6 +28,9 @@ export interface ProfileUpdate {
   companies: string[]
   interests: string[]
   linkedinUrl?: string | null
+  skills: string[]
+  looking_for: string[]
+  year: string | null
 }
 
 interface AuthContextValue {
@@ -49,6 +55,9 @@ export interface SignupData {
   companies: string[]
   interests: string[]
   linkedinUrl?: string | null
+  skills: string[]
+  looking_for: string[]
+  year: string | null
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)

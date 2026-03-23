@@ -8,7 +8,7 @@ import { DeadlineChip } from "./deadline-chip";
 import { format } from "date-fns";
 import { useAuth } from "../../context/AuthContext";
 import {
-  EventDetailModal, fmt12, CLUB_EMOJIS,
+  CATEGORY_STYLE, EventDetailModal, fmt12, CLUB_EMOJIS,
 } from "../events/components/EventDetailModal";
 import type { AttendeeInfo, UserProfile } from "../events/components/EventDetailModal";
 
@@ -24,8 +24,8 @@ function ClubAvatar({ clubId, clubName, index }: { clubId: number; clubName: str
 
 // change_pct: positive = up, negative = down, null = not yet available
 function ClubChangePct({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-xs text-[#6B7280]">—</span>;
-  const color = pct >= 0 ? "#1ABC9C" : "#E74C3C";
+  if (pct === null) return <span className="text-xs" style={{ color: "var(--text-subtle)" }}>—</span>;
+  const color = pct >= 0 ? "var(--status-success)" : "var(--status-error)";
   const sign = pct >= 0 ? "+" : "";
   return (
     <span style={{ color, fontSize: "11px", fontWeight: 600 }}>
@@ -35,11 +35,21 @@ function ClubChangePct({ pct }: { pct: number | null }) {
 }
 
 const moduleCards = [
-  { icon: Calendar, label: "Events", path: "/events", color: "from-[#C0392B] to-[#E74C3C]" },
-  { icon: Briefcase, label: "Opportunities", path: "/opportunities", color: "from-[#E67E22] to-[#F39C12]" },
-  { icon: Network, label: "Campus Network", path: "/network", color: "from-[#3498DB] to-[#5DADE2]" },
-  { icon: Microscope, label: "Research", path: "/research", color: "from-[#9B59B6] to-[#BB8FCE]" },
+  { icon: Calendar, label: "Events", path: "/events", gradient: "linear-gradient(135deg, var(--brand-primary), var(--accent-events))" },
+  { icon: Briefcase, label: "Opportunities", path: "/opportunities", gradient: "linear-gradient(135deg, var(--accent-opportunities), var(--accent-events))" },
+  { icon: Network, label: "Campus Network", path: "/network", gradient: "linear-gradient(135deg, var(--accent-networking), var(--status-info))" },
+  { icon: Microscope, label: "Research", path: "/research", gradient: "linear-gradient(135deg, var(--accent-research), var(--accent-networking))" },
 ];
+
+const FREE_FOOD_BADGE = {
+  backgroundColor: "var(--accent-events-soft)",
+  color: "var(--accent-events)",
+};
+
+const VIRTUAL_BADGE = {
+  backgroundColor: "var(--accent-orgs-soft)",
+  color: "var(--accent-orgs)",
+};
 
 export default function Home() {
   const { user } = useAuth();
@@ -137,10 +147,11 @@ export default function Home() {
     <>
     <div className="max-w-7xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold mb-2">
-          Welcome back, <span className="bg-gradient-to-r from-[#C0392B] to-[#E67E22] bg-clip-text text-transparent">{firstName}</span>
+        <h1 className="home-welcome-heading text-3xl font-semibold mb-2">
+          <span className="home-welcome-prefix">Welcome back, </span>
+          <span className="home-welcome-name">{firstName}</span>
         </h1>
-        <p className="text-[#9CA3AF]">Here's what's happening at NJIT today</p>
+        <p style={{ color: "var(--text-muted)" }}>Here's what's happening at NJIT today</p>
       </div>
 
       {/* Quick Module Links */}
@@ -153,9 +164,12 @@ export default function Home() {
             transition={{ delay: index * 0.1 }}
           >
             <Link to={module.path}>
-              <div className="group relative overflow-hidden bg-[#1A1A1A] border border-white/10 rounded-xl p-6 hover:border-white/20 transition-all">
-                <div className={`absolute inset-0 bg-gradient-to-br ${module.color} opacity-0 group-hover:opacity-10 transition-opacity`} />
-                <module.icon className="w-8 h-8 text-[#9CA3AF] group-hover:text-white transition-colors mb-3" />
+              <div
+                className="group relative overflow-hidden rounded-xl p-6 transition-all"
+                style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
+              >
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity" style={{ backgroundImage: module.gradient }} />
+                <module.icon className="w-8 h-8 transition-colors mb-3" style={{ color: "var(--text-muted)" }} />
                 <h3 className="font-medium text-white">{module.label}</h3>
               </div>
             </Link>
@@ -167,7 +181,7 @@ export default function Home() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-white">Upcoming Events</h2>
-          <Link to="/events" className="text-sm text-[#C0392B] hover:text-[#E74C3C] transition-colors">
+          <Link to="/events" className="text-sm transition-colors" style={{ color: "var(--brand-primary)" }}>
             View all →
           </Link>
         </div>
@@ -180,27 +194,34 @@ export default function Home() {
               transition={{ delay: 0.2 + index * 0.1 }}
               whileHover={{ y: -4 }}
               onClick={() => setSelectedEvent(event)}
-              className="bg-[#1A1A1A] border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all cursor-pointer"
+              className="rounded-xl p-5 transition-all cursor-pointer"
+              style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
             >
               <div className="flex items-start justify-between mb-3">
                 <ClubAvatar clubId={event.club_id} clubName={event.club_name} index={index} />
               </div>
               <h3 className="font-medium text-white mb-1">{event.event_name}</h3>
-              <p className="text-sm text-[#9CA3AF] mb-3">{event.club_name}</p>
+              <p className="text-sm mb-3" style={{ color: "var(--text-muted)" }}>{event.club_name}</p>
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 {event.event_category && (
-                  <span className="text-xs px-2 py-1 rounded-md bg-white/5 text-[#9CA3AF] capitalize">
+                  <span
+                    className="text-xs px-2 py-1 rounded-md capitalize"
+                    style={{
+                      backgroundColor: (CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" }).bg,
+                      color: (CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" }).color,
+                    }}
+                  >
                     {event.event_category}
                   </span>
                 )}
                 {event.has_free_food && (
-                  <span className="text-xs px-2 py-1 rounded-md bg-[#E67E22]/20 text-[#F39C12]">Free Food</span>
+                  <span className="text-xs px-2 py-1 rounded-md" style={FREE_FOOD_BADGE}>Free Food</span>
                 )}
                 {event.virtual && (
-                  <span className="text-xs px-2 py-1 rounded-md bg-[#9B59B6]/20 text-[#BB8FCE]">Virtual</span>
+                  <span className="text-xs px-2 py-1 rounded-md" style={VIRTUAL_BADGE}>Virtual</span>
                 )}
               </div>
-              <p className="text-xs text-[#9CA3AF]">
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                 {event.date ? format(new Date(event.date + "T00:00:00"), "EEE, MMM d") : "Date TBD"}
                 {event.start_time ? ` at ${fmt12(event.start_time.slice(0, 5))}` : ""}
               </p>
@@ -214,13 +235,14 @@ export default function Home() {
         <div className="lg:col-span-2">
           <div className="flex items-center gap-2 mb-4">
             <h2 className="text-xl font-semibold text-white">Opportunity Spotlight</h2>
-            <div className="w-2 h-2 rounded-full bg-[#C0392B] animate-pulse" />
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "var(--brand-primary)" }} />
           </div>
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.4 }}
-            className="bg-gradient-to-br from-[#1A1A1A] to-[#1F1F1F] border border-white/10 rounded-xl p-6"
+            className="rounded-xl p-6"
+            style={{ background: "var(--surface-gradient)", border: "1px solid var(--border-default)" }}
           >
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -229,23 +251,23 @@ export default function Home() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-white">{topOpportunity.role}</h3>
-                  <p className="text-sm text-[#9CA3AF]">{topOpportunity.company}</p>
+                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>{topOpportunity.company}</p>
                 </div>
               </div>
               <MatchBadge score={topOpportunity.matchScore} />
             </div>
             <div className="flex flex-wrap gap-2 mb-4">
-              <span className="text-xs px-3 py-1.5 rounded-md bg-[#E67E22]/20 text-[#F39C12]">
+              <span className="text-xs px-3 py-1.5 rounded-md" style={{ backgroundColor: "var(--accent-opportunities-soft)", color: "var(--accent-opportunities)" }}>
                 {topOpportunity.type}
               </span>
               <DeadlineChip deadline={topOpportunity.deadline} />
-              <span className="text-xs px-3 py-1.5 rounded-md bg-white/5 text-[#9CA3AF]">
+              <span className="text-xs px-3 py-1.5 rounded-md bg-white/5" style={{ color: "var(--text-muted)" }}>
                 {topOpportunity.location}
               </span>
             </div>
             <p className="text-sm text-white mb-4 font-medium">{topOpportunity.salary}</p>
             <div className="flex gap-2">
-              <button className="flex-1 px-4 py-2 bg-gradient-to-r from-[#C0392B] to-[#E74C3C] text-white rounded-lg font-medium hover:shadow-lg hover:shadow-[#C0392B]/30 transition-all">
+              <button className="flex-1 px-4 py-2 text-white rounded-lg font-medium transition-all" style={{ background: "var(--brand-gradient)", boxShadow: "var(--shadow-brand)" }}>
                 Apply Now
               </button>
               <Link to="/opportunities" className="px-4 py-2 bg-white/5 text-white rounded-lg font-medium hover:bg-white/10 transition-colors">
@@ -258,30 +280,40 @@ export default function Home() {
         {/* Trending Clubs */}
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-5 h-5 text-[#C0392B]" />
+            <TrendingUp className="w-5 h-5" style={{ color: "var(--brand-primary)" }} />
             <h2 className="text-xl font-semibold text-white">Trending Clubs</h2>
           </div>
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.5 }}
-            className="bg-[#1A1A1A] border border-white/10 rounded-xl p-4"
+            className="rounded-xl p-4"
+            style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
           >
             <div className="space-y-3">
               {trendingClubs.map((club, index) => (
                 <div key={club.club_name} className="flex items-center gap-3 group cursor-pointer">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium ${
-                    index === 0 ? "bg-gradient-to-br from-[#C0392B] to-[#E74C3C] text-white" :
                     index === 1 ? "bg-white/10 text-white" :
-                    "bg-white/5 text-[#9CA3AF]"
+                    "bg-white/5"
                   }`}>
-                    {club.rank}
+                    <span
+                      style={
+                        index === 0
+                          ? { display: "inline-flex", width: "100%", height: "100%", alignItems: "center", justifyContent: "center", borderRadius: 8, background: "var(--brand-gradient)", color: "#FFFFFF" }
+                          : index === 1
+                            ? undefined
+                            : { color: "var(--text-muted)" }
+                      }
+                    >
+                      {club.rank}
+                    </span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate group-hover:text-[#C0392B] transition-colors">
+                    <p className="text-sm font-medium text-white truncate transition-colors group-hover:opacity-90">
                       {club.club_name}
                     </p>
-                    <p className="text-xs text-[#9CA3AF]">{club.event_count} events this semester</p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>{club.event_count} events this semester</p>
                   </div>
                   <ClubChangePct pct={club.change_pct ?? null} />
                 </div>

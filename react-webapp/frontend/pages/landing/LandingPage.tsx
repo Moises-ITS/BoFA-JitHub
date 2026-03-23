@@ -18,7 +18,7 @@ export default function LandingPage() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "#0f1117",
+      background: "var(--hero-gradient)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -30,7 +30,7 @@ export default function LandingPage() {
       <div style={{
         position: "absolute",
         inset: 0,
-        background: "radial-gradient(ellipse 80% 60% at 50% 40%, rgba(192,57,43,0.15) 0%, transparent 70%)",
+        background: "radial-gradient(ellipse 80% 60% at 50% 40%, rgba(215,25,32,0.18) 0%, transparent 70%)",
         pointerEvents: "none",
       }} />
 
@@ -47,10 +47,10 @@ export default function LandingPage() {
             width: 72,
             height: 72,
             borderRadius: 20,
-            background: "linear-gradient(135deg, #C0392B, #E67E22)",
+            background: "var(--brand-gradient)",
             alignItems: "center",
             justifyContent: "center",
-            boxShadow: "0 0 40px rgba(192,57,43,0.4)",
+            boxShadow: "var(--shadow-brand)",
           }}>
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 22 }}>JH</span>
           </div>
@@ -65,7 +65,7 @@ export default function LandingPage() {
             fontSize: "clamp(2.5rem, 6vw, 4rem)",
             fontWeight: 700,
             marginBottom: 16,
-            background: "linear-gradient(135deg, #ffffff 40%, #9CA3AF)",
+            background: "linear-gradient(135deg, var(--text-primary) 40%, var(--text-muted))",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
             lineHeight: 1.1,
@@ -80,7 +80,7 @@ export default function LandingPage() {
           transition={{ duration: 0.5, delay: 0.25 }}
           style={{
             fontSize: "1.25rem",
-            color: "#9CA3AF",
+            color: "var(--text-secondary)",
             marginBottom: 40,
           }}
         >
@@ -106,9 +106,9 @@ export default function LandingPage() {
               style={{
                 padding: "6px 16px",
                 borderRadius: 999,
-                border: "1px solid rgba(255,255,255,0.1)",
+                border: "1px solid var(--border-default)",
                 background: "rgba(255,255,255,0.04)",
-                color: "#9CA3AF",
+                color: "var(--text-muted)",
                 fontSize: "0.85rem",
               }}
             >
@@ -129,12 +129,12 @@ export default function LandingPage() {
             style={{
               padding: "12px 32px",
               borderRadius: 10,
-              background: "linear-gradient(135deg, #C0392B, #E74C3C)",
+              background: "var(--brand-gradient)",
               color: "#fff",
               fontWeight: 600,
               fontSize: "0.95rem",
               textDecoration: "none",
-              boxShadow: "0 4px 20px rgba(192,57,43,0.35)",
+              boxShadow: "var(--shadow-brand)",
               transition: "opacity 0.2s",
             }}
           >
@@ -146,8 +146,8 @@ export default function LandingPage() {
               padding: "12px 32px",
               borderRadius: 10,
               background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              color: "#fff",
+              border: "1px solid var(--border-default)",
+              color: "var(--text-primary)",
               fontWeight: 600,
               fontSize: "0.95rem",
               textDecoration: "none",

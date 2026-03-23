@@ -112,6 +112,19 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     setConnLoading(false);
   };
 
+  const removeConnection = async () => {
+    if (!node || !user) return;
+    setConnLoading(true);
+    try {
+      const res = await fetch(`${API}/api/connections/${node.id}`, {
+        method:  "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setConnStatus("none");
+    } catch { /* silent */ }
+    setConnLoading(false);
+  };
+
   // ── Early return ──────────────────────────────────────────────────────────
   if (!node) return null;
 
@@ -178,7 +191,14 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
             </div>
           )}
           {connStatus === "connected" && (
-            <span className="connectChip connectChip--connected">✓ Connected</span>
+            <div className="connectIncoming">
+              <span className="connectChip connectChip--connected">✓ Connected</span>
+              <div className="connectActions">
+                <button className="connectBtn connectBtn--decline" onClick={removeConnection} disabled={connLoading}>
+                  {connLoading ? "Removing…" : "Remove"}
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}

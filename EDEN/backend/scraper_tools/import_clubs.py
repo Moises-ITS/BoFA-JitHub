@@ -42,8 +42,12 @@ def import_clubs():
                 # Check if club already exists by handle
                 existing = db.query(Club).filter(Club.instagram_handle == handle).first()
 
+                description = row.get("description", "").strip() or None
+
                 if existing:
                     existing.name = name
+                    if description:
+                        existing.bio = description
                     updated += 1
                 else:
                     club = Club(
@@ -51,15 +55,18 @@ def import_clubs():
                         instagram_handle=handle,
                         follower_count=None,
                         is_active=True,
+                        bio=description,
                     )
                     db.add(club)
                     inserted += 1
 
         db.commit()
+        with_bio = db.query(Club).filter(Club.bio.isnot(None)).count()
         print(f"\nImport complete:")
         print(f"  Inserted : {inserted}")
         print(f"  Updated  : {updated}")
         print(f"  Skipped  : {skipped} (no Instagram handle)")
+        print(f"  Total clubs with bio: {with_bio}")
 
     except Exception as e:
         db.rollback()

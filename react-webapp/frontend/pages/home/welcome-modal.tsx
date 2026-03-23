@@ -18,12 +18,12 @@ export function WelcomeModal({ isOpen, onClose }: WelcomeModalProps) {
     },
     {
       title: "Discover Events",
-      description: "Find events tailored to your interests with AI-powered matching. Never miss recruiting events, free food, or networking opportunities.",
+      description: "Find events relevant to campus life and your interests. Never miss recruiting events, free food, or networking opportunities.",
       image: "📅",
     },
     {
       title: "Find Opportunities",
-      description: "Access internships, scholarships, jobs, and research positions. Get personalized match scores and deadline alerts.",
+      description: "Access internships, scholarships, jobs, and research positions with clear details and deadline alerts.",
       image: "💼",
     },
     {

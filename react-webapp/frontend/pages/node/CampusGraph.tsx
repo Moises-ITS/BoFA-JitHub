@@ -19,7 +19,6 @@ import TopConnected                       from "./components/TopConnected";
 import HoverCard                          from "./components/HoverCard";
 import { useAuth }                        from "../../context/AuthContext";
 import { NetworkIntro }                   from "../../components/NetworkTransition";
-import CampusNavbar                       from "../../components/CampusNavbar";
 import "./CampusGraph.css";
 
 const API             = import.meta.env.VITE_API_URL ?? "";
@@ -47,7 +46,6 @@ export default function CampusGraph() {
   const [companyQuery,        setCompanyQuery]        = useState("");
   const [pathNodeIds,         setPathNodeIds]         = useState<string[]>([]);
   const [pathStatus,          setPathStatus]          = useState<"idle"|"searching"|"found"|"notfound">("idle");
-  const [visibleCount,        setVisibleCount]        = useState(0);
   const [hoverCard,           setHoverCard]           = useState<{ node: GraphNode; x: number; y: number } | null>(null);
   const [d3Ready,             setD3Ready]             = useState(false);
 
@@ -251,7 +249,6 @@ export default function CampusGraph() {
     const width  = svgRef.current.clientWidth;
     const height = svgRef.current.clientHeight;
     dimsRef.current = { w: width, h: height };
-    setVisibleCount(nodes.length);
 
     // ── SVG defs (glow filters) ────────────────────────────────────────────
     const defs = svg.append("defs");
@@ -605,7 +602,6 @@ export default function CampusGraph() {
       const t = nodes.find(n => n.id === getNodeId(l.target));
       return s && t && (hiddenTypes.has(s.type) || hiddenTypes.has(t.type)) ? "none" : null;
     });
-    setVisibleCount(nodes.filter(n => !hiddenTypes.has(n.type)).length);
   }, [hiddenTypes, nodes]);
 
   // ── Search Effect ─────────────────────────────────────────────────────────
@@ -644,9 +640,23 @@ export default function CampusGraph() {
     ).length,
   [links, user?.id]);
 
-  const companySorted = useMemo(() =>
-    nodes.filter(n => n.type === "company").sort((a, b) => a.label.localeCompare(b.label)),
-  [nodes]);
+  const visibleTypeCounts = useMemo(() => ({
+    students: nodes.filter(n => n.type === "student" && !hiddenTypes.has(n.type)).length,
+    organizations: nodes.filter(n => n.type === "club" && !hiddenTypes.has(n.type)).length,
+    companies: nodes.filter(n => n.type === "company" && !hiddenTypes.has(n.type)).length,
+  }), [hiddenTypes, nodes]);
+
+  const modeLabel =
+    mode === "locked" ? "Focus mode" :
+    mode === "path" ? "Path mode" :
+    "Explore mode";
+
+  const modeDescription =
+    mode === "locked"
+      ? "You are focused on one node and its strongest campus connections."
+      : mode === "path"
+      ? `Tracing the shortest visible path from your network to ${companyQuery || "a company"}.`
+      : "Explore students, organizations, and companies.";
 
   return (
     <div className="root">
@@ -654,47 +664,42 @@ export default function CampusGraph() {
       {/* Intro animation overlay — renders on top while graph loads underneath */}
       {!introComplete && <NetworkIntro onComplete={handleIntroComplete} />}
 
-      {/* Navbar */}
-      <CampusNavbar
-        mode={mode}
-        userConnCount={userConnCount}
-        onExitMode={deselectAll}
-      />
+      <div className="graphHeader">
+        <div className="graphHeaderCopy">
+          <span className="graphEyebrow">Campus Connections</span>
+          <h1 className="graphTitle">Campus Network</h1>
+          <p className="graphSubtitle">{modeDescription}</p>
+        </div>
+
+        <div className="graphHeaderMeta">
+          <span className={`graphModeBadge graphModeBadge--${mode}`}>{modeLabel}</span>
+          <span className="graphHeaderChip">
+            <strong>{userConnCount}</strong>
+            <span>connections</span>
+          </span>
+          {mode === "locked" && selectedNode && (
+            <span className="graphHeaderChip graphHeaderChip--focus">
+              <span>Focused on</span>
+              <strong>{selectedNode.label}</strong>
+            </span>
+          )}
+          {mode !== "free" && (
+            <button type="button" className="graphExitBtn" onClick={deselectAll}>
+              Back to explore
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Toolbar */}
       <div className="toolbar">
         <SearchBar value={searchQuery} onChange={setSearchQuery} />
         <FilterBar hiddenTypes={hiddenTypes} onToggleType={toggleType} />
 
-        {/* Company path search */}
-        <div className="pathSearchWrap">
-          <span style={{ color: "#718096", fontSize: "0.9rem", flexShrink: 0 }}>🏢</span>
-          <select
-            className="pathSearchSelect"
-            value={companyQuery}
-            disabled={pathStatus === "searching"}
-            onChange={e => {
-              const label = e.target.value;
-              setCompanyQuery(label);
-              setPathStatus("idle");
-              setPathNodeIds([]);
-              if (label) findPath(label);
-            }}
-          >
-            <option value="">Find company connection…</option>
-            {companySorted.map(n => (
-              <option key={n.id} value={n.label}>{n.label}</option>
-            ))}
-          </select>
-          {pathStatus === "searching" && <span className="pathMsg" style={{ color: "#a78bfa" }}>…</span>}
-          {pathStatus === "notfound"  && <span className="pathMsg pathMsg--err">No path found</span>}
-          {pathStatus === "found"     && <span className="pathMsg pathMsg--ok">{pathNodeIds.length - 1} hop{pathNodeIds.length !== 2 ? "s" : ""}</span>}
-        </div>
-
         <div className="toolbarStats">
-          <span><b>{nodes.length}</b> nodes</span>
-          <span><b>{links.length}</b> edges</span>
-          <span><b>{visibleCount}</b> visible</span>
+          <span><b>{visibleTypeCounts.students}</b> students</span>
+          <span><b>{visibleTypeCounts.organizations}</b> orgs</span>
+          <span><b>{visibleTypeCounts.companies}</b> companies</span>
         </div>
       </div>
 

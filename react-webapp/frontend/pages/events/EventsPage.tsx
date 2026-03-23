@@ -5,8 +5,9 @@ import { useAuth } from "../../context/AuthContext";
 import { format } from "date-fns";
 import { HeatmapCalendar } from "./components/heatmap-calendar";
 import {
-  CATEGORY_STYLE, fmt12, ClubAvatar, matchScore, EventDetailModal,
+  CATEGORY_STYLE, fmt12, ClubAvatar, CLUB_EMOJIS, matchScore, EventDetailModal,
 } from "./components/EventDetailModal";
+import SubmitEventModal, { type CommunityEventInput } from "./components/SubmitEventModal";
 import type { UserProfile, AttendeeInfo } from "./components/EventDetailModal";
 
 const API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
@@ -44,7 +45,7 @@ function MatchSignal({ score }: { score: number }) {
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
-function useEvents(endpoint: string) {
+function useEvents(endpoint: string, refreshKey = 0) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -53,7 +54,7 @@ function useEvents(endpoint: string) {
       .then((r) => r.json())
       .then((d) => { setData(d.events ?? d); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [endpoint]);
+  }, [endpoint, refreshKey]);
   return { data, loading };
 }
 
@@ -160,21 +161,61 @@ function EventCard({
   );
 }
 
+function RankingAvatar({
+  clubId,
+  clubName,
+  index,
+  size = 28,
+}: {
+  clubId?: number;
+  clubName: string;
+  index: number;
+  size?: number;
+}) {
+  const [failed, setFailed] = useState(clubId == null);
+
+  if (clubId != null && !failed) {
+    return (
+      <img
+        src={`/club_pics/${clubId}.jpg`}
+        alt={clubName}
+        onError={() => setFailed(true)}
+        style={{ width: size, height: size }}
+        className="rounded-lg object-cover shrink-0"
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        fontSize: Math.max(14, size * 0.55),
+        backgroundColor: "rgba(255,255,255,0.05)",
+      }}
+      className="rounded-lg flex items-center justify-center shrink-0"
+      aria-label={clubName}
+    >
+      {CLUB_EMOJIS[index % CLUB_EMOJIS.length]}
+    </div>
+  );
+}
+
 function TrendingPodium({ clubs }: { clubs: any[] }) {
   if (clubs.length < 3) return null;
   const podium = [
-    { club: clubs[1], rank: 2, height: 58, bg: "rgba(255,255,255,0.08)", border: "var(--border-default)", color: "var(--text-secondary)", delay: 0.05 },
-    { club: clubs[0], rank: 1, height: 88, bg: "var(--brand-primary-soft)", border: "var(--brand-primary-soft-strong)", color: "var(--accent-events)", delay: 0 },
-    { club: clubs[2], rank: 3, height: 40, bg: "var(--accent-events-soft)", border: "rgba(226,154,59,0.28)", color: "var(--accent-events)", delay: 0.1 },
+    { club: clubs[1], rank: 2, height: 58, bg: "rgba(255,255,255,0.08)", border: "var(--border-default)", delay: 0.05 },
+    { club: clubs[0], rank: 1, height: 88, bg: "var(--brand-primary-soft)", border: "var(--brand-primary-soft-strong)", delay: 0 },
+    { club: clubs[2], rank: 3, height: 40, bg: "var(--accent-events-soft)", border: "rgba(226,154,59,0.28)", delay: 0.1 },
   ];
-  const medals = ["🥈", "🥇", "🥉"];
 
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", padding: "8px 0 0" }}>
-      {podium.map(({ club, rank, height, bg, border, color, delay }, i) => (
+      {podium.map(({ club, rank, height, bg, border, delay }, i) => (
         <div key={rank} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <div style={{ textAlign: "center", marginBottom: "6px" }}>
-            <div style={{ fontSize: "18px", marginBottom: "3px" }}>{medals[i]}</div>
+          <div style={{ textAlign: "center", marginBottom: "8px", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+            <RankingAvatar clubId={club.club_id} clubName={club.club_name} index={i} size={34} />
             <p style={{ color: "#fff", fontSize: "10px", fontWeight: 600, lineHeight: 1.3, margin: 0, wordBreak: "break-word" as const }}>{club.club_name}</p>
             <p style={{ color: "var(--text-subtle)", fontSize: "9px", margin: "2px 0 0" }}>❤️ {club.total_likes}</p>
           </div>
@@ -184,7 +225,9 @@ function TrendingPodium({ clubs }: { clubs: any[] }) {
             transition={{ type: "spring", stiffness: 160, damping: 18, delay }}
             style={{ width: "100%", backgroundColor: bg, border: `1px solid ${border}`, borderRadius: "6px 6px 0 0", display: "flex", alignItems: "center", justifyContent: "center" }}
           >
-            <span style={{ color, fontSize: "13px", fontWeight: 700 }}>{rank}</span>
+            <div style={{ paddingTop: "8px", paddingBottom: "8px" }}>
+              <RankingAvatar clubId={club.club_id} clubName={club.club_name} index={i} size={26} />
+            </div>
           </motion.div>
         </div>
       ))}
@@ -200,12 +243,7 @@ function SidebarClubRow({ club, index, showScore }: { club: any; index: number; 
       transition={{ delay: index * 0.05 }}
       className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0"
     >
-      <div
-        className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${index === 1 ? "bg-white/10 text-white" : "bg-white/5"}`}
-        style={index === 0 ? { background: "var(--brand-gradient)", color: "#FFFFFF" } : index === 1 ? undefined : { color: "var(--text-muted)" }}
-      >
-        {index + 1}
-      </div>
+      <RankingAvatar clubId={club.club_id} clubName={club.club_name} index={index} size={28} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-white truncate">{club.club_name}</p>
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>{club.event_count} events</p>
@@ -228,8 +266,8 @@ function TopEventRow({ event, index, onSelect }: { event: any; index: number; on
       style={{ display: "flex", alignItems: "flex-start", gap: "10px", paddingTop: "10px", paddingBottom: "10px", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}
       className="last:border-0 hover:opacity-80 transition-opacity"
     >
-      <div style={{ width: "22px", height: "22px", borderRadius: "6px", backgroundColor: index === 0 ? "var(--brand-primary-soft)" : "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 700, color: index === 0 ? "var(--brand-primary)" : "var(--text-muted)", flexShrink: 0, marginTop: "1px" }}>
-        {index + 1}
+      <div style={{ marginTop: "1px" }}>
+        <RankingAvatar clubId={event.club_id} clubName={event.club_name} index={index} size={24} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: 500, margin: "0 0 3px", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{event.event_name}</p>
@@ -252,16 +290,19 @@ export default function EventsPage() {
   };
   const [view, setView] = useState<"upcoming" | "trending" | "top-match">("upcoming");
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [submitOpen, setSubmitOpen] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   const upcomingUrl = activeFilter
     ? `/events/upcoming?limit=50&category=${encodeURIComponent(activeFilter)}`
     : "/events/upcoming?limit=50";
 
-  const { data: upcomingRaw, loading: upcomingLoading } = useEvents(upcomingUrl);
-  const { data: trendingEvents, loading: trendingLoading } = useEvents("/events/trending?limit=50&upcoming_only=true");
-  const { data: sidebarTrending } = useEvents("/events/clubs/trending?limit=5");
-  const { data: topRisers } = useEvents("/events/clubs/top-risers?limit=5");
-  const { data: topEvents } = useEvents("/events/top-risers?limit=5");
+  const { data: upcomingRaw, loading: upcomingLoading } = useEvents(upcomingUrl, refreshNonce);
+  const { data: trendingEvents, loading: trendingLoading } = useEvents("/events/trending?limit=50&upcoming_only=true", refreshNonce);
+  const { data: sidebarTrending } = useEvents("/events/clubs/trending?limit=5", refreshNonce);
+  const { data: topRisers } = useEvents("/events/clubs/top-risers?limit=5", refreshNonce);
+  const { data: topEvents } = useEvents("/events/top-risers?limit=5", refreshNonce);
 
   const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
   const [attendeeMap, setAttendeeMap] = useState<Record<number, AttendeeInfo>>({});
@@ -363,6 +404,31 @@ export default function EventsPage() {
       .catch(() => {});
   }
 
+  async function handleCreateEvent(payload: CommunityEventInput) {
+    setSubmitLoading(true);
+    try {
+      const res = await fetch(`${API}/events/community`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.detail ?? body.error ?? "Could not create event");
+      }
+
+      setView("upcoming");
+      setActiveFilter(null);
+      setSelectedEvent(body);
+      setSelectedEventCanRsvp(true);
+      setModalAttendees({ count: 0, preview: [] });
+      setRefreshNonce((prev) => prev + 1);
+      setSubmitOpen(false);
+    } finally {
+      setSubmitLoading(false);
+    }
+  }
+
   const VIEW_TABS = [
     { key: "upcoming",  label: "Upcoming" },
     { key: "trending",  label: "Trending" },
@@ -381,36 +447,53 @@ export default function EventsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
 
-          <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1" style={{ width: "fit-content", border: "1px solid var(--border-default)" }}>
-            {VIEW_TABS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setView(key)}
-                className={`text-sm px-4 py-1.5 rounded-md font-medium transition-all ${
-                  view === key
-                    ? "text-white"
-                    : "hover:text-white"
-                }`}
-                style={view === key ? { backgroundColor: "var(--brand-primary)" } : { color: "var(--text-muted)" }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {view === "upcoming" && (
-            <select
-              value={activeFilter ?? ""}
-              onChange={(e) => setActiveFilter(e.target.value || null)}
-              className="text-sm text-white rounded-lg px-3 py-2 focus:outline-none cursor-pointer"
-              style={{ colorScheme: "dark", backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
-            >
-              <option value="">All categories</option>
-              {FILTERS.map((f) => (
-                <option key={f.value} value={f.value}>{f.label}</option>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1" style={{ width: "fit-content", border: "1px solid var(--border-default)" }}>
+              {VIEW_TABS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setView(key)}
+                  className={`text-sm px-4 py-1.5 rounded-md font-medium transition-all ${
+                    view === key
+                      ? "text-white"
+                      : "hover:text-white"
+                  }`}
+                  style={view === key ? { backgroundColor: "var(--brand-primary)" } : { color: "var(--text-muted)" }}
+                >
+                  {label}
+                </button>
               ))}
-            </select>
-          )}
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              {view === "upcoming" && (
+                <select
+                  value={activeFilter ?? ""}
+                  onChange={(e) => setActiveFilter(e.target.value || null)}
+                  className="text-sm text-white rounded-lg px-3 py-2 focus:outline-none cursor-pointer"
+                  style={{ colorScheme: "dark", backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
+                >
+                  <option value="">All categories</option>
+                  {FILTERS.map((f) => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </select>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setSubmitOpen(true)}
+                className="rounded-lg px-3 py-2 text-xs font-semibold transition-transform hover:-translate-y-0.5 whitespace-nowrap"
+                style={{
+                  border: "1px solid rgba(204, 0, 0, 0.24)",
+                  background: "linear-gradient(135deg, rgba(215, 25, 32, 0.16), rgba(215, 25, 32, 0.08))",
+                  color: "#f7d7d9",
+                }}
+              >
+                Submit Event
+              </button>
+            </div>
+          </div>
 
           {loading && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>}
           {!loading && displayEvents.length === 0 && (
@@ -488,6 +571,14 @@ export default function EventsPage() {
         forceReadOnly={!selectedEventCanRsvp}
       />
     )}
+
+    <SubmitEventModal
+      open={submitOpen}
+      submitting={submitLoading}
+      categories={FILTERS}
+      onClose={() => setSubmitOpen(false)}
+      onSubmit={handleCreateEvent}
+    />
     </>
   );
 }

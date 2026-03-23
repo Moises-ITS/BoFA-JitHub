@@ -109,6 +109,26 @@
   line-height: 1.6;
 }
 
+.auth-shell-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.auth-shell-links a {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.18s ease;
+}
+
+.auth-shell-links a:hover {
+  color: var(--text-primary);
+}
+
 .auth-steps {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -480,6 +500,30 @@
   width: 100%;
 }
 
+.auth-clerk-placeholder {
+  min-height: 18rem;
+  display: grid;
+  place-items: center;
+  gap: 0.9rem;
+  padding: 1.5rem 0;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.auth-clerk-placeholder p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.auth-clerk-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--brand-primary);
+  border-radius: 999px;
+  animation: auth-spin 0.8s linear infinite;
+}
+
 .auth-clerk-shell .cl-rootBox,
 .auth-clerk-shell .cl-cardBox {
   width: 100%;
@@ -592,6 +636,12 @@
   background: rgba(31, 39, 57, 0.98);
 }
 
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 760px) {
   .auth-page {
     align-items: flex-start;
@@ -611,6 +661,11 @@
 
   .auth-subtitle {
     font-size: 0.95rem;
+  }
+
+  .auth-shell-links {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .auth-steps {

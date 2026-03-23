@@ -24,6 +24,18 @@ interface Recommendation {
 
 type ConnStatus = "none" | "pending-sent" | "pending-received" | "connected";
 
+const HIDDEN_DETAIL_KEYS = new Set([
+  "id",
+  "graph_node_id",
+  "type",
+  "label",
+  "name",
+  "bio",
+  "interests",
+  "linkedinUrl",
+  "gpa",
+]);
+
 interface SidePanelProps {
   node:         GraphNode | null;
   nodes:        GraphNode[];
@@ -207,7 +219,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       <div className="section">
         <h4 className="sectionTitle">Details</h4>
         {Object.entries(node.details || {})
-          .filter(([k]) => !["id","graph_node_id","type","label","name","bio","interests","linkedinUrl"].includes(k))
+          .filter(([k]) => !HIDDEN_DETAIL_KEYS.has(k))
           .map(([k, v]) => (
             <div key={k} className="detailRow">
               <span className="detailIcon">{DETAIL_ICONS[k] || "•"}</span>

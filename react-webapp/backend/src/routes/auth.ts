@@ -1,18 +1,12 @@
 import { Router, Request, Response } from "express"
 import { v4 as uuidv4 } from "uuid"
-import { createClerkClient, verifyToken } from "@clerk/backend"
+import { createClerkClient } from "@clerk/backend"
 import { db } from "../config/postgres"
 import { requireAuth, AuthRequest } from "../middlewear/auth"
 import { createStudentNode, updateStudentNode } from "../services/graphService"
+import { verifyClerkSessionToken } from "../utils/clerkToken"
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
-
-async function verifyClerkToken(token: string) {
-  return verifyToken(token, {
-    jwtKey: process.env.CLERK_JWT_PUBLIC_KEY,
-    secretKey: process.env.CLERK_SECRET_KEY,
-  })
-}
 
 const SELECT_PROFILE = `
   SELECT id, name, email, major, gpa, graduation_year, bio,
@@ -89,9 +83,10 @@ router.post("/sync", async (req: Request, res: Response) => {
 
   let clerkId: string
   try {
-    const payload = await verifyClerkToken(token)
+    const payload = await verifyClerkSessionToken(token)
     clerkId = payload.sub
-  } catch {
+  } catch (error) {
+    console.error("Clerk token verification failed in /api/auth/sync:", error)
     res.status(401).json({ error: "Invalid token" })
     return
   }

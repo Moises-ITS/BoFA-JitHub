@@ -128,8 +128,9 @@ Migrations run automatically when the backend starts. They are idempotent (safe 
 | 003_interests | Interests array column |
 | 004_graph_node_id | Neo4j node ID column |
 | 005_linkedin | LinkedIn URL column |
-| 006_password_reset | Password reset tokens (legacy, unused) |
+| 006_skills_looking_for_year | Skills, looking-for, and class-year profile fields |
 | 007_clerk_id | `clerk_id` column linking Postgres users to Clerk accounts |
+| 008_user_chat_memory | Lightweight chat-memory table |
 
 ---
 

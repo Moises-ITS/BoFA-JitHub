@@ -1,19 +1,13 @@
 import { Request, Response, NextFunction } from "express"
-import { createClerkClient, verifyToken } from "@clerk/backend"
+import { createClerkClient } from "@clerk/backend"
 import { db } from "../config/postgres"
+import { verifyClerkSessionToken } from "../utils/clerkToken"
 
 export interface AuthRequest extends Request {
   userId?: string
 }
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
-
-async function verifyClerkToken(token: string) {
-  return verifyToken(token, {
-    jwtKey: process.env.CLERK_JWT_PUBLIC_KEY,
-    secretKey: process.env.CLERK_SECRET_KEY,
-  })
-}
 
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization
@@ -25,7 +19,7 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   const token = authHeader.slice(7)
 
   try {
-    const payload = await verifyClerkToken(token)
+    const payload = await verifyClerkSessionToken(token)
     const clerkId = payload.sub
 
     const result = await db.query("SELECT id FROM users WHERE clerk_id = $1", [clerkId])
@@ -63,7 +57,8 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
     }
 
     res.status(403).json({ error: "Profile not set up", code: "PROFILE_REQUIRED" })
-  } catch {
+  } catch (error) {
+    console.error("Clerk token verification failed in requireAuth:", error)
     res.status(401).json({ error: "Invalid or expired token" })
   }
 }

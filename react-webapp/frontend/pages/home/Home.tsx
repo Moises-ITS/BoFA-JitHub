@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Calendar, Briefcase, Network, Microscope, TrendingUp } from "lucide-react";
+import { Calendar, Briefcase, Network, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { mockOpportunities } from "./mock-data";
-import { MatchBadge } from "./match-badge";
 import { DeadlineChip } from "./deadline-chip";
 import { format } from "date-fns";
 import { useAuth } from "../../context/AuthContext";
@@ -22,6 +21,31 @@ function ClubAvatar({ clubId, clubName, index }: { clubId: number; clubName: str
   return <div className="text-3xl shrink-0 w-10 h-10 flex items-center justify-center">{CLUB_EMOJIS[index % CLUB_EMOJIS.length]}</div>;
 }
 
+function TrendingClubAvatar({ clubId, clubName, index }: { clubId?: number; clubName: string; index: number }) {
+  const [failed, setFailed] = useState(false);
+
+  if (clubId && !failed) {
+    return (
+      <img
+        src={`/club_pics/${clubId}.jpg`}
+        alt={clubName}
+        onError={() => setFailed(true)}
+        className="w-8 h-8 rounded-lg object-cover shrink-0"
+      />
+    );
+  }
+
+  return (
+    <div
+      className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
+      style={{ backgroundColor: "rgba(255,255,255,0.05)" }}
+      aria-label={clubName}
+    >
+      {CLUB_EMOJIS[index % CLUB_EMOJIS.length]}
+    </div>
+  );
+}
+
 // change_pct: positive = up, negative = down, null = not yet available
 function ClubChangePct({ pct }: { pct: number | null }) {
   if (pct === null) return <span className="text-xs" style={{ color: "var(--text-subtle)" }}>—</span>;
@@ -33,13 +57,6 @@ function ClubChangePct({ pct }: { pct: number | null }) {
     </span>
   );
 }
-
-const moduleCards = [
-  { icon: Calendar, label: "Events", path: "/events", gradient: "linear-gradient(135deg, var(--brand-primary), var(--accent-events))" },
-  { icon: Briefcase, label: "Opportunities", path: "/opportunities", gradient: "linear-gradient(135deg, var(--accent-opportunities), var(--accent-events))" },
-  { icon: Network, label: "Campus Network", path: "/network", gradient: "linear-gradient(135deg, var(--accent-networking), var(--status-info))" },
-  { icon: Microscope, label: "Research", path: "/research", gradient: "linear-gradient(135deg, var(--accent-research), var(--accent-networking))" },
-];
 
 const FREE_FOOD_BADGE = {
   backgroundColor: "var(--accent-events-soft)",
@@ -69,6 +86,36 @@ export default function Home() {
   const [connectionIds, setConnectionIds] = useState<Set<string>>(new Set());
   const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
 
+  const moduleCards = [
+    {
+      icon: Calendar,
+      label: "Events",
+      path: "/events",
+      accent: "var(--brand-primary)",
+      accentSoft: "rgba(215, 25, 32, 0.12)",
+      description: "See the next events worth showing up for.",
+      metric: topEvents.length > 0 ? `${topEvents.length} upcoming right now` : "Live event feed",
+    },
+    {
+      icon: Briefcase,
+      label: "Opportunities",
+      path: "/opportunities",
+      accent: "var(--accent-opportunities)",
+      accentSoft: "rgba(49, 197, 143, 0.12)",
+      description: "Track internships, scholarships, and roles to act on.",
+      metric: `${mockOpportunities.length} active leads surfaced`,
+    },
+    {
+      icon: Network,
+      label: "Campus Network",
+      path: "/network",
+      accent: "var(--accent-networking)",
+      accentSoft: "rgba(122, 132, 240, 0.12)",
+      description: "Explore how classmates, clubs, and companies connect.",
+      metric: connectionIds.size > 0 ? `${connectionIds.size} connections in your circle` : "Open your campus graph",
+    },
+  ];
+
   useEffect(() => {
     fetch(`${EVENTS_API}/events/upcoming?limit=3`)
       .then((r) => r.json())
@@ -85,11 +132,33 @@ export default function Home() {
 
   useEffect(() => {
     if (!selectedEvent) { setModalAttendees(null); return; }
+
+    let active = true;
+
     fetch(`${EVENTS_API}/rsvp/${selectedEvent.event_id}/attendees`)
       .then(r => r.json())
-      .then(setModalAttendees)
+      .then((data: AttendeeInfo) => {
+        if (active) setModalAttendees(data);
+      })
       .catch(() => {});
-  }, [selectedEvent]);
+
+    if (user?.id) {
+      fetch(`${EVENTS_API}/rsvp/batch-status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id, event_ids: [selectedEvent.event_id] }),
+      })
+        .then(r => r.json())
+        .then((data: Record<string, string>) => {
+          if (!active) return;
+          const nextStatus = data[String(selectedEvent.event_id)] ?? null;
+          setRsvpMap(prev => ({ ...prev, [selectedEvent.event_id]: nextStatus }));
+        })
+        .catch(() => {});
+    }
+
+    return () => { active = false; };
+  }, [selectedEvent, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -141,6 +210,13 @@ export default function Home() {
     } catch {
       setRsvpMap(prev => ({ ...prev, [eventId]: current }));
     }
+
+    fetch(`${EVENTS_API}/rsvp/${eventId}/attendees`)
+      .then(r => r.json())
+      .then((data: AttendeeInfo) => {
+        if (selectedEvent?.event_id === eventId) setModalAttendees(data);
+      })
+      .catch(() => {});
   }
 
   return (
@@ -155,22 +231,59 @@ export default function Home() {
       </div>
 
       {/* Quick Module Links */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {moduleCards.map((module, index) => (
           <motion.div
             key={module.path}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
+            whileHover={{ y: -5 }}
+            className="h-full"
           >
             <Link to={module.path}>
               <div
-                className="group relative overflow-hidden rounded-xl p-6 transition-all"
-                style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
+                className="group relative h-full overflow-hidden rounded-xl p-6 transition-all"
+                style={{
+                  backgroundColor: "var(--bg-surface)",
+                  border: "1px solid var(--border-default)",
+                  minHeight: 172,
+                }}
               >
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity" style={{ backgroundImage: module.gradient }} />
-                <module.icon className="w-8 h-8 transition-colors mb-3" style={{ color: "var(--text-muted)" }} />
-                <h3 className="font-medium text-white">{module.label}</h3>
+                <div
+                  className="absolute inset-x-0 top-0 h-px opacity-80"
+                  style={{ backgroundColor: module.accent }}
+                />
+                <div className="relative z-10 flex h-full flex-col">
+                  <div className="flex items-center justify-between mb-4">
+                    <div
+                      className="w-11 h-11 rounded-2xl flex items-center justify-center"
+                      style={{
+                        backgroundColor: module.accentSoft,
+                        border: "1px solid rgba(255,255,255,0.08)",
+                      }}
+                    >
+                      <module.icon className="w-5 h-5 transition-colors" style={{ color: "var(--text-secondary)" }} />
+                    </div>
+                    <span className="text-[11px] font-medium uppercase tracking-[0.14em]" style={{ color: "var(--text-muted)" }}>
+                      Open
+                    </span>
+                  </div>
+
+                  <div className="mb-3">
+                    <h3 className="text-xl font-semibold text-white mb-2">{module.label}</h3>
+                    <p className="text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+                      {module.description}
+                    </p>
+                  </div>
+
+                  <div className="mt-auto flex items-center gap-2 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: module.accent }} />
+                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                      {module.metric}
+                    </span>
+                  </div>
+                </div>
               </div>
             </Link>
           </motion.div>
@@ -244,7 +357,7 @@ export default function Home() {
             className="rounded-xl p-6"
             style={{ background: "var(--surface-gradient)", border: "1px solid var(--border-default)" }}
           >
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center text-2xl">
                   {topOpportunity.logo}
@@ -254,7 +367,6 @@ export default function Home() {
                   <p className="text-sm" style={{ color: "var(--text-muted)" }}>{topOpportunity.company}</p>
                 </div>
               </div>
-              <MatchBadge score={topOpportunity.matchScore} />
             </div>
             <div className="flex flex-wrap gap-2 mb-4">
               <span className="text-xs px-3 py-1.5 rounded-md" style={{ backgroundColor: "var(--accent-opportunities-soft)", color: "var(--accent-opportunities)" }}>
@@ -293,22 +405,7 @@ export default function Home() {
             <div className="space-y-3">
               {trendingClubs.map((club, index) => (
                 <div key={club.club_name} className="flex items-center gap-3 group cursor-pointer">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium ${
-                    index === 1 ? "bg-white/10 text-white" :
-                    "bg-white/5"
-                  }`}>
-                    <span
-                      style={
-                        index === 0
-                          ? { display: "inline-flex", width: "100%", height: "100%", alignItems: "center", justifyContent: "center", borderRadius: 8, background: "var(--brand-gradient)", color: "#FFFFFF" }
-                          : index === 1
-                            ? undefined
-                            : { color: "var(--text-muted)" }
-                      }
-                    >
-                      {club.rank}
-                    </span>
-                  </div>
+                  <TrendingClubAvatar clubId={club.club_id} clubName={club.club_name} index={index} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-white truncate transition-colors group-hover:opacity-90">
                       {club.club_name}

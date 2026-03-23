@@ -35,7 +35,7 @@ export default function TopConnected({ nodes, links, currentUserId, onSelectNode
 
   const ranked = useMemo<RankedStudent[]>(() => {
     const nodeById = new Map(nodes.map(n => [n.id, n]));
-    const degree: Record<string, number> = {};
+    const neighborsByStudent = new Map<string, Set<string>>();
 
     for (const l of links) {
       if (l.style !== "direct") continue;
@@ -44,13 +44,36 @@ export default function TopConnected({ nodes, links, currentUserId, onSelectNode
       const sNode = nodeById.get(sId);
       const tNode = nodeById.get(tId);
       if (!sNode || !tNode || sNode.type !== "student" || tNode.type !== "student") continue;
-      degree[sId] = (degree[sId] || 0) + 1;
-      degree[tId] = (degree[tId] || 0) + 1;
+      if (!neighborsByStudent.has(sId)) neighborsByStudent.set(sId, new Set());
+      if (!neighborsByStudent.has(tId)) neighborsByStudent.set(tId, new Set());
+      neighborsByStudent.get(sId)!.add(tId);
+      neighborsByStudent.get(tId)!.add(sId);
+    }
+
+    // Fallback for datasets that haven't materialized CONNECTED_TO links yet:
+    // rank students by unique graph neighbors across the whole campus network.
+    if (neighborsByStudent.size === 0) {
+      for (const l of links) {
+        const sId = getNodeId(l.source);
+        const tId = getNodeId(l.target);
+        const sNode = nodeById.get(sId);
+        const tNode = nodeById.get(tId);
+
+        if (sNode?.type === "student") {
+          if (!neighborsByStudent.has(sId)) neighborsByStudent.set(sId, new Set());
+          neighborsByStudent.get(sId)!.add(tId);
+        }
+
+        if (tNode?.type === "student") {
+          if (!neighborsByStudent.has(tId)) neighborsByStudent.set(tId, new Set());
+          neighborsByStudent.get(tId)!.add(sId);
+        }
+      }
     }
 
     return nodes
       .filter(n => n.type === "student")
-      .map(n => ({ node: n, connCount: degree[n.id] || 0 }))
+      .map(n => ({ node: n, connCount: neighborsByStudent.get(n.id)?.size || 0 }))
       .sort((a, b) => b.connCount - a.connCount)
       .map((item, i) => ({ ...item, rank: i + 1 }));
   }, [nodes, links]);

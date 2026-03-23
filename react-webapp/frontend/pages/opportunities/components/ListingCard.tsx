@@ -34,14 +34,11 @@ export default function ListingCard({ opportunity: o, tracked, onSelect }: Props
       onMouseEnter={e => (e.currentTarget.style.borderColor = '#4a5568')}
       onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: '1rem' }}>{TYPE_ICON[o.type]}</span>
           <NetworkBadge type={o.type} />
         </div>
-        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--green)' }}>
-          {o.matchPct}% match
-        </span>
       </div>
 
       <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>

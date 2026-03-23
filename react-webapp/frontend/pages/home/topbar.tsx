@@ -59,16 +59,26 @@ export function Topbar() {
         className="fixed top-0 left-20 right-0 h-16 backdrop-blur-xl px-6 flex items-center justify-between z-40"
         style={{ backgroundColor: "var(--bg-overlay)", borderBottom: "1px solid var(--border-default)" }}
       >
-        <div className="flex items-center gap-4">
-          <h1
-            className="text-xl font-semibold bg-clip-text text-transparent"
-            style={{ backgroundImage: "linear-gradient(90deg, var(--text-primary) 0%, var(--text-muted) 100%)" }}
-          >
-            JitHub
-          </h1>
-          <div className="hidden md:flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
-            <div className="w-1 h-1 rounded-full" style={{ backgroundColor: "var(--brand-primary)" }} />
-            <span>NJIT Student OS</span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <img
+              src="/njit-logo-transparent.png"
+              alt="NJIT"
+              className="h-7 w-auto object-contain shrink-0"
+            />
+            <span
+              aria-hidden="true"
+              className="text-sm font-medium"
+              style={{ color: "color-mix(in srgb, var(--text-muted) 70%, var(--border-default) 30%)" }}
+            >
+              |
+            </span>
+            <h1
+              className="text-xl font-semibold bg-clip-text text-transparent"
+              style={{ backgroundImage: "linear-gradient(90deg, var(--text-primary) 0%, var(--text-muted) 100%)" }}
+            >
+              JitHub
+            </h1>
           </div>
         </div>
 

@@ -50,7 +50,7 @@ export function NetworkIntro({ onComplete }: NetworkIntroProps) {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.4 }}
           style={{
-            position: "fixed",
+            position: "absolute",
             inset: 0,
             zIndex: 100,
             display: "flex",
@@ -58,6 +58,7 @@ export function NetworkIntro({ onComplete }: NetworkIntroProps) {
             justifyContent: "center",
             overflow: "hidden",
             background: "var(--bg-canvas)",
+            borderRadius: "inherit",
           }}
         >
           {/* Radial glow */}

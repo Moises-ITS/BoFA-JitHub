@@ -60,7 +60,23 @@ try {
 const express = expressModule.default
 const app = express()
 
-app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173" }))
+const configuredFrontendOrigin = process.env.FRONTEND_URL || "http://localhost:5173"
+const allowedOrigins = new Set<string>([
+  configuredFrontendOrigin,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+])
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true)
+      return
+    }
+
+    callback(new Error(`CORS blocked for origin ${origin}`))
+  },
+}))
 app.use(express.json())
 
 app.use("/api/graph", graphMod.default)

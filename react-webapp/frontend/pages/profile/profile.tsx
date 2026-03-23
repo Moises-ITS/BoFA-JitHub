@@ -1,14 +1,52 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { Target, Award, Edit2, Calendar, Briefcase, Users, Star } from "lucide-react";
-import { mockEvents, mockOpportunities } from "../home/mock-data";
+import { Target, Award, Edit2, Calendar, Briefcase, Users } from "lucide-react";
+import { mockOpportunities } from "../home/mock-data";
 import { useAuth } from "../../context/AuthContext";
 import EditProfileModal from "../node/components/EditProfileModal";
+
+const EVENTS_API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
+
+type ProfileEvent = {
+  event_id: number;
+  event_name: string;
+  club_name: string;
+  date: string | null;
+  start_time: string | null;
+  event_category?: string | null;
+  virtual?: boolean;
+  has_free_food?: boolean;
+  status: string;
+  rsvp_time: string | null;
+};
+
+function formatEventDate(date: string | null, startTime: string | null) {
+  if (!date) return "Date TBD";
+
+  const eventDate = new Date(`${date}T00:00:00`);
+  const dateLabel = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(eventDate);
+
+  if (!startTime) return dateLabel;
+
+  const [hoursRaw = "0", minutesRaw = "0"] = startTime.split(":");
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  const normalizedHour = ((hours + 11) % 12) + 1;
+  const meridiem = hours >= 12 ? "PM" : "AM";
+  const timeLabel = `${normalizedHour}:${minutes.toString().padStart(2, "0")} ${meridiem}`;
+
+  return `${dateLabel} at ${timeLabel}`;
+}
 
 export default function Profile() {
   const { user } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
-  const savedEvents = mockEvents.slice(0, 3);
+  const [yourEvents, setYourEvents] = useState<ProfileEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
   const savedOpportunities = mockOpportunities.slice(0, 2);
 
   const name = user?.name ?? "";
@@ -21,8 +59,41 @@ export default function Profile() {
   const clubs = user?.clubs ?? [];
   const companies = user?.companies ?? [];
   const interests = user?.interests ?? [];
-  const dreamCompany = companies[0] ?? "";
   const linkedinUrl = user?.linkedinUrl ?? null;
+
+  useEffect(() => {
+    if (!user?.id) {
+      setYourEvents([]);
+      return;
+    }
+
+    setEventsLoading(true);
+    fetch(`${EVENTS_API}/rsvp/user/${encodeURIComponent(user.id)}`)
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Failed to load events"))))
+      .then((data: ProfileEvent[]) => setYourEvents(Array.isArray(data) ? data : []))
+      .catch(() => setYourEvents([]))
+      .finally(() => setEventsLoading(false));
+  }, [user?.id]);
+
+  const sortedEvents = useMemo(() => {
+    const now = new Date();
+
+    return [...yourEvents].sort((left, right) => {
+      const leftDate = left.date ? new Date(`${left.date}T${left.start_time ?? "00:00:00"}`) : null;
+      const rightDate = right.date ? new Date(`${right.date}T${right.start_time ?? "00:00:00"}`) : null;
+      const leftUpcoming = leftDate ? leftDate >= now : false;
+      const rightUpcoming = rightDate ? rightDate >= now : false;
+
+      if (leftUpcoming !== rightUpcoming) return leftUpcoming ? -1 : 1;
+      if (!leftDate && !rightDate) return 0;
+      if (!leftDate) return 1;
+      if (!rightDate) return -1;
+
+      return leftUpcoming
+        ? leftDate.getTime() - rightDate.getTime()
+        : rightDate.getTime() - leftDate.getTime();
+    });
+  }, [yourEvents]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -86,19 +157,6 @@ export default function Profile() {
                     <h3 className="font-semibold text-white">About</h3>
                   </div>
                   <p className="text-sm" style={{ color: "var(--text-muted)" }}>{bio}</p>
-                </div>
-              )}
-
-              {dreamCompany && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Star className="w-4 h-4" style={{ color: "var(--accent-events)" }} />
-                    <h3 className="font-semibold text-white">Dream Company</h3>
-                  </div>
-                  <div className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
-                    <span className="text-xl">🔴</span>
-                    <span className="text-sm text-white">{dreamCompany}</span>
-                  </div>
                 </div>
               )}
 
@@ -219,19 +277,63 @@ export default function Profile() {
           >
             <div className="flex items-center gap-2 mb-4">
               <Calendar className="w-5 h-5" style={{ color: "var(--brand-primary)" }} />
-              <h3 className="font-semibold text-white">Saved Events</h3>
+              <h3 className="font-semibold text-white">Your Events</h3>
             </div>
-            <div className="space-y-3">
-              {savedEvents.map((event) => (
-                <div key={event.id} className="p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xl">{event.clubLogo}</span>
-                    <p className="text-sm font-medium text-white truncate flex-1">{event.title}</p>
+            {eventsLoading ? (
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading your RSVP'd events...</p>
+            ) : sortedEvents.length === 0 ? (
+              <div className="rounded-lg border border-white/6 bg-white/3 p-4">
+                <p className="text-sm text-white">No RSVP'd events yet.</p>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                  RSVP to events from the Events page and they&apos;ll show up here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
+                {sortedEvents.map((event) => (
+                  <div key={event.event_id} className="p-3 bg-white/5 rounded-lg transition-colors">
+                    <div className="flex items-start gap-2 mb-1">
+                      <span className="text-lg leading-none">{event.virtual ? "💻" : "📅"}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-white">{event.event_name}</p>
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>{event.club_name}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {formatEventDate(event.date, event.start_time)}
+                    </p>
+                    {(event.event_category || event.has_free_food || event.virtual) && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {event.event_category && (
+                          <span
+                            className="text-[11px] px-2 py-1 rounded-md capitalize"
+                            style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "var(--text-secondary)" }}
+                          >
+                            {event.event_category}
+                          </span>
+                        )}
+                        {event.has_free_food && (
+                          <span
+                            className="text-[11px] px-2 py-1 rounded-md"
+                            style={{ backgroundColor: "var(--accent-events-soft)", color: "var(--accent-events)" }}
+                          >
+                            Free Food
+                          </span>
+                        )}
+                        {event.virtual && (
+                          <span
+                            className="text-[11px] px-2 py-1 rounded-md"
+                            style={{ backgroundColor: "var(--accent-orgs-soft)", color: "var(--accent-orgs)" }}
+                          >
+                            Virtual
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{event.club}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </motion.div>
 
           <motion.div

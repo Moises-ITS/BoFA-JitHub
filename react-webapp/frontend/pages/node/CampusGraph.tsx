@@ -623,17 +623,6 @@ export default function CampusGraph() {
       .style("opacity", (d: GraphNode) => matches.has(d.id) ? 1 : 0);
   }, [searchQuery, nodes, mode]);
 
-  // ── Error ────────────────────────────────────────────────────────────────
-  if (error) return (
-    <div className="root">
-      <div className="errorState">
-        <span>⚠️</span><p>Failed to load graph: {error}</p>
-        <button onClick={() => window.location.reload()}>Try Again</button>
-      </div>
-    </div>
-  );
-
-  // ── Render ────────────────────────────────────────────────────────────────
   const userConnCount = useMemo(() =>
     links.filter(l =>
       getNodeId(l.source) === user?.id || getNodeId(l.target) === user?.id
@@ -645,6 +634,18 @@ export default function CampusGraph() {
     organizations: nodes.filter(n => n.type === "club" && !hiddenTypes.has(n.type)).length,
     companies: nodes.filter(n => n.type === "company" && !hiddenTypes.has(n.type)).length,
   }), [hiddenTypes, nodes]);
+
+  // ── Error ────────────────────────────────────────────────────────────────
+  if (error) return (
+    <div className="root">
+      <div className="errorState">
+        <span>⚠️</span><p>Failed to load graph: {error}</p>
+        <button onClick={() => window.location.reload()}>Try Again</button>
+      </div>
+    </div>
+  );
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   const modeLabel =
     mode === "locked" ? "Focus mode" :

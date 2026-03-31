@@ -5,6 +5,7 @@ import { db } from "../config/postgres"
 import { requireAuth, AuthRequest } from "../middlewear/auth"
 import { createStudentNode, updateStudentNode } from "../services/graphService"
 import { verifyClerkSessionToken } from "../utils/clerkToken"
+import { syncRateLimiter, profileUpdateRateLimiter } from "../middlewear/authRateLimit"
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
@@ -74,7 +75,7 @@ function toNullableInt(value: unknown): number | null {
 
 const router = Router()
 
-router.post("/sync", async (req: Request, res: Response) => {
+router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
   const token = req.headers.authorization?.slice(7)
   if (!token) {
     res.status(401).json({ error: "Unauthorized" })
@@ -238,7 +239,7 @@ router.get("/interests", async (_req: Request, res: Response) => {
   }
 })
 
-router.put("/profile", requireAuth, async (req: AuthRequest, res: Response) => {
+router.put("/profile", requireAuth, profileUpdateRateLimiter, async (req: AuthRequest, res: Response) => {
   const { gpa, major, graduationYear, bio, clubs, companies, interests, linkedinUrl, skills, looking_for, year } = req.body
 
   if (!major || !graduationYear) {

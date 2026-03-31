@@ -18,6 +18,7 @@ const [
   connMod,
   oppMod,
   chatMemMod,
+  buildingsMod,
   { startScheduler },
   { runMigrations },
   { ensureNodeIds },
@@ -31,6 +32,7 @@ const [
   import("./routes/connections.js"),
   import("./routes/opportunities.js"),
   import("./routes/chatMemory.js"),
+  import("./routes/buildings.js"),
   import("./scrapers/runner.js"),
   import("./db/migrate.js"),
   import("./services/graphService.js"),
@@ -84,6 +86,7 @@ app.use("/api/auth", authMod.default)
 app.use("/api/connections", connMod.default)
 app.use("/api/opportunities", oppMod.default)
 app.use("/api/chat-memory", chatMemMod.default)
+app.use("/api/buildings",   buildingsMod.default)
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" })

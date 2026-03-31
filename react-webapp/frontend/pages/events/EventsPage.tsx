@@ -1,14 +1,19 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
-import { TrendingUp, Zap, Flame } from "lucide-react";
+import { TrendingUp, Zap, Flame, Search } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { format } from "date-fns";
 import { HeatmapCalendar } from "./components/heatmap-calendar";
 import {
-  CATEGORY_STYLE, fmt12, ClubAvatar, CLUB_EMOJIS, matchScore, EventDetailModal,
+  CATEGORY_STYLE, fmt12, ClubAvatar, CLUB_EMOJIS, getEventCategories, matchScore, EventDetailModal,
 } from "./components/EventDetailModal";
 import SubmitEventModal, { type CommunityEventInput } from "./components/SubmitEventModal";
 import type { UserProfile, AttendeeInfo } from "./components/EventDetailModal";
+import {
+  type ClubDirectoryEntry,
+  eventMatchesQuery,
+  getClubOptionLabel,
+} from "./utils/clubMatching";
 
 const API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
 const AUTH_API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
@@ -70,9 +75,9 @@ function EventCard({
 }) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const score = matchScore(event, profile);
-  const catStyle = CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" };
   const isGoing = rsvpStatus === "going";
   const friendsGoing = attendees?.preview.filter(p => connectionIds?.has(p.user_id)).length ?? 0;
+  const eventCategories = getEventCategories(event);
 
   return (
     <motion.div
@@ -97,12 +102,18 @@ function EventCard({
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5 mt-3">
-            {event.event_category && (
-              <span className="text-xs px-2 py-0.5 rounded-md font-medium capitalize"
-                style={{ backgroundColor: catStyle.bg, color: catStyle.color }}>
-                {event.event_category}
-              </span>
-            )}
+            {eventCategories.map((category) => {
+              const catStyle = CATEGORY_STYLE[category] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" };
+              return (
+                <span
+                  key={category}
+                  className="text-xs px-2 py-0.5 rounded-md font-medium capitalize"
+                  style={{ backgroundColor: catStyle.bg, color: catStyle.color }}
+                >
+                  {category}
+                </span>
+              );
+            })}
             {event.has_free_food && <span className="text-xs px-2 py-0.5 rounded-md" style={{ backgroundColor: "var(--accent-events-soft)", color: "var(--accent-events)" }}>Free Food</span>}
             {event.virtual && <span className="text-xs px-2 py-0.5 rounded-md" style={{ backgroundColor: "var(--accent-orgs-soft)", color: "var(--accent-orgs)" }}>Virtual</span>}
           </div>
@@ -256,7 +267,8 @@ function SidebarClubRow({ club, index, showScore }: { club: any; index: number; 
 }
 
 function TopEventRow({ event, index, onSelect }: { event: any; index: number; onSelect: (e: any) => void }) {
-  const catStyle = CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" };
+  const primaryCategory = getEventCategories(event)[0];
+  const catStyle = primaryCategory ? (CATEGORY_STYLE[primaryCategory] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" }) : null;
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
@@ -273,8 +285,8 @@ function TopEventRow({ event, index, onSelect }: { event: any; index: number; on
         <p style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: 500, margin: "0 0 3px", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{event.event_name}</p>
         <p style={{ color: "var(--text-subtle)", fontSize: "11px", margin: 0 }}>{event.club_name}</p>
       </div>
-      {event.event_category && (
-        <span style={{ backgroundColor: catStyle.bg, color: catStyle.color, fontSize: "10px", padding: "2px 7px", borderRadius: "4px", flexShrink: 0, marginTop: "2px", textTransform: "capitalize" as const }}>{event.event_category}</span>
+      {primaryCategory && catStyle && (
+        <span style={{ backgroundColor: catStyle.bg, color: catStyle.color, fontSize: "10px", padding: "2px 7px", borderRadius: "4px", flexShrink: 0, marginTop: "2px", textTransform: "capitalize" as const }}>{primaryCategory}</span>
       )}
     </motion.div>
   );
@@ -290,9 +302,13 @@ export default function EventsPage() {
   };
   const [view, setView] = useState<"upcoming" | "trending" | "top-match">("upcoming");
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedClubId, setSelectedClubId] = useState("");
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [clubsLoading, setClubsLoading] = useState(true);
+  const [clubOptions, setClubOptions] = useState<ClubDirectoryEntry[]>([]);
 
   const upcomingUrl = activeFilter
     ? `/events/upcoming?limit=50&category=${encodeURIComponent(activeFilter)}`
@@ -312,6 +328,39 @@ export default function EventsPage() {
   const [modalAttendees, setModalAttendees] = useState<AttendeeInfo | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    setClubsLoading(true);
+
+    fetch(`${API}/clubs`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const clubs = Array.isArray(data) ? data as ClubDirectoryEntry[] : [];
+        clubs.sort((left, right) => getClubOptionLabel(left).localeCompare(getClubOptionLabel(right)));
+        setClubOptions(clubs);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setClubOptions([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setClubsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedClub = useMemo(
+    () => clubOptions.find((club) => String(club.club_id) === selectedClubId) ?? null,
+    [clubOptions, selectedClubId],
+  );
+
+  useEffect(() => {
     if (!selectedEvent) { setModalAttendees(null); return; }
     fetch(`${API}/rsvp/${selectedEvent.event_id}/attendees`)
       .then(r => r.json())
@@ -329,16 +378,28 @@ export default function EventsPage() {
 
   const displayEvents = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
-    if (view === "trending")
-      return trendingEvents.filter((e: any) => !e.date || e.date >= today);
-    if (view === "top-match") {
-      return [...upcomingRaw]
+    let baseEvents: any[] = [];
+    if (view === "trending") {
+      baseEvents = trendingEvents.filter((e: any) => !e.date || e.date >= today);
+    } else if (view === "top-match") {
+      baseEvents = [...upcomingRaw]
         .map(e => ({ ...e, _score: matchScore(e, profile) }))
         .filter(e => e._score >= 0)
         .sort((a, b) => b._score - a._score);
+    } else {
+      baseEvents = upcomingRaw;
     }
-    return upcomingRaw;
-  }, [view, trendingEvents, upcomingRaw, user]);
+
+    if (selectedClub) {
+      baseEvents = baseEvents.filter((event: any) => event.club_id === selectedClub.club_id);
+    }
+
+    if (searchQuery.trim()) {
+      baseEvents = baseEvents.filter((event: any) => eventMatchesQuery(event, searchQuery));
+    }
+
+    return baseEvents;
+  }, [view, trendingEvents, upcomingRaw, profile, searchQuery, selectedClub]);
   const loading = view === "trending" ? trendingLoading : upcomingLoading;
 
   useEffect(() => {
@@ -419,6 +480,8 @@ export default function EventsPage() {
 
       setView("upcoming");
       setActiveFilter(null);
+      setSearchQuery("");
+      setSelectedClubId("");
       setSelectedEvent(body);
       setSelectedEventCanRsvp(true);
       setModalAttendees({ count: 0, preview: [] });
@@ -465,7 +528,51 @@ export default function EventsPage() {
               ))}
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+              <div
+                style={{
+                  position: "relative",
+                  minWidth: "min(100%, 280px)",
+                }}
+              >
+                <Search
+                  className="w-4 h-4"
+                  style={{
+                    position: "absolute",
+                    left: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "var(--text-muted)",
+                  }}
+                />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search events or clubs"
+                  className="text-sm text-white rounded-lg py-2 pr-3 focus:outline-none"
+                  style={{
+                    width: "100%",
+                    paddingLeft: "36px",
+                    backgroundColor: "var(--bg-surface)",
+                    border: "1px solid var(--border-default)",
+                  }}
+                />
+              </div>
+
+              <select
+                value={selectedClubId}
+                onChange={(e) => setSelectedClubId(e.target.value)}
+                className="text-sm text-white rounded-lg px-3 py-2 focus:outline-none cursor-pointer"
+                style={{ colorScheme: "dark", backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
+              >
+                <option value="">{clubsLoading ? "Loading clubs..." : "All clubs"}</option>
+                {clubOptions.map((club) => (
+                  <option key={club.club_id} value={String(club.club_id)}>
+                    {getClubOptionLabel(club)}
+                  </option>
+                ))}
+              </select>
+
               {view === "upcoming" && (
                 <select
                   value={activeFilter ?? ""}
@@ -503,7 +610,11 @@ export default function EventsPage() {
                 {view === "top-match" ? "Set up your profile to see matches" : "No events found"}
               </p>
               <p className="text-sm mt-1">
-                {view === "top-match" ? "Add your major, interests, and clubs in your profile." : activeFilter ? "Try a different category." : "Check back soon."}
+                {view === "top-match"
+                  ? "Add your major, interests, and clubs in your profile."
+                  : (activeFilter || selectedClubId || searchQuery.trim())
+                    ? "Try adjusting your search or filters."
+                    : "Check back soon."}
               </p>
             </div>
           )}
@@ -576,6 +687,7 @@ export default function EventsPage() {
       open={submitOpen}
       submitting={submitLoading}
       categories={FILTERS}
+      clubs={clubOptions}
       onClose={() => setSubmitOpen(false)}
       onSubmit={handleCreateEvent}
     />

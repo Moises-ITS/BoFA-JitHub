@@ -1,9 +1,10 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
+import { type ClubDirectoryEntry, getClubOptionLabel } from '../utils/clubMatching';
 
 export interface CommunityEventInput {
   club_name: string;
   event_name: string;
-  event_category: string;
+  event_categories: string[];
   date: string;
   start_time: string;
   end_time?: string;
@@ -19,7 +20,7 @@ export interface CommunityEventInput {
 const INITIAL_FORM = {
   clubName: '',
   eventName: '',
-  eventCategory: 'workshop',
+  eventCategories: ['workshop'],
   date: '',
   startTime: '',
   endTime: '',
@@ -36,6 +37,7 @@ interface Props {
   open: boolean;
   submitting: boolean;
   categories: { label: string; value: string }[];
+  clubs: ClubDirectoryEntry[];
   onClose: () => void;
   onSubmit: (payload: CommunityEventInput) => Promise<void>;
 }
@@ -44,11 +46,13 @@ export default function SubmitEventModal({
   open,
   submitting,
   categories,
+  clubs,
   onClose,
   onSubmit,
 }: Props) {
   const [form, setForm] = useState(INITIAL_FORM);
   const [error, setError] = useState<string | null>(null);
+  const selectedClub = clubs.find((club) => club.name === form.clubName) ?? null;
 
   useEffect(() => {
     if (!open) {
@@ -63,6 +67,11 @@ export default function SubmitEventModal({
     event.preventDefault();
     setError(null);
 
+    if (form.eventCategories.length === 0) {
+      setError('Pick at least one event category');
+      return;
+    }
+
     if (!form.virtual && !form.campusLocation.trim()) {
       setError('Campus location is required for in-person events');
       return;
@@ -71,7 +80,7 @@ export default function SubmitEventModal({
     const payload: CommunityEventInput = {
       club_name: form.clubName.trim(),
       event_name: form.eventName.trim(),
-      event_category: form.eventCategory,
+      event_categories: form.eventCategories,
       date: form.date,
       start_time: form.startTime,
       end_time: form.endTime || undefined,
@@ -151,13 +160,34 @@ export default function SubmitEventModal({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
             <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <span style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 700 }}>Club / Organization</span>
-              <input
-                value={form.clubName}
-                onChange={(event) => setForm((prev) => ({ ...prev, clubName: event.target.value }))}
-                placeholder="Women in Computing Society"
-                required
-                style={fieldStyle}
-              />
+              {clubs.length > 0 ? (
+                <select
+                  value={form.clubName}
+                  onChange={(event) => setForm((prev) => ({ ...prev, clubName: event.target.value }))}
+                  required
+                  style={fieldStyle}
+                >
+                  <option value="">Select a club</option>
+                  {clubs.map((club) => (
+                    <option key={club.club_id} value={club.name}>
+                      {getClubOptionLabel(club)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={form.clubName}
+                  onChange={(event) => setForm((prev) => ({ ...prev, clubName: event.target.value }))}
+                  placeholder="Women in Computer Science"
+                  required
+                  style={fieldStyle}
+                />
+              )}
+              <span style={helperTextStyle}>
+                {selectedClub
+                  ? `This event will reuse ${selectedClub.display_name}'s saved logo.`
+                  : 'Pick a known club to reuse its saved logo automatically.'}
+              </span>
             </label>
 
             <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -173,21 +203,6 @@ export default function SubmitEventModal({
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 700 }}>Category</span>
-              <select
-                value={form.eventCategory}
-                onChange={(event) => setForm((prev) => ({ ...prev, eventCategory: event.target.value }))}
-                style={fieldStyle}
-              >
-                {categories.map((category) => (
-                  <option key={category.value} value={category.value}>
-                    {category.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
             <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <span style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 700 }}>Date</span>
               <input
@@ -219,6 +234,32 @@ export default function SubmitEventModal({
                 style={fieldStyle}
               />
             </label>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <span style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 700 }}>Categories</span>
+            <div style={categoryGridStyle}>
+              {categories.map((category) => {
+                const checked = form.eventCategories.includes(category.value);
+                return (
+                  <label key={category.value} style={checked ? checkedCategoryChipStyle : categoryChipStyle}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => setForm((prev) => ({
+                        ...prev,
+                        eventCategories: event.target.checked
+                          ? [...prev.eventCategories, category.value]
+                          : prev.eventCategories.filter((value) => value !== category.value),
+                      }))}
+                      style={{ margin: 0 }}
+                    />
+                    <span>{category.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <span style={helperTextStyle}>Select every category that fits this event.</span>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
@@ -264,7 +305,7 @@ export default function SubmitEventModal({
               onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
               placeholder="Add the event details students should see in the modal."
               rows={5}
-              style={{ ...fieldStyle, resize: 'vertical' }}
+              style={{ ...fieldStyle, resize: 'vertical', maxHeight: '220px', overflowY: 'auto' }}
             />
           </label>
 
@@ -349,6 +390,39 @@ const checkboxCardStyle: CSSProperties = {
   color: 'var(--text-secondary)',
   fontSize: '0.84rem',
   fontWeight: 600,
+};
+
+const helperTextStyle: CSSProperties = {
+  color: 'var(--text-muted)',
+  fontSize: '0.74rem',
+  lineHeight: 1.5,
+};
+
+const categoryGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+  gap: '10px',
+};
+
+const categoryChipStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+  border: '1px solid var(--border-default)',
+  backgroundColor: 'rgba(255,255,255,0.03)',
+  borderRadius: '14px',
+  padding: '12px 14px',
+  color: 'var(--text-secondary)',
+  fontSize: '0.82rem',
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+const checkedCategoryChipStyle: CSSProperties = {
+  ...categoryChipStyle,
+  border: '1px solid rgba(215, 25, 32, 0.32)',
+  backgroundColor: 'rgba(215, 25, 32, 0.12)',
+  color: '#ffe7e8',
 };
 
 const secondaryButtonStyle: CSSProperties = {

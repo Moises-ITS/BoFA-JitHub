@@ -7,39 +7,28 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
 from app import models
+from app.club_directory import (
+    find_matching_club,
+    get_club_aliases,
+    get_club_display_name,
+    resolve_canonical_club_name,
+)
 
 router = APIRouter(prefix="/events", tags=["events"])
-
-CLUB_ACRONYMS: dict[str, str] = {
-    "Institute of Electrical and Electronics Engineers": "IEEE",
-    "Association for Computing Machinery": "ACM",
-    "Society of Hispanic Professional Engineers": "SHPE",
-    "Society of Women Engineers": "SWE",
-    "National Society of Black Engineers": "NSBE",
-    "American Society of Civil Engineers": "ASCE",
-    "American Society of Mechanical Engineers": "ASME",
-    "American Institute of Chemical Engineers": "AIChE",
-    "Biomedical Engineering Society": "BMES",
-    "Google Developer Student Club": "GDSC",
-    "Student Government Association": "SGA",
-    "Latino American Student Organization": "LASO",
-    "Muslim Student Association": "MSA",
-    "Women in Computer Science": "WiCS",
-}
-
-def _display_name(full_name: str) -> str:
-    return CLUB_ACRONYMS.get(full_name, full_name)
 
 
 def _format_event(event, post, club):
     days_until = None
     if event.date:
         days_until = (event.date - date.today()).days
+    event_categories = _parse_event_categories(event.event_category)
+    canonical_club_name = resolve_canonical_club_name(club.name)
     return {
         "event_id": event.event_id,
         "event_name": event.event_name,
         "event_type": event.event_type,
-        "event_category": event.event_category,
+        "event_category": event_categories[0] if event_categories else None,
+        "event_categories": event_categories,
         "date": str(event.date) if event.date else None,
         "days_until": days_until,
         "start_time": str(event.start_time) if event.start_time else None,
@@ -52,7 +41,9 @@ def _format_event(event, post, club):
         "is_open_to_public": event.is_open_to_public,
         "event_link": event.event_link,
         "club_id": club.club_id,
-        "club_name": _display_name(club.name),
+        "club_name": get_club_display_name(canonical_club_name),
+        "club_full_name": canonical_club_name,
+        "club_aliases": get_club_aliases(canonical_club_name, club.instagram_handle),
         "likes": post.likes if post else None,
         "comments": post.comments if post else None,
         "engagement_score": float(post.engagement_score) if post and post.engagement_score else None,
@@ -64,7 +55,8 @@ def _format_event(event, post, club):
 class CommunityEventBody(BaseModel):
     club_name: str
     event_name: str
-    event_category: str
+    event_category: str | None = None
+    event_categories: list[str] | None = None
     date: date
     start_time: str
     end_time: str | None = None
@@ -84,6 +76,27 @@ def _parse_time_string(value: str | None) -> time | None:
         return time.fromisoformat(value.strip())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid time format. Use HH:MM.") from exc
+
+
+def _parse_event_categories(value: str | None) -> list[str]:
+    if not value:
+        return []
+    categories: list[str] = []
+    for raw in value.split(","):
+        cleaned = raw.strip().lower()
+        if cleaned and cleaned not in categories:
+            categories.append(cleaned)
+    return categories
+
+
+def _normalize_requested_categories(body: CommunityEventBody) -> list[str]:
+    values = body.event_categories or ([] if body.event_category is None else [body.event_category])
+    categories: list[str] = []
+    for value in values:
+        cleaned = (value or "").strip().lower()
+        if cleaned and cleaned not in categories:
+            categories.append(cleaned)
+    return categories
 
 
 def _base_query(db):
@@ -106,13 +119,13 @@ def _apply_filters(q, public_only, event_type):
 def create_community_event(body: CommunityEventBody, db: Session = Depends(get_db)):
     club_name = body.club_name.strip()
     event_name = body.event_name.strip()
-    event_category = body.event_category.strip().lower()
+    event_categories = _normalize_requested_categories(body)
     campus_location = (body.campus_location or "").strip()
     event_room = (body.event_room or "").strip()
     event_link = (body.event_link or "").strip()
     description = (body.description or "").strip()
 
-    if not club_name or not event_name or not event_category:
+    if not club_name or not event_name or not event_categories:
         raise HTTPException(status_code=400, detail="Missing required fields")
 
     if not body.virtual and not campus_location:
@@ -124,22 +137,26 @@ def create_community_event(body: CommunityEventBody, db: Session = Depends(get_d
     if start_at is None:
         raise HTTPException(status_code=400, detail="Start time is required")
 
+    known_clubs = db.query(models.Club).all()
+    club = find_matching_club(known_clubs, club_name)
+
     existing = (
         db.query(models.Event)
-        .join(models.Club, models.Club.club_id == models.Event.club_id)
-        .filter(func.lower(models.Club.name) == club_name.lower())
         .filter(func.lower(models.Event.event_name) == event_name.lower())
         .filter(models.Event.date == body.date)
-        .first()
     )
+    if club is not None:
+        existing = existing.filter(models.Event.club_id == club.club_id).first()
+    else:
+        existing = (
+            existing
+            .join(models.Club, models.Club.club_id == models.Event.club_id)
+            .filter(func.lower(models.Club.name) == club_name.lower())
+            .first()
+        )
     if existing:
         raise HTTPException(status_code=409, detail="That event already exists")
 
-    club = (
-        db.query(models.Club)
-        .filter(func.lower(models.Club.name) == club_name.lower())
-        .first()
-    )
     if club is None:
         club = models.Club(name=club_name, is_active=True)
         db.add(club)
@@ -161,7 +178,7 @@ def create_community_event(body: CommunityEventBody, db: Session = Depends(get_d
         is_open_to_public=body.is_open_to_public,
         event_link=event_link or None,
         promo_link=event_link or None,
-        event_category=event_category,
+        event_category=", ".join(event_categories),
     )
     db.add(event)
     db.flush()
@@ -339,7 +356,7 @@ def get_upcoming(
         models.Event.date <= SEMESTER_END,
     )
     if category:
-        q = q.filter(models.Event.event_category == category)
+        q = q.filter(models.Event.event_category.ilike(f"%{category}%"))
     results = q.order_by(models.Event.date.asc()).offset(offset).limit(limit * 3).all()
     return [_format_event(e, p, c) for e, p, c in _deduplicate(results)][:limit]
 
@@ -444,7 +461,7 @@ def get_clubs_trending(limit: int = Query(5, le=20), db: Session = Depends(get_d
     return [{
         "rank": i + 1,
         "club_id": r.club_id,
-        "club_name": _display_name(r.name),
+        "club_name": get_club_display_name(r.name),
         "total_likes": r.total_likes,
         "event_count": r.event_count,
         "change_pct": None,
@@ -473,7 +490,7 @@ def get_clubs_top_risers(limit: int = Query(5, le=20), db: Session = Depends(get
     return [{
         "rank": i + 1,
         "club_id": r.club_id,
-        "club_name": _display_name(r.name),
+        "club_name": get_club_display_name(r.name),
         "avg_score": round(float(r.avg_score), 2),
         "event_count": r.event_count,
     } for i, r in enumerate(results)]

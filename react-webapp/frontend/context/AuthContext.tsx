@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, Re
 import { useAuth as useClerkAuth, useClerk, useUser } from "@clerk/clerk-react"
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001"
+const USER_CACHE_KEY = "jithub.cached-user"
 
 export interface User {
   id: string
@@ -78,12 +79,23 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+function readCachedUser(): User | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(USER_CACHE_KEY)
+    return raw ? JSON.parse(raw) as User : null
+  } catch {
+    return null
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { isSignedIn, isLoaded, getToken } = useClerkAuth()
   const { signOut } = useClerk()
   const { user: clerkUser, isLoaded: clerkUserLoaded } = useUser()
+  const cachedUserRef = useRef<User | null>(readCachedUser())
 
-  const [user,              setUser]      = useState<User | null>(null)
+  const [user,              setUser]      = useState<User | null>(cachedUserRef.current)
   const [token,             setToken]     = useState<string | null>(null)
   const [loading,           setLoading]   = useState(true)
   const [needsProfileSetup, setNeedsSetup] = useState(false)
@@ -93,13 +105,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [getToken]
   )
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      if (user) {
+        window.localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user))
+      } else {
+        window.localStorage.removeItem(USER_CACHE_KEY)
+      }
+    } catch {
+      /* ignore storage issues */
+    }
+  }, [user])
+
   // Resolve Clerk session → our profile (auto-creates on first login, no setup form)
   useEffect(() => {
     if (!isLoaded || !clerkUserLoaded) return
     if (!isSignedIn) {
       setUser(null); setToken(null); setLoading(false); setNeedsSetup(false)
       autoSynced.current = false
+      cachedUserRef.current = null
       return
+    }
+    const clerkEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? ""
+    const cachedUser = cachedUserRef.current
+    if (cachedUser && clerkEmail && cachedUser.email === clerkEmail) {
+      setUser(cachedUser)
+      setNeedsSetup(false)
+      setLoading(false)
+    } else {
+      setLoading(true)
     }
     getSessionToken(true).then(async (t) => {
       if (!t) { setLoading(false); return }
@@ -109,7 +144,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           headers: { Authorization: `Bearer ${t}` },
         })
         if (res.ok) {
-          setUser(await res.json()); setNeedsSetup(false)
+          const fetchedUser = await res.json()
+          cachedUserRef.current = fetchedUser
+          setUser(fetchedUser); setNeedsSetup(false)
         } else if (res.status === 403) {
           const body = await res.json()
           if (body.code === "PROFILE_REQUIRED" && !autoSynced.current) {
@@ -127,7 +164,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }),
               })
               if (syncRes.ok) {
-                setToken(t); setUser(await syncRes.json()); setNeedsSetup(false); return
+                const syncedUser = await syncRes.json()
+                cachedUserRef.current = syncedUser
+                setToken(t); setUser(syncedUser); setNeedsSetup(false); return
               }
             }
             setNeedsSetup(true)
@@ -158,6 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     const result = await res.json()
     if (!res.ok) throw new Error(result.error ?? "Sync failed")
+    cachedUserRef.current = result
     setToken(t); setUser(result); setNeedsSetup(false)
   }, [getSessionToken])
 
@@ -171,11 +211,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     const updated = await res.json()
     if (!res.ok) throw new Error(updated.error ?? "Update failed")
+    cachedUserRef.current = updated
     setToken(t)
     setUser(updated)
   }, [getSessionToken])
 
-  function logout() { setLoading(true); signOut(); setUser(null); setToken(null); setNeedsSetup(false) }
+  function logout() {
+    cachedUserRef.current = null
+    setLoading(true); signOut(); setUser(null); setToken(null); setNeedsSetup(false)
+  }
   async function login() { throw new Error("Use Clerk SignIn component") }
   async function signup() { throw new Error("Use Clerk SignUp component") }
 

@@ -50,16 +50,41 @@ function MatchSignal({ score }: { score: number }) {
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
-function useEvents(endpoint: string, refreshKey = 0) {
+function useEvents(endpoint: string | null, refreshKey = 0) {
   const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(endpoint));
+
   useEffect(() => {
+    let cancelled = false;
+
+    if (!endpoint) {
+      setData([]);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     setLoading(true);
+
     fetch(`${API}${endpoint}`)
       .then((r) => r.json())
-      .then((d) => { setData(d.events ?? d); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then((d) => {
+        if (cancelled) return;
+        setData(d.events ?? d);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [endpoint, refreshKey]);
+
   return { data, loading };
 }
 
@@ -83,7 +108,7 @@ function EventCard({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04 }}
+      transition={{ delay: index * 0.015 }}
       whileHover={{ x: 4 }}
       onClick={() => onSelect?.(event)}
       className="rounded-xl p-5 transition-all cursor-pointer"
@@ -216,9 +241,9 @@ function RankingAvatar({
 function TrendingPodium({ clubs }: { clubs: any[] }) {
   if (clubs.length < 3) return null;
   const podium = [
-    { club: clubs[1], rank: 2, height: 58, bg: "rgba(255,255,255,0.08)", border: "var(--border-default)", delay: 0.05 },
+    { club: clubs[1], rank: 2, height: 58, bg: "rgba(255,255,255,0.08)", border: "var(--border-default)", delay: 0.02 },
     { club: clubs[0], rank: 1, height: 88, bg: "var(--brand-primary-soft)", border: "var(--brand-primary-soft-strong)", delay: 0 },
-    { club: clubs[2], rank: 3, height: 40, bg: "var(--accent-events-soft)", border: "rgba(226,154,59,0.28)", delay: 0.1 },
+    { club: clubs[2], rank: 3, height: 40, bg: "var(--accent-events-soft)", border: "rgba(226,154,59,0.28)", delay: 0.04 },
   ];
 
   return (
@@ -251,7 +276,7 @@ function SidebarClubRow({ club, index, showScore }: { club: any; index: number; 
     <motion.div
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05 }}
+      transition={{ delay: index * 0.02 }}
       className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0"
     >
       <RankingAvatar clubId={club.club_id} clubName={club.club_name} index={index} size={28} />
@@ -273,7 +298,7 @@ function TopEventRow({ event, index, onSelect }: { event: any; index: number; on
     <motion.div
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05 }}
+      transition={{ delay: index * 0.02 }}
       onClick={() => onSelect(event)}
       style={{ display: "flex", alignItems: "flex-start", gap: "10px", paddingTop: "10px", paddingBottom: "10px", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}
       className="last:border-0 hover:opacity-80 transition-opacity"
@@ -295,11 +320,14 @@ function TopEventRow({ event, index, onSelect }: { event: any; index: number; on
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function EventsPage() {
   const { user, token } = useAuth();
-  const profile: UserProfile = {
+  const profile = useMemo<UserProfile>(() => ({
     major: user?.major ?? "",
     interests: user?.interests ?? [],
     clubs: user?.clubs ?? [],
-  };
+    skills: user?.skills ?? [],
+    looking_for: user?.looking_for ?? [],
+    year: user?.year ?? null,
+  }), [user?.major, user?.interests, user?.clubs, user?.skills, user?.looking_for, user?.year]);
   const [view, setView] = useState<"upcoming" | "trending" | "top-match">("upcoming");
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -313,9 +341,10 @@ export default function EventsPage() {
   const upcomingUrl = activeFilter
     ? `/events/upcoming?limit=50&category=${encodeURIComponent(activeFilter)}`
     : "/events/upcoming?limit=50";
+  const trendingUrl = view === "trending" ? "/events/trending?limit=50&upcoming_only=true" : null;
 
   const { data: upcomingRaw, loading: upcomingLoading } = useEvents(upcomingUrl, refreshNonce);
-  const { data: trendingEvents, loading: trendingLoading } = useEvents("/events/trending?limit=50&upcoming_only=true", refreshNonce);
+  const { data: trendingEvents, loading: trendingLoading } = useEvents(trendingUrl, refreshNonce);
   const { data: sidebarTrending } = useEvents("/events/clubs/trending?limit=5", refreshNonce);
   const { data: topRisers } = useEvents("/events/clubs/top-risers?limit=5", refreshNonce);
   const { data: topEvents } = useEvents("/events/top-risers?limit=5", refreshNonce);
@@ -326,6 +355,7 @@ export default function EventsPage() {
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [selectedEventCanRsvp, setSelectedEventCanRsvp] = useState(true);
   const [modalAttendees, setModalAttendees] = useState<AttendeeInfo | null>(null);
+  const selectedEventId = selectedEvent?.event_id ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -335,7 +365,7 @@ export default function EventsPage() {
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
-        const clubs = Array.isArray(data) ? data as ClubDirectoryEntry[] : [];
+        const clubs = Array.isArray(data) ? [...data as ClubDirectoryEntry[]] : [];
         clubs.sort((left, right) => getClubOptionLabel(left).localeCompare(getClubOptionLabel(right)));
         setClubOptions(clubs);
       })
@@ -359,22 +389,53 @@ export default function EventsPage() {
     () => clubOptions.find((club) => String(club.club_id) === selectedClubId) ?? null,
     [clubOptions, selectedClubId],
   );
+  const selectedEventAttendees = selectedEventId ? attendeeMap[selectedEventId] : null;
 
   useEffect(() => {
-    if (!selectedEvent) { setModalAttendees(null); return; }
-    fetch(`${API}/rsvp/${selectedEvent.event_id}/attendees`)
+    if (!selectedEventId) {
+      setModalAttendees(null);
+      return;
+    }
+
+    if (selectedEventAttendees) {
+      setModalAttendees(selectedEventAttendees);
+      return;
+    }
+
+    let cancelled = false;
+
+    fetch(`${API}/rsvp/${selectedEventId}/attendees`)
       .then(r => r.json())
-      .then(setModalAttendees)
+      .then((data: AttendeeInfo) => {
+        if (cancelled) return;
+        setAttendeeMap((prev) => ({ ...prev, [selectedEventId]: data }));
+        setModalAttendees(data);
+      })
       .catch(() => {});
-  }, [selectedEvent]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEventAttendees, selectedEventId]);
 
   useEffect(() => {
     if (!user?.id) return;
+
+    let cancelled = false;
+
     fetch(`${AUTH_API}/api/connections`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then((data: { id: string }[]) => setConnectionIds(new Set(data.map(c => c.id))))
+      .then((data: { id: string }[]) => {
+        if (!cancelled) {
+          setConnectionIds(new Set(data.map((connection) => connection.id)));
+        }
+      })
       .catch(() => {});
-  }, [user?.id]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, user?.id]);
 
   const displayEvents = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
@@ -400,37 +461,65 @@ export default function EventsPage() {
 
     return baseEvents;
   }, [view, trendingEvents, upcomingRaw, profile, searchQuery, selectedClub]);
+  const displayEventIds = useMemo(
+    () => displayEvents.map((event: any) => event.event_id),
+    [displayEvents],
+  );
+  const displayEventIdsKey = useMemo(
+    () => displayEventIds.join(","),
+    [displayEventIds],
+  );
   const loading = view === "trending" ? trendingLoading : upcomingLoading;
 
   useEffect(() => {
-    if (!displayEvents.length) return;
-    displayEvents.forEach((event: any) => {
-      fetch(`${API}/rsvp/${event.event_id}/attendees`)
-        .then(r => r.json())
-        .then((data: AttendeeInfo) => {
-          if (data.count > 0)
-            setAttendeeMap(prev => ({ ...prev, [event.event_id]: data }));
-        })
-        .catch(() => {});
-    });
-  }, [displayEvents]);
+    if (!displayEventIds.length) return;
+
+    let cancelled = false;
+
+    fetch(`${API}/rsvp/batch-attendees`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_ids: displayEventIds }),
+    })
+      .then(r => r.json())
+      .then((data: Record<string, AttendeeInfo>) => {
+        if (cancelled) return;
+        const nextEntries = Object.fromEntries(
+          displayEventIds.map((eventId) => [eventId, data[String(eventId)] ?? { count: 0, preview: [] }]),
+        ) as Record<number, AttendeeInfo>;
+        setAttendeeMap((prev) => ({ ...prev, ...nextEntries }));
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [displayEventIds, displayEventIdsKey]);
 
   useEffect(() => {
-    if (!displayEvents.length || !user?.id) return;
+    if (!displayEventIds.length || !user?.id) return;
+
+    let cancelled = false;
+
     fetch(`${API}/rsvp/batch-status`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: user.id, event_ids: displayEvents.map((e: any) => e.event_id) }),
+      body: JSON.stringify({ user_id: user.id, event_ids: displayEventIds }),
     })
       .then(r => r.json())
-      .then((data: Record<string, string>) =>
+      .then((data: Record<string, string>) => {
+        if (cancelled) return;
         setRsvpMap(prev => ({
           ...prev,
           ...Object.fromEntries(Object.entries(data).map(([k, v]) => [Number(k), v])),
-        }))
-      )
+        }));
+      })
       .catch(() => {});
-  }, [displayEvents, user?.id]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [displayEventIds, displayEventIdsKey, user?.id]);
 
   async function handleRsvpToggle(eventId: number) {
     if (!user) return;

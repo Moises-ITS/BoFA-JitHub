@@ -273,6 +273,12 @@
 /* Path pulse — JS applies color + filter; class marks membership */
 .link.path-pulse { stroke: #e879f9; }
 
+/* Edge pulse dots — soft glow, no pointer events */
+.edge-pulse-layer circle {
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgba(147, 197, 253, 0.7));
+}
+
 .node { cursor: pointer; }
 .node circle:hover { filter: brightness(1.25); }
 .node.dimmed circle { opacity: 0.07; }

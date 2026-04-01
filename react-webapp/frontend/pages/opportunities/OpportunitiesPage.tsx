@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+﻿import { useState, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOpportunities } from './hooks/useOpportunities';
 import type { FilterType } from './hooks/useOpportunities';
 import type { Opportunity } from './types/opportunities';
@@ -13,12 +14,16 @@ import './Opportunities.css';
 type SideTab = 'feed' | 'tracker';
 
 export default function OpportunitiesPage() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const districtParam = searchParams.get('district');
   const { token } = useAuth();
   const {
     filtered, counts, filter, setFilter,
     activeId, setActiveId,
     tracked, trackApplication, getTracked, createOpportunity,
-  } = useOpportunities();
+    districtFilter, setDistrictFilter,
+  } = useOpportunities(districtParam);
 
   const [sideTab, setSideTab] = useState<SideTab>('feed');
   const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null);
@@ -67,6 +72,20 @@ export default function OpportunitiesPage() {
     { key: 'networking', label: 'Networking' },
   ];
 
+  useEffect(() => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (districtFilter) {
+        next.set('district', districtFilter);
+      } else {
+        next.delete('district');
+      }
+      return next;
+    });
+  }, [districtFilter, setSearchParams]);
+
+  const clearDistrictChip = () => setDistrictFilter(null);
+
   return (
     <div
       style={{
@@ -87,6 +106,56 @@ export default function OpportunitiesPage() {
               <p className="map-subtitle">
                 {counts[filter === 'all' ? 'all' : filter]} opportunities across the US
               </p>
+              {districtFilter && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '6px 10px',
+                      borderRadius: 999,
+                      background: 'rgba(59, 130, 246, 0.12)',
+                      border: '1px solid rgba(59, 130, 246, 0.35)',
+                      color: '#cbd5e1',
+                      fontSize: '12px',
+                    }}
+                  >
+                    Filtered to district: <strong style={{ color: '#93c5fd' }}>{districtFilter}</strong>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); clearDistrictChip(); }}
+                      style={{
+                        border: 'none',
+                        background: 'none',
+                        color: '#93c5fd',
+                        cursor: 'pointer',
+                        fontWeight: 700,
+                      }}
+                      aria-label="Clear district filter"
+                    >
+                      x
+                    </button>
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate('/research');
+                    }}
+                    style={{
+                      border: '1px solid rgba(148, 163, 184, 0.35)',
+                      background: 'rgba(15, 23, 42, 0.55)',
+                      color: '#e2e8f0',
+                      borderRadius: 999,
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                    aria-label="Back to Research District"
+                  >
+                    Back to Research District
+                  </button>
+                </div>
+              )}
             </div>
             <div className="map-header-actions">
               <button

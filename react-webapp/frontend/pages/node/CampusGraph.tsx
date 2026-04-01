@@ -58,6 +58,12 @@ export default function CampusGraph() {
   const zoomRef    = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const introDoneRef = useRef(false);
 
+  // ── Pan inertia refs ──────────────────────────────────────────────────────
+  const inertiaRafRef   = useRef<number | null>(null);
+  const inertiaDeltaRef = useRef({ dx: 0, dy: 0 });
+  const lastZoomXRef    = useRef<number | null>(null);
+  const lastZoomYRef    = useRef<number | null>(null);
+
   // ── Clear hover card when leaving free mode ───────────────────────────────
   useEffect(() => { if (mode !== "free") setHoverCard(null); }, [mode]);
 
@@ -136,6 +142,36 @@ export default function CampusGraph() {
       return (s === d.id && neighborSet.has(t)) || (t === d.id && neighborSet.has(s)) ? 0.85 : 0;
     });
 
+    // Emphasize direct edges: color, width boost, glow
+    linkSel
+      .filter((l: GraphLink) => {
+        const s = getNodeId(l.source), t = getNodeId(l.target);
+        return (s === d.id && neighborSet.has(t)) || (t === d.id && neighborSet.has(s));
+      })
+      .transition().duration(600)
+      .attr("stroke",       "#93c5fd")   // CONSTANT: emphasized edge color
+      .attr("stroke-width", (l: GraphLink) => {
+        const w = l.weight ?? 0.5;
+        return (w >= 0.8 ? 3.5 : w >= 0.5 ? 2.2 : 1.2) * 1.5;
+      })
+      .attr("filter", "url(#glow-soft)");
+
+    // Neighbor opacity gradient: stronger connection = brighter node
+    nodeSel.filter((n: GraphNode) => neighborSet.has(n.id))
+      .transition().duration(500)
+      .style("opacity", (n: GraphNode) => {
+        const maxW = Math.max(
+          ...linksRef.current
+            .filter(l =>
+              (getNodeId(l.source) === d.id && getNodeId(l.target) === n.id) ||
+              (getNodeId(l.target) === d.id && getNodeId(l.source) === n.id)
+            )
+            .map(l => l.weight ?? 0.5),
+          0.3  // floor so even weakest neighbors stay visible
+        );
+        return 0.45 + maxW * 0.55;  // CONSTANT: range 0.45–1.0
+      });
+
   }, []); // eslint-disable-line
 
   // ── Exit to Free Mode ─────────────────────────────────────────────────────
@@ -162,9 +198,13 @@ export default function CampusGraph() {
 
     linkSel.transition().duration(400)
       .attr("stroke-opacity", (l: GraphLink) => defOp(l.weight ?? 0.5))
-      .attr("stroke", null)
-      .attr("filter", null)
-      .attr("stroke-dasharray", null)
+      .attr("stroke",          null)
+      .attr("stroke-width",    (l: GraphLink) => {
+        const w = l.weight ?? 0.5;
+        return w >= 0.8 ? 3.5 : w >= 0.5 ? 2.2 : 1.2;
+      })
+      .attr("filter",          null)
+      .attr("stroke-dasharray",  null)
       .attr("stroke-dashoffset", null);
 
     d3.selectAll(".link.path-pulse").classed("path-pulse", false);
@@ -310,6 +350,18 @@ export default function CampusGraph() {
     });
 
     const simLinks: GraphLink[] = visibleLinks.map(l => ({ ...l }));
+
+    // ── Edge pulse state ──────────────────────────────────────────────────
+    interface PulseState {
+      el:      d3.Selection<SVGCircleElement, unknown, null, undefined>;
+      linkIdx: number;
+      t:       number;
+      speed:   number;
+    }
+    const activePulses: PulseState[] = [];
+    // direct-style links already animate via CSS; exclude them
+    const pulseLinks = simLinks.filter(l => l.style !== "direct");
+
     const g = svg.append("g").attr("class", "graph-root");
 
     // ── Zoom ──────────────────────────────────────────────────────────────
@@ -317,13 +369,50 @@ export default function CampusGraph() {
       .scaleExtent([0.12, 4])
       // Soft boundary: prevent drifting into empty space more than 2× canvas
       .translateExtent([[-width * 2, -height * 2], [width * 3, height * 3]])
+      .on("start.inertia", () => {
+        // Instant interrupt: any new drag/pan cancels ongoing glide
+        if (inertiaRafRef.current) cancelAnimationFrame(inertiaRafRef.current);
+        inertiaRafRef.current  = null;
+        lastZoomXRef.current   = null;
+        lastZoomYRef.current   = null;
+        inertiaDeltaRef.current = { dx: 0, dy: 0 };
+      })
       .on("zoom", (e: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
         g.attr("transform", e.transform.toString());
         // Show more labels when zoomed in
         if (modeRef.current === "free") {
           nodeSelRef.current?.select("text")
+            .transition().duration(200)
             .style("opacity", e.transform.k > 1.6 ? 1 : 0.6);
         }
+        // Track translation delta for inertia (pan events only, not programmatic)
+        if (e.sourceEvent) {
+          if (lastZoomXRef.current !== null) {
+            inertiaDeltaRef.current = {
+              dx: e.transform.x - lastZoomXRef.current,
+              dy: e.transform.y - lastZoomYRef.current!,
+            };
+          }
+          lastZoomXRef.current = e.transform.x;
+          lastZoomYRef.current = e.transform.y;
+        }
+      })
+      .on("end.inertia", (e: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+        // Only glide after pointer pan, not scroll-zoom
+        if (!e.sourceEvent || e.sourceEvent.type === "wheel") return;
+        const svgNode = svgRef.current;
+        if (!svgNode) return;
+        // CONSTANTS (tweak here):
+        const FRICTION  = 0.88;  // higher = longer glide
+        const MIN_SPEED = 0.4;   // lower = longer tail
+        let { dx, dy } = inertiaDeltaRef.current;
+        const glide = () => {
+          if (Math.abs(dx) < MIN_SPEED && Math.abs(dy) < MIN_SPEED) return;
+          d3.select(svgNode).call(zoom.translateBy, dx, dy);
+          dx *= FRICTION; dy *= FRICTION;
+          inertiaRafRef.current = requestAnimationFrame(glide);
+        };
+        inertiaRafRef.current = requestAnimationFrame(glide);
       });
     svg.call(zoom);
     zoomRef.current = zoom;
@@ -337,6 +426,9 @@ export default function CampusGraph() {
       .attr("stroke-width",   (d: GraphLink) => edgeWidth(d.weight ?? 0.5))
       .attr("stroke-opacity", (d: GraphLink) => defOp(d.weight ?? 0.5))
       .attr("fill", "none");
+
+    // ── Pulse layer (between links and nodes) ────────────────────────────
+    const pulseLayer = g.append("g").attr("class", "edge-pulse-layer").attr("pointer-events", "none");
 
     // ── Nodes ─────────────────────────────────────────────────────────────
     const nodeSel = g.append("g")
@@ -375,7 +467,8 @@ export default function CampusGraph() {
         });
         nodeSel.transition().duration(150)
           .style("opacity", (n: GraphNode) => conn.has(n.id) ? 1 : 0.12);
-        nodeSel.select("text").style("opacity", (n: GraphNode) => conn.has(n.id) ? 1 : 0);
+        nodeSel.select("text").transition().duration(140)
+          .style("opacity", (n: GraphNode) => conn.has(n.id) ? 1 : 0);
         nodeSel.filter((n: GraphNode) => n.id === d.id)
           .select<SVGCircleElement>("circle.main-circle")
           .attr("filter", "url(#glow-soft)");
@@ -385,7 +478,7 @@ export default function CampusGraph() {
         setHoverCard(null);
         linkSel.attr("stroke-opacity", (l: GraphLink) => defOp(l.weight ?? 0.5));
         nodeSel.transition().duration(200).style("opacity", 1);
-        nodeSel.select("text").style("opacity", 0.6);
+        nodeSel.select("text").transition().duration(200).style("opacity", 0.6);
         nodeSel.select<SVGCircleElement>("circle.main-circle").attr("filter", null);
       });
 
@@ -462,6 +555,44 @@ export default function CampusGraph() {
       });
       nodeSel.attr("transform", (d: GraphNode) => `translate(${d.x ?? 0},${d.y ?? 0})`);
 
+      // ── Edge pulse update ──────────────────────────────────────────────
+      // CONSTANTS (tweak here):
+      const PULSE_MAX     = 5;      // max simultaneous pulses
+      const PULSE_SPAWN   = 0.012;  // per-tick spawn probability
+      const PULSE_OPACITY = 0.65;   // peak fill-opacity
+
+      if (modeRef.current === "free" && pulseLinks.length > 0) {
+        if (activePulses.length < PULSE_MAX && Math.random() < PULSE_SPAWN) {
+          const linkIdx = Math.floor(Math.random() * pulseLinks.length);
+          const pulseEl = pulseLayer.append<SVGCircleElement>("circle")
+            .attr("r", 2.5)
+            .attr("fill-opacity", 0)
+            .attr("pointer-events", "none");
+          activePulses.push({ el: pulseEl, linkIdx, t: 0, speed: 0.003 + Math.random() * 0.004 });
+        }
+        for (let i = activePulses.length - 1; i >= 0; i--) {
+          const p = activePulses[i];
+          p.t += p.speed;
+          if (p.t >= 1) { p.el.remove(); activePulses.splice(i, 1); continue; }
+          const lnk = pulseLinks[p.linkIdx];
+          const src = lnk.source as GraphNode, tgt = lnk.target as GraphNode;
+          if (src.x == null || tgt.x == null) continue;
+          const x1 = src.x, y1 = src.y ?? 0, x2 = tgt.x, y2 = tgt.y ?? 0;
+          const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 30;
+          const bt = p.t;
+          const bx = (1-bt)*(1-bt)*x1 + 2*(1-bt)*bt*mx + bt*bt*x2;
+          const by = (1-bt)*(1-bt)*y1 + 2*(1-bt)*bt*my + bt*bt*y2;
+          const edgeOpacity = bt < 0.12 ? bt / 0.12 : bt > 0.88 ? (1 - bt) / 0.12 : 1;
+          const color = (lnk.weight ?? 0.5) >= 0.8 ? "#93c5fd" : "#60a5fa";
+          p.el.attr("cx", bx).attr("cy", by)
+             .attr("fill", color)
+             .attr("fill-opacity", edgeOpacity * PULSE_OPACITY);
+        }
+      } else if (activePulses.length > 0 && modeRef.current !== "free") {
+        activePulses.forEach(p => p.el.remove());
+        activePulses.length = 0;
+      }
+
       // One-time intro flyover: show whole graph, then zoom to current user node
       if (!introDoneRef.current && user?.id && zoomRef.current && svgRef.current && ++tick > 45) {
         introDoneRef.current = true;
@@ -531,6 +662,9 @@ export default function CampusGraph() {
       setD3Ready(false);
       clearTimeout(timer);
       window.removeEventListener("resize", onResize);
+      if (inertiaRafRef.current) cancelAnimationFrame(inertiaRafRef.current);
+      activePulses.forEach(p => p.el.remove());
+      activePulses.length = 0;
       sim.stop();
       svg.selectAll("*").remove();
     };

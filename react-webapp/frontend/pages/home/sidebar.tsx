@@ -1,15 +1,17 @@
 import { NavLink } from "react-router-dom";
 import { motion } from "motion/react";
-import { Home, Calendar, Briefcase, Network, User, Bot } from "lucide-react";
+import { Home, Calendar, Briefcase, FlaskConical, Network, User, Bot } from "lucide-react";
 
 const navItems = [
   { icon: Home, label: "Home", path: "/home" },
   { icon: Calendar, label: "Events", path: "/events" },
   { icon: Briefcase, label: "Opportunities", path: "/opportunities" },
+  { icon: FlaskConical, label: "Research", path: "/research" },
   { icon: Network, label: "Campus Network", path: "/network" },
   { icon: Bot, label: "Sandbox", path: "/sandbox" },
   { icon: User, label: "Profile", path: "/profile" },
 ];
+
 
 export function Sidebar() {
   return (
@@ -34,12 +36,12 @@ export function Sidebar() {
             <line x1="29" y1="21" x2="37" y2="15" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
             <line x1="19" y1="27" x2="11" y2="33" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
             {/* Outer nodes */}
-            <circle cx="24" cy="7"  r="3.5" fill="white" />
+            <circle cx="24" cy="7" r="3.5" fill="white" />
             <circle cx="24" cy="41" r="3.5" fill="white" />
-            <circle cx="8"  cy="13" r="3.5" fill="white" />
+            <circle cx="8" cy="13" r="3.5" fill="white" />
             <circle cx="40" cy="35" r="3.5" fill="white" />
             <circle cx="40" cy="13" r="3.5" fill="white" />
-            <circle cx="8"  cy="35" r="3.5" fill="white" />
+            <circle cx="8" cy="35" r="3.5" fill="white" />
           </svg>
         </motion.div>
       </div>

@@ -15,6 +15,12 @@ from dotenv import load_dotenv
 
 from app.database import get_db
 from app import models
+from app.club_directory import (
+    find_matching_club,
+    get_club_aliases,
+    normalize_club_text,
+    resolve_canonical_club_name,
+)
 
 load_dotenv()
 router = APIRouter(prefix="/sandbox", tags=["sandbox"])
@@ -244,25 +250,114 @@ def _resolve_club_name(club_name: str) -> str:
     """Expand known acronyms to searchable substrings."""
     return CLUB_ACRONYMS.get(club_name.lower().strip(), club_name)
 
+
+def _candidate_club_search_terms(club_name: str) -> list[str]:
+    raw = (club_name or "").strip()
+    if not raw:
+        return []
+
+    terms: list[str] = [raw]
+    direct = _resolve_club_name(raw)
+    if direct and direct not in terms:
+        terms.append(direct)
+
+    for token in re.findall(r"[a-z0-9]+", raw.lower()):
+        if len(token) < 2:
+            continue
+        if token not in terms:
+            terms.append(token)
+        expanded = CLUB_ACRONYMS.get(token)
+        if expanded and expanded not in terms:
+            terms.append(expanded)
+
+    unique_terms: list[str] = []
+    seen: set[str] = set()
+    for term in terms:
+        normalized = normalize_club_text(term)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique_terms.append(term)
+    return unique_terms
+
+
+def _resolve_club_filters(club_name: str, db: Session) -> tuple[list[models.Club], list[str]]:
+    search_terms = _candidate_club_search_terms(club_name)
+    if not search_terms:
+        return [], []
+
+    known_clubs = db.query(models.Club).all()
+    matched: dict[int, models.Club] = {}
+    alias_terms: list[str] = []
+
+    for term in search_terms:
+        club = find_matching_club(known_clubs, term)
+        if club and club.club_id not in matched:
+            matched[club.club_id] = club
+            alias_terms.extend(get_club_aliases(club.name, club.instagram_handle))
+
+    terms = search_terms + alias_terms
+    unique_terms: list[str] = []
+    seen: set[str] = set()
+    for term in terms:
+        normalized = normalize_club_text(term)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique_terms.append(term)
+
+    return list(matched.values()), unique_terms
+
 def _execute_tool(name: str, args: dict, db: Session) -> dict:
     if name == "search_events":
-        club_name  = _resolve_club_name(args["club_name"]) if args.get("club_name") else None
+        club_name  = args.get("club_name")
         categories = args.get("categories") or ([args["category"]] if args.get("category") else [])
         keyword    = args.get("keyword")
         limit      = min(int(args.get("limit", 10)), 20)
         past_only  = bool(args.get("past_only", False))
+        today      = date.today()
 
         conditions, params = [], {}
         # Always exclude interest-gauging posts
         conditions.append("e.event_name NOT ILIKE '%interest%'")
+
         if club_name:
-            conditions.append("(c.name ILIKE :club_name OR c.instagram_handle ILIKE :club_name)")
-            params["club_name"] = f"%{club_name}%"
+            matched_clubs, club_terms = _resolve_club_filters(club_name, db)
+            club_parts: list[str] = []
+
+            if matched_clubs:
+                placeholders = []
+                for index, club in enumerate(matched_clubs):
+                    key = f"club_id_{index}"
+                    params[key] = club.club_id
+                    placeholders.append(f":{key}")
+                club_parts.append(f"e.club_id IN ({', '.join(placeholders)})")
+
+            if club_terms:
+                name_filters = []
+                collab_filters = []
+                for index, term in enumerate(club_terms):
+                    key = f"club_term_{index}"
+                    params[key] = f"%{term}%"
+                    name_filters.append(f"c.name ILIKE :{key}")
+                    name_filters.append(f"c.instagram_handle ILIKE :{key}")
+                    collab_filters.append(f"coll.partner_name ILIKE :{key}")
+
+                club_parts.append("(" + " OR ".join(name_filters) + ")")
+                club_parts.append(
+                    "EXISTS (SELECT 1 FROM collaborations coll "
+                    "WHERE coll.event_id = e.event_id AND (" + " OR ".join(collab_filters) + "))"
+                )
+
+            if club_parts:
+                conditions.append("(" + " OR ".join(club_parts) + ")")
+
         if categories:
-            placeholders = ", ".join(f":cat{i}" for i in range(len(categories)))
-            conditions.append(f"e.event_category IN ({placeholders})")
+            category_parts = []
             for i, cat in enumerate(categories):
-                params[f"cat{i}"] = cat
+                params[f"cat{i}"] = f"%{cat}%"
+                category_parts.append(f"e.event_category ILIKE :cat{i}")
+            conditions.append("(" + " OR ".join(category_parts) + ")")
         if keyword:
             conditions.append("(e.event_name ILIKE :keyword OR ep.caption ILIKE :keyword)")
             params["keyword"] = f"%{keyword}%"
@@ -270,19 +365,36 @@ def _execute_tool(name: str, args: dict, db: Session) -> dict:
             conditions.append("e.date <= CURRENT_DATE")
 
         where = "WHERE " + " AND ".join(conditions)
-        params["limit"] = limit
 
         rows = db.execute(sa_text(f"""
-            SELECT DISTINCT ON (e.event_id)
-                e.event_id, e.event_name, e.event_category, e.date,
-                c.name AS club_name, ep.caption, ep.engagement_score
-            FROM events e
-            JOIN clubs c ON e.club_id = c.club_id
-            LEFT JOIN event_posts ep ON ep.event_id = e.event_id
-            {where}
-            ORDER BY e.event_id, ep.engagement_score DESC NULLS LAST
-            LIMIT :limit
+            SELECT *
+            FROM (
+                SELECT DISTINCT ON (e.event_id)
+                    e.event_id, e.event_name, e.event_category, e.date,
+                    c.name AS club_name, ep.caption, ep.engagement_score
+                FROM events e
+                JOIN clubs c ON e.club_id = c.club_id
+                LEFT JOIN event_posts ep ON ep.event_id = e.event_id
+                {where}
+                ORDER BY e.event_id, ep.engagement_score DESC NULLS LAST
+            ) deduped
         """), params).fetchall()
+
+        def _sort_key(row):
+            engagement = float(row.engagement_score) if row.engagement_score else 0.0
+            if past_only:
+                sort_date = row.date.toordinal() if row.date else date.min.toordinal()
+                return (-sort_date, -engagement, row.event_name.lower())
+
+            is_upcoming = row.date is not None and row.date >= today
+            upcoming_rank = 0 if is_upcoming else 1
+            if is_upcoming:
+                sort_date = row.date.toordinal()
+            else:
+                sort_date = -(row.date.toordinal() if row.date else date.min.toordinal())
+            return (upcoming_rank, sort_date, -engagement, row.event_name.lower())
+
+        rows = sorted(rows, key=_sort_key)[:limit]
 
         return {
             "events": [
@@ -291,7 +403,7 @@ def _execute_tool(name: str, args: dict, db: Session) -> dict:
                     "name":      r.event_name,
                     "category":  r.event_category,
                     "date":      str(r.date) if r.date else None,
-                    "club":      r.club_name,
+                    "club":      resolve_canonical_club_name(r.club_name) if r.club_name else r.club_name,
                     "description": (r.caption or "")[:120],
                 }
                 for r in rows
@@ -327,21 +439,39 @@ def _execute_tool(name: str, args: dict, db: Session) -> dict:
         }
 
     if name == "get_club_info":
-        club_name = _resolve_club_name(args.get("club_name", ""))
-        rows = db.execute(sa_text("""
-            SELECT name, bio, instagram_handle, follower_count
-            FROM clubs
-            WHERE name ILIKE :club_name OR instagram_handle ILIKE :club_name
-            ORDER BY follower_count DESC NULLS LAST
-            LIMIT 3
-        """), {"club_name": f"%{club_name}%"}).fetchall()
+        raw_club_name = args.get("club_name", "")
+        matched_clubs, club_terms = _resolve_club_filters(raw_club_name, db)
+        rows = []
+
+        if matched_clubs:
+            rows = [
+                db.query(models.Club.name, models.Club.bio, models.Club.instagram_handle, models.Club.follower_count)
+                .filter(models.Club.club_id == club.club_id)
+                .first()
+                for club in matched_clubs[:3]
+            ]
+        elif club_terms:
+            conditions = []
+            params = {}
+            for index, term in enumerate(club_terms[:6]):
+                key = f"club_term_{index}"
+                params[key] = f"%{term}%"
+                conditions.append(f"name ILIKE :{key}")
+                conditions.append(f"instagram_handle ILIKE :{key}")
+            rows = db.execute(sa_text(f"""
+                SELECT name, bio, instagram_handle, follower_count
+                FROM clubs
+                WHERE {" OR ".join(conditions)}
+                ORDER BY follower_count DESC NULLS LAST
+                LIMIT 3
+            """), params).fetchall()
 
         if not rows:
-            return {"error": f"No club found matching '{club_name}'"}
+            return {"error": f"No club found matching '{raw_club_name}'"}
         return {
             "clubs": [
                 {
-                    "name":             r.name,
+                    "name":             resolve_canonical_club_name(r.name),
                     "bio":              (r.bio or "")[:300],
                     "instagram":        r.instagram_handle,
                     "follower_count":   r.follower_count,

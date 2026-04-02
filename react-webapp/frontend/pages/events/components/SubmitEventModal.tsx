@@ -1,10 +1,12 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
-import { type ClubDirectoryEntry, getClubOptionLabel } from '../utils/clubMatching';
+import { clubNamesEquivalent, type ClubDirectoryEntry, getClubOptionLabel } from '../utils/clubMatching';
 
 export interface CommunityEventInput {
   club_name: string;
   event_name: string;
   event_categories: string[];
+  collaborators?: string[];
+  corporate_partners?: string[];
   date: string;
   start_time: string;
   end_time?: string;
@@ -21,6 +23,8 @@ const INITIAL_FORM = {
   clubName: '',
   eventName: '',
   eventCategories: ['workshop'],
+  collaborators: [] as string[],
+  corporatePartners: [] as string[],
   date: '',
   startTime: '',
   endTime: '',
@@ -52,16 +56,66 @@ export default function SubmitEventModal({
 }: Props) {
   const [form, setForm] = useState(INITIAL_FORM);
   const [error, setError] = useState<string | null>(null);
+  const [collaboratorDraft, setCollaboratorDraft] = useState('');
+  const [corporatePartnerDraft, setCorporatePartnerDraft] = useState('');
   const selectedClub = clubs.find((club) => club.name === form.clubName) ?? null;
+  const availableCollaboratorOptions = clubs.filter((club) => (
+    !clubNamesEquivalent(club.name, form.clubName)
+    && !form.collaborators.some((collaborator) => clubNamesEquivalent(collaborator, club.name))
+  ));
 
   useEffect(() => {
     if (!open) {
       setForm(INITIAL_FORM);
       setError(null);
+      setCollaboratorDraft('');
+      setCorporatePartnerDraft('');
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!form.clubName) return;
+    setForm((prev) => ({
+      ...prev,
+      collaborators: prev.collaborators.filter((collaborator) => !clubNamesEquivalent(collaborator, prev.clubName)),
+    }));
+  }, [form.clubName]);
+
   if (!open) return null;
+
+  function addCollaborator() {
+    const nextCollaborator = collaboratorDraft.trim();
+    if (!nextCollaborator || clubNamesEquivalent(nextCollaborator, form.clubName)) {
+      setCollaboratorDraft('');
+      return;
+    }
+    if (form.collaborators.some((collaborator) => clubNamesEquivalent(collaborator, nextCollaborator))) {
+      setCollaboratorDraft('');
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      collaborators: [...prev.collaborators, nextCollaborator],
+    }));
+    setCollaboratorDraft('');
+  }
+
+  function addCorporatePartner() {
+    const nextPartner = corporatePartnerDraft.trim();
+    if (!nextPartner) {
+      setCorporatePartnerDraft('');
+      return;
+    }
+    if (form.corporatePartners.some((partner) => partner.toLowerCase() === nextPartner.toLowerCase())) {
+      setCorporatePartnerDraft('');
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      corporatePartners: [...prev.corporatePartners, nextPartner],
+    }));
+    setCorporatePartnerDraft('');
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -81,6 +135,8 @@ export default function SubmitEventModal({
       club_name: form.clubName.trim(),
       event_name: form.eventName.trim(),
       event_categories: form.eventCategories,
+      collaborators: form.collaborators,
+      corporate_partners: form.corporatePartners,
       date: form.date,
       start_time: form.startTime,
       end_time: form.endTime || undefined,
@@ -200,6 +256,94 @@ export default function SubmitEventModal({
                 style={fieldStyle}
               />
             </label>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 700 }}>Collaborating clubs</span>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'stretch' }}>
+                <select
+                  value={collaboratorDraft}
+                  onChange={(event) => setCollaboratorDraft(event.target.value)}
+                  style={{ ...fieldStyle, flex: 1 }}
+                >
+                  <option value="">Optional</option>
+                  {availableCollaboratorOptions.map((club) => (
+                    <option key={club.club_id} value={club.name}>
+                      {getClubOptionLabel(club)}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" onClick={addCollaborator} style={secondaryButtonStyle}>
+                  Add
+                </button>
+              </div>
+              {form.collaborators.length > 0 && (
+                <div style={pillWrapStyle}>
+                  {form.collaborators.map((collaborator) => (
+                    <button
+                      key={collaborator}
+                      type="button"
+                      onClick={() => setForm((prev) => ({
+                        ...prev,
+                        collaborators: prev.collaborators.filter((value) => !clubNamesEquivalent(value, collaborator)),
+                      }))}
+                      style={pillStyle}
+                    >
+                      {clubs.find((club) => clubNamesEquivalent(club.name, collaborator))
+                        ? getClubOptionLabel(clubs.find((club) => clubNamesEquivalent(club.name, collaborator))!)
+                        : collaborator}
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <span style={helperTextStyle}>
+                Optional. Pick any NJIT club collaborating on this event.
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 700 }}>Corporate partners</span>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'stretch' }}>
+                <input
+                  value={corporatePartnerDraft}
+                  onChange={(event) => setCorporatePartnerDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      addCorporatePartner();
+                    }
+                  }}
+                  placeholder="Optional company or sponsor"
+                  style={{ ...fieldStyle, flex: 1 }}
+                />
+                <button type="button" onClick={addCorporatePartner} style={secondaryButtonStyle}>
+                  Add
+                </button>
+              </div>
+              {form.corporatePartners.length > 0 && (
+                <div style={pillWrapStyle}>
+                  {form.corporatePartners.map((partner) => (
+                    <button
+                      key={partner}
+                      type="button"
+                      onClick={() => setForm((prev) => ({
+                        ...prev,
+                        corporatePartners: prev.corporatePartners.filter((value) => value.toLowerCase() !== partner.toLowerCase()),
+                      }))}
+                      style={pillStyle}
+                    >
+                      {partner}
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <span style={helperTextStyle}>
+                Optional. Type any company name exactly how you want it shown.
+              </span>
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
@@ -396,6 +540,26 @@ const helperTextStyle: CSSProperties = {
   color: 'var(--text-muted)',
   fontSize: '0.74rem',
   lineHeight: 1.5,
+};
+
+const pillWrapStyle: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '8px',
+};
+
+const pillStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '8px',
+  border: '1px solid rgba(215, 25, 32, 0.24)',
+  backgroundColor: 'rgba(215, 25, 32, 0.12)',
+  color: '#ffe7e8',
+  borderRadius: '999px',
+  padding: '8px 12px',
+  fontSize: '0.78rem',
+  fontWeight: 700,
+  cursor: 'pointer',
 };
 
 const categoryGridStyle: CSSProperties = {

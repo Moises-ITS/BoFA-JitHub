@@ -289,6 +289,42 @@ export function EventDetailModal({ event, attendees, connectionIds, rsvpStatus, 
           </div>
         )}
 
+        {(Array.isArray(event.collaborators) && event.collaborators.length > 0) && (
+          <div style={{ marginBottom: "16px" }}>
+            <p style={{ color: "var(--text-subtle)", fontSize: "11px", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", margin: "0 0 10px" }}>
+              Collaborating Clubs
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {event.collaborators.map((collaborator: string) => (
+                <span
+                  key={collaborator}
+                  style={{ backgroundColor: "rgba(215,25,32,0.12)", border: "1px solid rgba(215,25,32,0.24)", color: "#ffe7e8", fontSize: "12px", padding: "6px 10px", borderRadius: "999px", fontWeight: 600 }}
+                >
+                  {collaborator}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(Array.isArray(event.sponsors) && event.sponsors.length > 0) && (
+          <div style={{ marginBottom: "16px" }}>
+            <p style={{ color: "var(--text-subtle)", fontSize: "11px", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", margin: "0 0 10px" }}>
+              Corporate Partners
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {event.sponsors.map((sponsor: string) => (
+                <span
+                  key={sponsor}
+                  style={{ backgroundColor: "rgba(49,197,143,0.12)", border: "1px solid rgba(49,197,143,0.24)", color: "var(--accent-opportunities)", fontSize: "12px", padding: "6px 10px", borderRadius: "999px", fontWeight: 600 }}
+                >
+                  {sponsor}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {score >= 70 && (
           <div style={{ backgroundColor: "var(--status-success-soft)", border: "1px solid rgba(63,199,141,0.28)", borderRadius: "10px", padding: "12px 14px", marginBottom: "16px", display: "flex", gap: "10px", alignItems: "flex-start" }}>
             <span style={{ color: "var(--status-success)", fontSize: "15px" }}>✦</span>

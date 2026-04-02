@@ -11,6 +11,7 @@ from app.club_directory import (
     find_matching_club,
     get_club_aliases,
     get_club_display_name,
+    normalize_club_text,
     resolve_canonical_club_name,
 )
 
@@ -57,6 +58,8 @@ class CommunityEventBody(BaseModel):
     event_name: str
     event_category: str | None = None
     event_categories: list[str] | None = None
+    collaborators: list[str] | None = None
+    corporate_partners: list[str] | None = None
     date: date
     start_time: str
     end_time: str | None = None
@@ -99,6 +102,53 @@ def _normalize_requested_categories(body: CommunityEventBody) -> list[str]:
     return categories
 
 
+def _unique_partner_names(values: list[str] | None) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for value in values or []:
+        cleaned = " ".join((value or "").strip().split())
+        normalized = normalize_club_text(cleaned)
+        if not cleaned or not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(cleaned)
+    return unique
+
+
+def _normalize_event_name(value: str) -> str:
+    return " ".join(value.lower().split())
+
+
+def _resolve_known_partner_names(clubs: list[models.Club], names: list[str]) -> list[str]:
+    resolved: list[str] = []
+    seen: set[str] = set()
+    for name in names:
+        match = find_matching_club(clubs, name)
+        canonical_name = resolve_canonical_club_name(match.name if match else name)
+        normalized = normalize_club_text(canonical_name)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        resolved.append(canonical_name)
+    return resolved
+
+
+def _get_event_participant_names(event: models.Event, club: models.Club, collabs: list[models.Collaboration]) -> set[str]:
+    participant_names = {
+        resolve_canonical_club_name(club.name),
+        *(
+            resolve_canonical_club_name(collab.partner_name)
+            for collab in collabs
+            if (collab.partner_name or "").strip()
+        ),
+    }
+    return {
+        normalize_club_text(name)
+        for name in participant_names
+        if normalize_club_text(name)
+    }
+
+
 def _base_query(db):
     return (
         db.query(models.Event, models.EventPost, models.Club)
@@ -120,6 +170,8 @@ def create_community_event(body: CommunityEventBody, db: Session = Depends(get_d
     club_name = body.club_name.strip()
     event_name = body.event_name.strip()
     event_categories = _normalize_requested_categories(body)
+    requested_collaborators = _unique_partner_names(body.collaborators)
+    requested_corporate_partners = _unique_partner_names(body.corporate_partners)
     campus_location = (body.campus_location or "").strip()
     event_room = (body.event_room or "").strip()
     event_link = (body.event_link or "").strip()
@@ -139,23 +191,57 @@ def create_community_event(body: CommunityEventBody, db: Session = Depends(get_d
 
     known_clubs = db.query(models.Club).all()
     club = find_matching_club(known_clubs, club_name)
+    resolved_primary_club_name = resolve_canonical_club_name(club.name if club else club_name)
+    collaborator_names = _resolve_known_partner_names(known_clubs, requested_collaborators)
+    collaborator_names = [
+        name for name in collaborator_names
+        if normalize_club_text(name) != normalize_club_text(resolved_primary_club_name)
+    ]
+    requested_participants = {
+        normalize_club_text(resolved_primary_club_name),
+        *(normalize_club_text(name) for name in collaborator_names),
+    }
 
-    existing = (
+    candidate_events = (
         db.query(models.Event)
-        .filter(func.lower(models.Event.event_name) == event_name.lower())
         .filter(models.Event.date == body.date)
+        .filter(models.Event.start_time == start_at)
+        .all()
     )
-    if club is not None:
-        existing = existing.filter(models.Event.club_id == club.club_id).first()
-    else:
-        existing = (
-            existing
-            .join(models.Club, models.Club.club_id == models.Event.club_id)
-            .filter(func.lower(models.Club.name) == club_name.lower())
-            .first()
+
+    normalized_event_name = _normalize_event_name(event_name)
+    event_ids = [event.event_id for event in candidate_events]
+    collabs_by_event: dict[int, list[models.Collaboration]] = {event_id: [] for event_id in event_ids}
+    if event_ids:
+        existing_collabs = (
+            db.query(models.Collaboration)
+            .filter(models.Collaboration.event_id.in_(event_ids))
+            .all()
         )
-    if existing:
-        raise HTTPException(status_code=409, detail="That event already exists")
+        for collab in existing_collabs:
+            collabs_by_event.setdefault(collab.event_id, []).append(collab)
+
+    for existing_event in candidate_events:
+        if _normalize_event_name(existing_event.event_name) != normalized_event_name:
+            continue
+
+        existing_club = next(
+            (known_club for known_club in known_clubs if known_club.club_id == existing_event.club_id),
+            None,
+        )
+        if existing_club is None:
+            continue
+
+        existing_participants = _get_event_participant_names(
+            existing_event,
+            existing_club,
+            collabs_by_event.get(existing_event.event_id, []),
+        )
+        if existing_participants & requested_participants:
+            raise HTTPException(
+                status_code=409,
+                detail="An event with the same title, date, and time already exists for one of the participating clubs.",
+            )
 
     if club is None:
         club = models.Club(name=club_name, is_active=True)
@@ -196,6 +282,12 @@ def create_community_event(body: CommunityEventBody, db: Session = Depends(get_d
     )
     db.add(post)
 
+    for collaborator_name in collaborator_names:
+        db.add(models.Collaboration(event_id=event.event_id, partner_name=collaborator_name))
+
+    for sponsor_name in requested_corporate_partners:
+        db.add(models.Sponsor(event_id=event.event_id, sponsor_name=sponsor_name))
+
     try:
         db.commit()
     except Exception as exc:
@@ -206,7 +298,10 @@ def create_community_event(body: CommunityEventBody, db: Session = Depends(get_d
     db.refresh(event)
     db.refresh(post)
     db.refresh(club)
-    return _format_event(event, post, club)
+    response = _format_event(event, post, club)
+    response["collaborators"] = collaborator_names
+    response["sponsors"] = requested_corporate_partners
+    return response
 
 
 from difflib import SequenceMatcher
@@ -368,6 +463,19 @@ def _monday_of(d: date) -> date:
 
 
 SEMESTER_END = date(2026, 5, 25)
+HEATMAP_HOURS = [8, 10, 12, 14, 16, 18, 20, 22]
+
+
+def _bucket_heatmap_hour(start_at: time | None) -> int:
+    """Map an event start time to the nearest visible 2-hour heatmap row."""
+    if start_at is None:
+        return 12
+
+    event_minutes = (start_at.hour * 60) + start_at.minute
+    return min(
+        HEATMAP_HOURS,
+        key=lambda slot_hour: abs((slot_hour * 60) - event_minutes),
+    )
 
 
 @router.get("/heatmap/weeks")
@@ -408,7 +516,7 @@ def get_heatmap(week_start: str = None, db: Session = Depends(get_db)):
             continue
         seen.add(e.event_id)
         day = e.date.strftime("%a")
-        hour = e.start_time.hour if e.start_time else 12  # default to noon if no time
+        hour = _bucket_heatmap_hour(e.start_time)
         key = f"{day}:{hour}"
         if key not in grid:
             grid[key] = []

@@ -225,6 +225,28 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!selectedEventId) return;
+
+    let cancelled = false;
+
+    fetch(`${EVENTS_API}/events/${selectedEventId}`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (cancelled || data?.error) return;
+        setSelectedEvent((prev: any) => (
+          prev?.event_id === selectedEventId
+            ? { ...prev, ...data }
+            : prev
+        ));
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEventId]);
+
+  useEffect(() => {
     if (!selectedEventId) {
       setModalAttendees(null);
       return;

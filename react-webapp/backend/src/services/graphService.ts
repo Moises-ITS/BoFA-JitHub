@@ -13,10 +13,39 @@ interface StudentInput {
   linkedinUrl?: string | null
 }
 
+const PROFILE_REL_CAPS = {
+  interests: 5,
+  clubs: 3,
+  companies: 4,
+} as const
+
+const capOrderedUnique = (items: string[], cap: number): string[] => {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of items) {
+    const item = raw.trim()
+    if (!item) continue
+    const key = item.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(item)
+    if (out.length >= cap) break
+  }
+  return out
+}
+
+const withGraphCaps = (student: StudentInput): StudentInput => ({
+  ...student,
+  interests: capOrderedUnique(student.interests, PROFILE_REL_CAPS.interests),
+  clubs: capOrderedUnique(student.clubs, PROFILE_REL_CAPS.clubs),
+  companies: capOrderedUnique(student.companies, PROFILE_REL_CAPS.companies),
+})
+
 // Creates a Student node in Neo4j and links them to Club/Company nodes.
 // If a club or company doesn't exist yet it is created automatically.
 // Returns the node id (same as user id).
 export async function createStudentNode(student: StudentInput): Promise<string> {
+  const cappedStudent = withGraphCaps(student)
   const session = driver.session()
   try {
     await session.run(
@@ -30,39 +59,39 @@ export async function createStudentNode(student: StudentInput): Promise<string> 
            s.bio            = $bio,
            s.interests      = $interests,
            s.linkedinUrl    = $linkedinUrl`,
-      { id: student.id, name: student.name, major: student.major,
-        gpa: student.gpa, graduationYear: student.graduationYear, bio: student.bio,
-        interests: student.interests, linkedinUrl: student.linkedinUrl ?? null }
+      { id: cappedStudent.id, name: cappedStudent.name, major: cappedStudent.major,
+        gpa: cappedStudent.gpa, graduationYear: cappedStudent.graduationYear, bio: cappedStudent.bio,
+        interests: cappedStudent.interests, linkedinUrl: cappedStudent.linkedinUrl ?? null }
     )
 
-    for (const clubName of student.clubs) {
+    for (const clubName of cappedStudent.clubs) {
       await session.run(
         `MATCH (s:Student {id: $studentId})
          MERGE (c:Club {type: 'club', label: $clubName})
            ON CREATE SET c.id = 'club-' + toLower(replace($clubName, ' ', '-'))
          MERGE (s)-[:MEMBER_OF]->(c)`,
-        { studentId: student.id, clubName }
+        { studentId: cappedStudent.id, clubName }
       )
     }
 
-    for (const companyName of student.companies) {
+    for (const companyName of cappedStudent.companies) {
       await session.run(
         `MATCH (s:Student {id: $studentId})
          MERGE (c:Company {type: 'company', normalizedName: toLower($companyName)})
            ON CREATE SET c.id    = 'company-' + toLower(replace($companyName, ' ', '-')),
                          c.label = $companyName
          MERGE (s)-[:WORKS_AT]->(c)`,
-        { studentId: student.id, companyName }
+        { studentId: cappedStudent.id, companyName }
       )
     }
 
     // For each interest, check if any existing student shares it.
     // If so, create an Interest node and connect all matching students to it.
-    for (const interest of student.interests) {
+    for (const interest of cappedStudent.interests) {
       const result = await session.run(
         `MATCH (other:Student) WHERE other.id <> $id AND $interest IN other.interests
          RETURN other.id AS otherId`,
-        { id: student.id, interest }
+        { id: cappedStudent.id, interest }
       )
 
       if (result.records.length > 0) {
@@ -71,7 +100,7 @@ export async function createStudentNode(student: StudentInput): Promise<string> 
            ON CREATE SET i.id = 'interest-' + toLower(replace($interest, ' ', '-'))
            WITH i MATCH (s:Student {id: $id})
            MERGE (s)-[:INTERESTED_IN]->(i)`,
-          { id: student.id, interest }
+          { id: cappedStudent.id, interest }
         )
         for (const record of result.records) {
           const otherId = record.get("otherId")
@@ -84,7 +113,7 @@ export async function createStudentNode(student: StudentInput): Promise<string> 
       }
     }
 
-    return student.id
+    return cappedStudent.id
   } finally {
     session.close()
   }
@@ -92,6 +121,7 @@ export async function createStudentNode(student: StudentInput): Promise<string> 
 
 // Updates an existing Student node's properties and refreshes all relationships.
 export async function updateStudentNode(student: StudentInput): Promise<void> {
+  const cappedStudent = withGraphCaps(student)
   const session = driver.session()
   try {
     // Update core properties on the student node
@@ -103,46 +133,46 @@ export async function updateStudentNode(student: StudentInput): Promise<void> {
            s.bio            = $bio,
            s.interests      = $interests,
            s.linkedinUrl    = $linkedinUrl`,
-      { id: student.id, major: student.major, gpa: student.gpa,
-        graduationYear: student.graduationYear, bio: student.bio,
-        interests: student.interests, linkedinUrl: student.linkedinUrl ?? null }
+      { id: cappedStudent.id, major: cappedStudent.major, gpa: cappedStudent.gpa,
+        graduationYear: cappedStudent.graduationYear, bio: cappedStudent.bio,
+        interests: cappedStudent.interests, linkedinUrl: cappedStudent.linkedinUrl ?? null }
     )
 
     // Remove stale club / company / interest relationships
     await session.run(
       `MATCH (s:Student {id: $id})-[r:MEMBER_OF|WORKS_AT|INTERESTED_IN]->() DELETE r`,
-      { id: student.id }
+      { id: cappedStudent.id }
     )
 
     // Re-create MEMBER_OF relationships
-    for (const clubName of student.clubs) {
+    for (const clubName of cappedStudent.clubs) {
       await session.run(
         `MATCH (s:Student {id: $studentId})
          MERGE (c:Club {type: 'club', label: $clubName})
            ON CREATE SET c.id = 'club-' + toLower(replace($clubName, ' ', '-'))
          MERGE (s)-[:MEMBER_OF]->(c)`,
-        { studentId: student.id, clubName }
+        { studentId: cappedStudent.id, clubName }
       )
     }
 
     // Re-create WORKS_AT relationships
-    for (const companyName of student.companies) {
+    for (const companyName of cappedStudent.companies) {
       await session.run(
         `MATCH (s:Student {id: $studentId})
          MERGE (c:Company {type: 'company', normalizedName: toLower($companyName)})
            ON CREATE SET c.id    = 'company-' + toLower(replace($companyName, ' ', '-')),
                          c.label = $companyName
          MERGE (s)-[:WORKS_AT]->(c)`,
-        { studentId: student.id, companyName }
+        { studentId: cappedStudent.id, companyName }
       )
     }
 
     // Re-create INTERESTED_IN relationships (shared-interest logic)
-    for (const interest of student.interests) {
+    for (const interest of cappedStudent.interests) {
       const result = await session.run(
         `MATCH (other:Student) WHERE other.id <> $id AND $interest IN other.interests
          RETURN other.id AS otherId`,
-        { id: student.id, interest }
+        { id: cappedStudent.id, interest }
       )
       if (result.records.length > 0) {
         await session.run(
@@ -150,7 +180,7 @@ export async function updateStudentNode(student: StudentInput): Promise<void> {
            ON CREATE SET i.id = 'interest-' + toLower(replace($interest, ' ', '-'))
            WITH i MATCH (s:Student {id: $id})
            MERGE (s)-[:INTERESTED_IN]->(i)`,
-          { id: student.id, interest }
+          { id: cappedStudent.id, interest }
         )
         for (const record of result.records) {
           const otherId = record.get("otherId")

@@ -11,6 +11,8 @@ export interface Opportunity {
   state:       string;
   lat:         number;
   lng:         number;
+  // Optional mapping back to a Research District (ai, cyber, engineering, bio, data)
+  districtId?: string;
   amount?:     string;
   stipend?:    string;
   deadline?:   string;

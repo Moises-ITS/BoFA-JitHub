@@ -35,6 +35,6 @@ jobs:
       - name: Build application
         run: npm run build
 
-      - name: Deploy
-        if: ${{ vars.DEPLOY_TARGET == 'vercel' }}
-        run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Confirm Deployment
+        run: echo: "Main branch is validated. Connected platform will handle deployment."
+        

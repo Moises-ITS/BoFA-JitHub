@@ -1,0 +1,507 @@
+/* ─── CSS Variables (dark theme) ─────────────────────────────────────────────── */
+:root {
+  --bg:           #0a0c12;
+  --surface:      #12151f;
+  --surface2:     #1a1f2e;
+  --border:       #252d40;
+  --text:         #e2e8f0;
+  --muted:        #8a97b0;
+  --blue-light:   #60a5fa;
+  --green-light:  #4ade80;
+  --green:        #22c55e;
+  --purple-light: #c4b5fd;
+}
+
+/* ─── Map View ──────────────────────────────────────────────────────────────── */
+.map-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+/* ─── Map Header ────────────────────────────────────────────────────────────── */
+.map-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-wrap: wrap;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.map-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0 0 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-subtitle {
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ─── Map Filters ────────────────────────────────────────────────────────────── */
+.map-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.map-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.map-submit-btn {
+  border: 1px solid rgba(204, 0, 0, 0.28);
+  background: linear-gradient(135deg, rgba(215, 25, 32, 0.18), rgba(215, 25, 32, 0.08));
+  color: #f7d7d9;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.map-submit-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(204, 0, 0, 0.48);
+  background: linear-gradient(135deg, rgba(215, 25, 32, 0.24), rgba(215, 25, 32, 0.12));
+}
+
+.map-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.map-filter-btn:hover { color: var(--text); border-color: #4a5568; }
+
+.map-filter-btn.active.all         { border-color: rgba(59, 130, 246, 0.6);  color: var(--blue-light);   background: rgba(59, 130, 246, 0.1); }
+.map-filter-btn.active.scholarship { border-color: rgba(34, 197, 94, 0.6);   color: var(--green-light);  background: rgba(34, 197, 94, 0.1); }
+.map-filter-btn.active.internship  { border-color: rgba(59, 130, 246, 0.6);  color: var(--blue-light);   background: rgba(59, 130, 246, 0.1); }
+.map-filter-btn.active.networking  { border-color: rgba(167, 139, 250, 0.6); color: var(--purple-light); background: rgba(167, 139, 250, 0.1); }
+
+.map-filter-count {
+  background: rgba(255, 255, 255, 0.07);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 0.68rem;
+}
+
+/* ─── Map Container ──────────────────────────────────────────────────────────── */
+.map-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px 16px;
+  gap: 14px;
+  min-height: 0;
+}
+
+/* ─── Map Image Wrapper ──────────────────────────────────────────────────────── */
+.map-img-wrap {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 380px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #1e3a5f;
+  background: #06091a;
+}
+
+.map-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+}
+
+/* ─── Map Pins ───────────────────────────────────────────────────────────────── */
+.map-pin-wrap {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 5;
+  transition: z-index 0s;
+}
+
+.map-pin-wrap:hover { z-index: 20; }
+
+/* Teardrop pin shape */
+.map-pin {
+  width: 28px;
+  height: 28px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  transition: transform 0.15s, filter 0.15s;
+  position: relative;
+}
+
+.map-pin-wrap:hover .map-pin {
+  transform: rotate(-45deg) scale(1.25);
+  filter: brightness(1.25);
+}
+
+/* content inside rotates back upright */
+.map-pin-inner {
+  transform: rotate(45deg);
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* small stem dot under the pin */
+.map-pin-stem {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  margin-top: 2px;
+  opacity: 0.75;
+}
+
+/* ─── Map Legend ─────────────────────────────────────────────────────────────── */
+.map-legend {
+  display: flex;
+  gap: 20px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* ─── Map Popup ──────────────────────────────────────────────────────────────── */
+@keyframes popupIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.map-popup {
+  position: fixed;
+  width: 308px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  animation: popupIn 0.18s ease;
+  pointer-events: all;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+
+.popup-type-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.popup-type-badge.scholarship { background: rgba(34, 197, 94, 0.15);  color: var(--green-light);  border: 1px solid rgba(34, 197, 94, 0.2); }
+.popup-type-badge.internship  { background: rgba(59, 130, 246, 0.15); color: var(--blue-light);   border: 1px solid rgba(59, 130, 246, 0.2); }
+.popup-type-badge.networking  { background: rgba(139, 92, 246, 0.15); color: var(--purple-light); border: 1px solid rgba(139, 92, 246, 0.2); }
+
+.popup-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.35;
+  margin-bottom: 4px;
+}
+
+.popup-org  { font-size: 0.74rem; color: var(--muted); margin-bottom: 5px; }
+
+.popup-city { font-size: 0.72rem; color: var(--blue-light); margin-bottom: 8px; }
+
+.popup-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.popup-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.popup-tag {
+  padding: 3px 8px;
+  background: var(--surface2);
+  border-radius: 6px;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.popup-action {
+  width: 100%;
+  padding: 9px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.popup-action.scholarship { background: rgba(34, 197, 94, 0.2);  color: var(--green-light); }
+.popup-action.internship  { background: rgba(59, 130, 246, 0.2); color: var(--blue-light); }
+.popup-action.networking  { background: rgba(139, 92, 246, 0.2); color: var(--purple-light); }
+
+.popup-action.scholarship:hover { background: rgba(34, 197, 94, 0.35); }
+.popup-action.internship:hover  { background: rgba(59, 130, 246, 0.35); }
+.popup-action.networking:hover  { background: rgba(139, 92, 246, 0.35); }
+
+.popup-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 0.6rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.popup-close:hover { background: rgba(255, 255, 255, 0.12); color: var(--text); }
+
+.submission-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(4, 7, 16, 0.74);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.submission-modal-card {
+  width: min(720px, 100%);
+  max-height: min(88vh, 880px);
+  overflow-y: auto;
+  background: rgba(18, 21, 31, 0.98);
+  border: 1px solid rgba(37, 45, 64, 0.9);
+  border-radius: 20px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  padding: 24px;
+}
+
+.submission-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.submission-modal-title {
+  margin: 0 0 6px;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.submission-modal-copy {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.submission-modal-close,
+.submission-secondary-btn {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.submission-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.submission-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.submission-grid-compact {
+  grid-template-columns: 1.5fr 0.8fr 1fr;
+}
+
+.submission-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.submission-field span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.submission-field input,
+.submission-field select,
+.submission-field textarea {
+  width: 100%;
+  border: 1px solid rgba(37, 45, 64, 0.95);
+  background: rgba(9, 12, 20, 0.96);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+}
+
+.submission-field input:focus,
+.submission-field select:focus,
+.submission-field textarea:focus {
+  border-color: rgba(204, 0, 0, 0.5);
+  box-shadow: 0 0 0 1px rgba(204, 0, 0, 0.25);
+}
+
+.submission-field input::placeholder,
+.submission-field textarea::placeholder {
+  color: #70809b;
+}
+
+.submission-modal-error {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(243, 111, 111, 0.2);
+  background: rgba(243, 111, 111, 0.1);
+  color: #fecaca;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.submission-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.submission-primary-btn {
+  border: none;
+  background: linear-gradient(135deg, #d71920, #b70f16);
+  color: white;
+  border-radius: 12px;
+  padding: 11px 16px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 14px 30px rgba(183, 15, 22, 0.2);
+}
+
+.submission-primary-btn:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .map-header    { flex-direction: column; align-items: flex-start; padding: 14px 16px; }
+  .map-header-actions { width: 100%; justify-content: flex-start; }
+  .map-container { padding: 12px; }
+  .map-img-wrap  { min-height: 240px; }
+  .map-legend    { flex-wrap: wrap; gap: 12px; }
+  .map-popup     { width: 270px; }
+  .submission-modal-card { padding: 18px; }
+  .submission-grid,
+  .submission-grid-compact { grid-template-columns: 1fr; }
+  .submission-modal-actions { flex-direction: column-reverse; }
+  .submission-primary-btn,
+  .submission-secondary-btn,
+  .submission-modal-close { width: 100%; }
+}

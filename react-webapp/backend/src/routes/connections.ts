@@ -1,7 +1,7 @@
 import { Router, Response } from "express"
 import { db } from "../config/postgres"
 import { requireAuth, AuthRequest } from "../middlewear/auth"
-import { createConnectionInNeo4j, getRecommendations } from "../services/graphService"
+import { createConnectionInNeo4j, removeConnectionFromNeo4j, getRecommendations } from "../services/graphService"
 
 const router = Router()
 
@@ -44,7 +44,46 @@ router.get("/status", async (req: AuthRequest, res: Response) => {
 router.get("/recommendations", async (req: AuthRequest, res: Response) => {
   try {
     const recs = await getRecommendations(req.userId!)
-    res.json(recs)
+    if (recs.length === 0) {
+      res.json(recs)
+      return
+    }
+
+    // Enrich with skills, looking_for, and year from Postgres
+    const allIds = [req.userId!, ...recs.map(r => r.id)]
+    const pgResult = await db.query(
+      `SELECT id, skills, looking_for, year FROM users WHERE id = ANY($1)`,
+      [allIds]
+    )
+    const userMap = new Map<string, { skills: string[]; looking_for: string[]; year: string | null }>()
+    for (const row of pgResult.rows) {
+      userMap.set(row.id, {
+        skills:      Array.isArray(row.skills)      ? row.skills      : [],
+        looking_for: Array.isArray(row.looking_for) ? row.looking_for : [],
+        year:        row.year ?? null,
+      })
+    }
+
+    const me = userMap.get(req.userId!) ?? { skills: [], looking_for: [], year: null }
+
+    const enriched = recs
+      .map(r => {
+        const other        = userMap.get(r.id) ?? { skills: [], looking_for: [], year: null }
+        const sharedSkills = me.skills.filter(s => other.skills.includes(s))
+        const sharedIntent = me.looking_for.filter(l => other.looking_for.includes(l))
+        const bonus        = sharedSkills.length * 2 + sharedIntent.length * 3
+        return {
+          ...r,
+          year:             other.year,
+          sharedSkills,
+          sharedLookingFor: sharedIntent,
+          lookingFor:       other.looking_for,
+          score:            r.score + bonus,
+        }
+      })
+      .sort((a, b) => b.score - a.score)
+
+    res.json(enriched)
   } catch (err) {
     console.error("Recommendations error:", err)
     res.status(500).json({ error: "Internal server error" })
@@ -126,6 +165,36 @@ router.post("/accept", async (req: AuthRequest, res: Response) => {
     res.json({ message: "Connection accepted" })
   } catch (err) {
     console.error("Accept connection error:", err)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// DELETE /api/connections/:userId — remove an accepted connection
+router.delete("/:userId", async (req: AuthRequest, res: Response) => {
+  const myId     = req.userId!
+  const otherId  = req.params.userId
+
+  if (otherId === myId) {
+    res.status(400).json({ error: "Cannot remove yourself" })
+    return
+  }
+
+  try {
+    const result = await db.query(
+      `DELETE FROM connection_requests
+       WHERE ((from_user_id = $1 AND to_user_id = $2) OR (from_user_id = $2 AND to_user_id = $1))
+         AND status = 'accepted'
+       RETURNING id`,
+      [myId, otherId]
+    )
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: "No accepted connection found" })
+      return
+    }
+    await removeConnectionFromNeo4j(myId, otherId)
+    res.json({ message: "Connection removed" })
+  } catch (err) {
+    console.error("Remove connection error:", err)
     res.status(500).json({ error: "Internal server error" })
   }
 })

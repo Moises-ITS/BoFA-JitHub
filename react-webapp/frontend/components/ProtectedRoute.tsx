@@ -14,13 +14,13 @@ export default function ProtectedRoute() {
         alignItems: "center",
         justifyContent: "center",
         height: "100vh",
-        background: "#0f1117",
+        background: "var(--bg-canvas)",
       }}>
         <div style={{
           width: 32,
           height: 32,
-          border: "3px solid #2d2d2d",
-          borderTop: "3px solid #C0392B",
+          border: "3px solid var(--border-default)",
+          borderTop: "3px solid var(--brand-primary)",
           borderRadius: "50%",
           animation: "spin 0.8s linear infinite",
         }} />

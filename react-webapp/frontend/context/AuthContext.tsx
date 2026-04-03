@@ -15,6 +15,9 @@ export interface User {
   companies: string[]
   interests: string[]
   linkedinUrl: string | null
+  skills: string[]
+  looking_for: string[]
+  year: string | null
 }
 
 export interface ProfileUpdate {
@@ -26,6 +29,9 @@ export interface ProfileUpdate {
   companies: string[]
   interests: string[]
   linkedinUrl?: string | null
+  skills: string[]
+  looking_for: string[]
+  year: string | null
 }
 
 export interface SignupData {
@@ -40,6 +46,34 @@ export interface SignupData {
   companies: string[]
   interests: string[]
   linkedinUrl?: string | null
+  skills: string[]
+  looking_for: string[]
+  year: string | null
+}
+
+export interface SyncData {
+  email: string
+  name: string
+  major: string
+  gpa: number | null
+  graduationYear: number
+  bio: string
+  clubs: string[]
+  companies: string[]
+  interests: string[]
+  linkedinUrl?: string | null
+}
+
+interface AuthContextValue {
+  user: User | null
+  token: string | null
+  loading: boolean
+  needsProfileSetup: boolean
+  login: (email: string, password: string) => Promise<void>
+  signup: (data: SignupData) => Promise<void>
+  logout: () => void
+  updateProfile: (data: ProfileUpdate) => Promise<void>
+  syncProfile: (data: SyncData) => Promise<void>
 }
 
 export interface SyncData {
@@ -79,6 +113,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading,           setLoading]   = useState(true)
   const [needsProfileSetup, setNeedsSetup] = useState(false)
   const autoSynced = useRef(false)
+  const getSessionToken = useCallback(
+    (fresh = false) => getToken(fresh ? { skipCache: true } : undefined),
+    [getToken]
+  )
 
   // Resolve Clerk session → our profile (auto-creates on first login, no setup form)
   useEffect(() => {
@@ -88,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       autoSynced.current = false
       return
     }
-    getToken().then(async (t) => {
+    getSessionToken(true).then(async (t) => {
       if (!t) { setLoading(false); return }
       setToken(t)
       try {
@@ -129,14 +167,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isSignedIn) return
     const id = setInterval(async () => {
-      const t = await getToken()
+      const t = await getSessionToken(true)
       if (t) setToken(t)
     }, 50_000)
     return () => clearInterval(id)
   }, [isSignedIn]) // eslint-disable-line
 
   const syncProfile = useCallback(async (data: SyncData) => {
-    const t = await getToken()
+    const t = await getSessionToken(true)
     if (!t) throw new Error("Not authenticated")
     const res = await fetch(`${API}/api/auth/sync`, {
       method: "POST",
@@ -146,10 +184,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await res.json()
     if (!res.ok) throw new Error(result.error ?? "Sync failed")
     setToken(t); setUser(result); setNeedsSetup(false)
-  }, [getToken])
+  }, [getSessionToken])
 
   const updateProfile = useCallback(async (data: ProfileUpdate) => {
-    const t = token ?? await getToken()
+    const t = await getSessionToken(true)
     if (!t) throw new Error("Not authenticated")
     const res = await fetch(`${API}/api/auth/profile`, {
       method: "PUT",
@@ -158,8 +196,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     const updated = await res.json()
     if (!res.ok) throw new Error(updated.error ?? "Update failed")
+    setToken(t)
     setUser(updated)
-  }, [token, getToken])
+  }, [getSessionToken])
 
   function logout() { setLoading(true); signOut(); setUser(null); setToken(null); setNeedsSetup(false) }
   async function login() { throw new Error("Use Clerk SignIn component") }

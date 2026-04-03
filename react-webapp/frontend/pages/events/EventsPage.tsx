@@ -1,11 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
-import { ExternalLink, TrendingUp, Zap } from "lucide-react";
+import { TrendingUp, Zap, Flame } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 import { format } from "date-fns";
 import { HeatmapCalendar } from "./components/heatmap-calendar";
+import {
+  CATEGORY_STYLE, fmt12, ClubAvatar, CLUB_EMOJIS, matchScore, EventDetailModal,
+} from "./components/EventDetailModal";
+import SubmitEventModal, { type CommunityEventInput } from "./components/SubmitEventModal";
+import type { UserProfile, AttendeeInfo } from "./components/EventDetailModal";
 
-const API = import.meta.env.VITE_EDEN_API_URL ?? "http://localhost:8000";
-const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥", "🎨", "🏆", "💻", "🎪", "🌈"];
+const API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
+const AUTH_API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 // ─── Category filters ────────────────────────────────────────────────────────
 const FILTERS = [
@@ -20,59 +26,26 @@ const FILTERS = [
   { label: "Social",               value: "social" },
   { label: "Conference",           value: "conference" },
   { label: "Study Support",        value: "study support" },
+  { label: "Hackathon",            value: "hackathon" },
 ];
 
-// Major → bonus points per category (on top of interest match)
-const MAJOR_AFFINITIES: Record<string, Record<string, number>> = {
-  "Computer Science":        { workshop: 20, recruiting: 18, conference: 14, "info session": 12 },
-  "Information Technology":  { workshop: 20, recruiting: 18, "info session": 14 },
-  "Electrical Engineering":  { workshop: 20, recruiting: 18, "site tour": 14 },
-  "Mechanical Engineering":  { workshop: 18, recruiting: 16, "site tour": 18 },
-  "Civil Engineering":       { "site tour": 20, volunteering: 14, workshop: 12 },
-  "Chemical Engineering":    { workshop: 18, recruiting: 16, "info session": 14 },
-  "Biomedical Engineering":  { workshop: 16, recruiting: 14, volunteering: 16 },
-  "Business":                { recruiting: 22, exposure: 18, conference: 16, "info session": 14 },
-  "Architecture":            { "site tour": 22, exposure: 18, workshop: 12 },
-  "Biology":                 { volunteering: 20, "info session": 18, workshop: 12 },
-  "Applied Mathematics":     { workshop: 20, conference: 16, "study support": 18 },
-  "Physics":                 { workshop: 20, conference: 16, "info session": 14 },
-  "Humanities / Liberal Arts": { social: 18, exposure: 16, volunteering: 14 },
-};
-
-// ─── Profile / match types ────────────────────────────────────────────────────
-interface UserProfile { major: string; interests: string[] }
-
-// Empty profile until DB branch is merged — match scoring wired up but inactive
-const EMPTY_PROFILE: UserProfile = { major: "", interests: [] };
-
-// ─── Match scoring ─────────────────────────────────────────────────────────
-function matchScore(event: any, profile: UserProfile): number {
-  if (!profile.major && profile.interests.length === 0) return -1;
-  let score = 0;
-  if (event.event_category && profile.interests.includes(event.event_category)) score += 60;
-  const affinities = MAJOR_AFFINITIES[profile.major] ?? {};
-  score += affinities[event.event_category] ?? 0;
-  if (event.engagement_score) score += Math.min(10, event.engagement_score * 2);
-  if (event.has_free_food) score += 5;
-  return Math.min(100, Math.round(score));
-}
-
-function MatchBadge({ score }: { score: number }) {
+function MatchSignal({ score }: { score: number }) {
   if (score < 0) return null;
-  const color = score >= 70
-    ? "bg-[#27AE60]/20 text-[#2ECC71]"
-    : score >= 40
-    ? "bg-[#E67E22]/20 text-[#F39C12]"
-    : "bg-white/5 text-[#9CA3AF]";
+  const [color, title] =
+    score >= 70 ? ["var(--status-success)", "Strong match"] :
+    score >= 40 ? ["var(--status-warning)", "Moderate match"] :
+                  ["var(--status-error)", "Weak match"];
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${color}`}>
-      {score}% match
-    </span>
+    <span
+      title={title}
+      style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}` }}
+      className="w-2.5 h-2.5 rounded-full shrink-0 inline-block"
+    />
   );
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
-function useEvents(endpoint: string) {
+function useEvents(endpoint: string, refreshKey = 0) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -81,34 +54,35 @@ function useEvents(endpoint: string) {
       .then((r) => r.json())
       .then((d) => { setData(d.events ?? d); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [endpoint]);
+  }, [endpoint, refreshKey]);
   return { data, loading };
 }
 
-function fmt12(time: string): string {
-  const [h, m] = time.split(":").map(Number);
-  const period = h >= 12 ? "pm" : "am";
-  const hour = h % 12 || 12;
-  return m === 0 ? `${hour}${period}` : `${hour}:${String(m).padStart(2, "0")}${period}`;
-}
+function EventCard({
+  event, index, profile, rsvpStatus, attendees, onRsvpToggle, connectionIds, onSelect,
+}: {
+  event: any; index: number; profile: UserProfile;
+  rsvpStatus?: string | null;
+  attendees?: AttendeeInfo;
+  onRsvpToggle?: (eventId: number) => void;
+  connectionIds?: Set<string>;
+  onSelect?: (event: any) => void;
+}) {
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+  const score = matchScore(event, profile);
+  const catStyle = CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" };
+  const isGoing = rsvpStatus === "going";
+  const friendsGoing = attendees?.preview.filter(p => connectionIds?.has(p.user_id)).length ?? 0;
 
-function ClubAvatar({ clubId, clubName, index }: { clubId: number; clubName: string; index: number }) {
-  const [failed, setFailed] = useState(false);
-  if (!failed)
-    return <img src={`/club_pics/${clubId}.jpg`} alt={clubName} onError={() => setFailed(true)} className="w-10 h-10 rounded-lg object-cover shrink-0" />;
-  return <div className="text-3xl shrink-0 w-10 h-10 flex items-center justify-center">{CLUB_EMOJIS[index % CLUB_EMOJIS.length]}</div>;
-}
-
-function EventCard({ event, index }: { event: any; index: number }) {
-  const score = matchScore(event, EMPTY_PROFILE);
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.04 }}
       whileHover={{ x: 4 }}
-      onClick={() => event.post_url && window.open(event.post_url, "_blank")}
-      className="bg-[#1A1A1A] border border-white/10 rounded-xl p-5 hover:border-white/20 hover:bg-[#222222] transition-all cursor-pointer"
+      onClick={() => onSelect?.(event)}
+      className="rounded-xl p-5 transition-all cursor-pointer"
+      style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
     >
       <div className="flex gap-4">
         <ClubAvatar clubId={event.club_id} clubName={event.club_name} index={index} />
@@ -116,24 +90,148 @@ function EventCard({ event, index }: { event: any; index: number }) {
           <div className="flex items-start justify-between gap-3 mb-1">
             <div>
               <h3 className="font-semibold text-white">{event.event_name}</h3>
-              <p className="text-sm text-[#9CA3AF]">{event.club_name}</p>
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>{event.club_name}</p>
             </div>
-            {event.post_url && <ExternalLink className="w-4 h-4 text-[#9CA3AF] hover:text-white shrink-0 mt-1" />}
-          </div>
-          <div className="flex items-center justify-between mt-3 text-sm">
-            <span className="text-white">
-              {event.date ? format(new Date(event.date + "T00:00:00"), "EEE, MMM d") : "Date TBD"}
-              {event.start_time ? ` at ${fmt12(event.start_time.slice(0, 5))}` : ""}
-            </span>
-            <div className="flex gap-2 items-center">
-              <MatchBadge score={score} />
-              {event.has_free_food && <span className="text-xs px-2 py-0.5 rounded-md bg-[#E67E22]/20 text-[#F39C12]">Free Food</span>}
-              {event.virtual && <span className="text-xs px-2 py-0.5 rounded-md bg-[#9B59B6]/20 text-[#BB8FCE]">Virtual</span>}
+            <div className="flex items-center gap-2 shrink-0 mt-1">
+              <MatchSignal score={score} />
             </div>
           </div>
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {event.event_category && (
+              <span className="text-xs px-2 py-0.5 rounded-md font-medium capitalize"
+                style={{ backgroundColor: catStyle.bg, color: catStyle.color }}>
+                {event.event_category}
+              </span>
+            )}
+            {event.has_free_food && <span className="text-xs px-2 py-0.5 rounded-md" style={{ backgroundColor: "var(--accent-events-soft)", color: "var(--accent-events)" }}>Free Food</span>}
+            {event.virtual && <span className="text-xs px-2 py-0.5 rounded-md" style={{ backgroundColor: "var(--accent-orgs-soft)", color: "var(--accent-orgs)" }}>Virtual</span>}
+          </div>
+          <p className="text-sm text-white mt-2">
+            {event.date ? format(new Date(event.date + "T00:00:00"), "EEE, MMM d") : "Date TBD"}
+            {event.start_time ? ` at ${fmt12(event.start_time.slice(0, 5))}` : ""}
+          </p>
+
+          {friendsGoing > 0 && (
+            <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--status-success)", display: "flex", alignItems: "center", gap: "5px" }}>
+              <span>👥</span>
+              <span>{friendsGoing === 1 ? "1 of your connections is going" : `${friendsGoing} of your connections are going`}</span>
+            </div>
+          )}
+
+          {onRsvpToggle && (
+            <div className="flex items-center gap-3 mt-3" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => onRsvpToggle(event.event_id)}
+                style={{
+                  border: `1px solid ${isGoing ? "rgba(63,199,141,0.28)" : "var(--border-default)"}`,
+                  backgroundColor: isGoing ? "var(--status-success-soft)" : "transparent",
+                  color: isGoing ? "var(--status-success)" : "var(--text-muted)",
+                  borderRadius: "8px", padding: "4px 10px",
+                  fontSize: "12px", fontWeight: 500, cursor: "pointer", transition: "all 0.15s",
+                }}
+              >
+                {isGoing ? "✓ Going" : "Are you going?"}
+              </button>
+              {attendees && attendees.count > 0 && (
+                <div
+                  style={{ position: "relative" }}
+                  onMouseEnter={() => setTooltipVisible(true)}
+                  onMouseLeave={() => setTooltipVisible(false)}
+                >
+                  <span style={{ fontSize: "12px", color: "var(--text-muted)", cursor: "default" }}>
+                    {attendees.count} going
+                  </span>
+                  {tooltipVisible && attendees.preview.length > 0 && (
+                    <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: 0, backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)", borderRadius: "8px", padding: "8px 10px", minWidth: "160px", zIndex: 50, pointerEvents: "none" }}>
+                      {attendees.preview.map((p, idx) => (
+                        <div key={idx} style={{ fontSize: "12px", color: "var(--text-primary)", lineHeight: "1.7" }}>
+                          {p.user_name}
+                          {p.user_major && <span style={{ color: "var(--text-muted)" }}> · {p.user_major}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
+  );
+}
+
+function RankingAvatar({
+  clubId,
+  clubName,
+  index,
+  size = 28,
+}: {
+  clubId?: number;
+  clubName: string;
+  index: number;
+  size?: number;
+}) {
+  const [failed, setFailed] = useState(clubId == null);
+
+  if (clubId != null && !failed) {
+    return (
+      <img
+        src={`/club_pics/${clubId}.jpg`}
+        alt={clubName}
+        onError={() => setFailed(true)}
+        style={{ width: size, height: size }}
+        className="rounded-lg object-cover shrink-0"
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        fontSize: Math.max(14, size * 0.55),
+        backgroundColor: "rgba(255,255,255,0.05)",
+      }}
+      className="rounded-lg flex items-center justify-center shrink-0"
+      aria-label={clubName}
+    >
+      {CLUB_EMOJIS[index % CLUB_EMOJIS.length]}
+    </div>
+  );
+}
+
+function TrendingPodium({ clubs }: { clubs: any[] }) {
+  if (clubs.length < 3) return null;
+  const podium = [
+    { club: clubs[1], rank: 2, height: 58, bg: "rgba(255,255,255,0.08)", border: "var(--border-default)", delay: 0.05 },
+    { club: clubs[0], rank: 1, height: 88, bg: "var(--brand-primary-soft)", border: "var(--brand-primary-soft-strong)", delay: 0 },
+    { club: clubs[2], rank: 3, height: 40, bg: "var(--accent-events-soft)", border: "rgba(226,154,59,0.28)", delay: 0.1 },
+  ];
+
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", padding: "8px 0 0" }}>
+      {podium.map(({ club, rank, height, bg, border, delay }, i) => (
+        <div key={rank} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ textAlign: "center", marginBottom: "8px", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+            <RankingAvatar clubId={club.club_id} clubName={club.club_name} index={i} size={34} />
+            <p style={{ color: "#fff", fontSize: "10px", fontWeight: 600, lineHeight: 1.3, margin: 0, wordBreak: "break-word" as const }}>{club.club_name}</p>
+            <p style={{ color: "var(--text-subtle)", fontSize: "9px", margin: "2px 0 0" }}>❤️ {club.total_likes}</p>
+          </div>
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 160, damping: 18, delay }}
+            style={{ width: "100%", backgroundColor: bg, border: `1px solid ${border}`, borderRadius: "6px 6px 0 0", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <div style={{ paddingTop: "8px", paddingBottom: "8px" }}>
+              <RankingAvatar clubId={club.club_id} clubName={club.club_name} index={i} size={26} />
+            </div>
+          </motion.div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -145,107 +243,342 @@ function SidebarClubRow({ club, index, showScore }: { club: any; index: number; 
       transition={{ delay: index * 0.05 }}
       className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0"
     >
-      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-        index === 0 ? "bg-gradient-to-br from-[#C0392B] to-[#E74C3C] text-white" :
-        index === 1 ? "bg-white/10 text-white" : "bg-white/5 text-[#9CA3AF]"
-      }`}>{index + 1}</div>
+      <RankingAvatar clubId={club.club_id} clubName={club.club_name} index={index} size={28} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-white truncate">{club.club_name}</p>
-        <p className="text-xs text-[#9CA3AF]">{club.event_count} events</p>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>{club.event_count} events</p>
       </div>
       {showScore
-        ? <span className="text-xs text-[#E67E22] shrink-0 font-medium">{club.avg_score}x</span>
-        : <span className="text-xs text-[#9CA3AF] shrink-0">❤️ {club.total_likes}</span>}
+        ? <span className="text-xs shrink-0 font-medium" style={{ color: "var(--accent-events)" }}>{club.avg_score}x</span>
+        : <span className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>❤️ {club.total_likes}</span>}
+    </motion.div>
+  );
+}
+
+function TopEventRow({ event, index, onSelect }: { event: any; index: number; onSelect: (e: any) => void }) {
+  const catStyle = CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" };
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.05 }}
+      onClick={() => onSelect(event)}
+      style={{ display: "flex", alignItems: "flex-start", gap: "10px", paddingTop: "10px", paddingBottom: "10px", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer" }}
+      className="last:border-0 hover:opacity-80 transition-opacity"
+    >
+      <div style={{ marginTop: "1px" }}>
+        <RankingAvatar clubId={event.club_id} clubName={event.club_name} index={index} size={24} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ color: "var(--text-primary)", fontSize: "13px", fontWeight: 500, margin: "0 0 3px", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{event.event_name}</p>
+        <p style={{ color: "var(--text-subtle)", fontSize: "11px", margin: 0 }}>{event.club_name}</p>
+      </div>
+      {event.event_category && (
+        <span style={{ backgroundColor: catStyle.bg, color: catStyle.color, fontSize: "10px", padding: "2px 7px", borderRadius: "4px", flexShrink: 0, marginTop: "2px", textTransform: "capitalize" as const }}>{event.event_category}</span>
+      )}
     </motion.div>
   );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function EventsPage() {
+  const { user, token } = useAuth();
+  const profile: UserProfile = {
+    major: user?.major ?? "",
+    interests: user?.interests ?? [],
+    clubs: user?.clubs ?? [],
+  };
+  const [view, setView] = useState<"upcoming" | "trending" | "top-match">("upcoming");
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [submitOpen, setSubmitOpen] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   const upcomingUrl = activeFilter
     ? `/events/upcoming?limit=50&category=${encodeURIComponent(activeFilter)}`
     : "/events/upcoming?limit=50";
 
-  const { data: upcoming, loading } = useEvents(upcomingUrl);
-  const { data: trending } = useEvents("/events/clubs/trending?limit=5");
-  const { data: topRisers } = useEvents("/events/clubs/top-risers?limit=5");
+  const { data: upcomingRaw, loading: upcomingLoading } = useEvents(upcomingUrl, refreshNonce);
+  const { data: trendingEvents, loading: trendingLoading } = useEvents("/events/trending?limit=50&upcoming_only=true", refreshNonce);
+  const { data: sidebarTrending } = useEvents("/events/clubs/trending?limit=5", refreshNonce);
+  const { data: topRisers } = useEvents("/events/clubs/top-risers?limit=5", refreshNonce);
+  const { data: topEvents } = useEvents("/events/top-risers?limit=5", refreshNonce);
+
+  const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
+  const [attendeeMap, setAttendeeMap] = useState<Record<number, AttendeeInfo>>({});
+  const [connectionIds, setConnectionIds] = useState<Set<string>>(new Set());
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [selectedEventCanRsvp, setSelectedEventCanRsvp] = useState(true);
+  const [modalAttendees, setModalAttendees] = useState<AttendeeInfo | null>(null);
+
+  useEffect(() => {
+    if (!selectedEvent) { setModalAttendees(null); return; }
+    fetch(`${API}/rsvp/${selectedEvent.event_id}/attendees`)
+      .then(r => r.json())
+      .then(setModalAttendees)
+      .catch(() => {});
+  }, [selectedEvent]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetch(`${AUTH_API}/api/connections`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then((data: { id: string }[]) => setConnectionIds(new Set(data.map(c => c.id))))
+      .catch(() => {});
+  }, [user?.id]);
+
+  const displayEvents = useMemo(() => {
+    const today = new Date().toISOString().split("T")[0];
+    if (view === "trending")
+      return trendingEvents.filter((e: any) => !e.date || e.date >= today);
+    if (view === "top-match") {
+      return [...upcomingRaw]
+        .map(e => ({ ...e, _score: matchScore(e, profile) }))
+        .filter(e => e._score >= 0)
+        .sort((a, b) => b._score - a._score);
+    }
+    return upcomingRaw;
+  }, [view, trendingEvents, upcomingRaw, user]);
+  const loading = view === "trending" ? trendingLoading : upcomingLoading;
+
+  useEffect(() => {
+    if (!displayEvents.length) return;
+    displayEvents.forEach((event: any) => {
+      fetch(`${API}/rsvp/${event.event_id}/attendees`)
+        .then(r => r.json())
+        .then((data: AttendeeInfo) => {
+          if (data.count > 0)
+            setAttendeeMap(prev => ({ ...prev, [event.event_id]: data }));
+        })
+        .catch(() => {});
+    });
+  }, [displayEvents]);
+
+  useEffect(() => {
+    if (!displayEvents.length || !user?.id) return;
+    fetch(`${API}/rsvp/batch-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: user.id, event_ids: displayEvents.map((e: any) => e.event_id) }),
+    })
+      .then(r => r.json())
+      .then((data: Record<string, string>) =>
+        setRsvpMap(prev => ({
+          ...prev,
+          ...Object.fromEntries(Object.entries(data).map(([k, v]) => [Number(k), v])),
+        }))
+      )
+      .catch(() => {});
+  }, [displayEvents, user?.id]);
+
+  async function handleRsvpToggle(eventId: number) {
+    if (!user) return;
+    const current = rsvpMap[eventId] ?? null;
+    const newStatus = current === "going" ? null : "going";
+    setRsvpMap(prev => ({ ...prev, [eventId]: newStatus }));
+    try {
+      if (newStatus === null) {
+        await fetch(`${API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, { method: "DELETE" });
+      } else {
+        await fetch(`${API}/rsvp/${eventId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: user.id, user_name: user.name,
+            user_major: user.major ?? null,
+            user_interests: JSON.stringify(user.interests ?? []),
+            user_clubs: JSON.stringify(user.clubs ?? []),
+            status: "going",
+          }),
+        });
+      }
+    } catch {
+      setRsvpMap(prev => ({ ...prev, [eventId]: current }));
+    }
+    fetch(`${API}/rsvp/${eventId}/attendees`)
+      .then(r => r.json())
+      .then((data: AttendeeInfo) => {
+        setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
+        if (selectedEvent?.event_id === eventId) setModalAttendees(data);
+      })
+      .catch(() => {});
+  }
+
+  async function handleCreateEvent(payload: CommunityEventInput) {
+    setSubmitLoading(true);
+    try {
+      const res = await fetch(`${API}/events/community`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.detail ?? body.error ?? "Could not create event");
+      }
+
+      setView("upcoming");
+      setActiveFilter(null);
+      setSelectedEvent(body);
+      setSelectedEventCanRsvp(true);
+      setModalAttendees({ count: 0, preview: [] });
+      setRefreshNonce((prev) => prev + 1);
+      setSubmitOpen(false);
+    } finally {
+      setSubmitLoading(false);
+    }
+  }
+
+  const VIEW_TABS = [
+    { key: "upcoming",  label: "Upcoming" },
+    { key: "trending",  label: "Trending" },
+    { key: "top-match", label: "Top Match" },
+  ] as const;
 
   return (
+    <>
     <div className="max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-semibold mb-1">
-          <span className="bg-gradient-to-r from-[#C0392B] to-[#E67E22] bg-clip-text text-transparent">EDEN</span> — Events
+          <span className="bg-clip-text text-transparent" style={{ backgroundImage: "var(--brand-gradient)" }}>Events</span>
         </h1>
-        <p className="text-[#9CA3AF]">Discover what's happening across 204 NJIT orgs ✨</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Upcoming Events</h2>
-          </div>
 
-          {/* Category filter chips */}
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setActiveFilter(null)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                activeFilter === null
-                  ? "bg-[#C0392B] border-[#C0392B] text-white"
-                  : "bg-white/5 border-white/10 text-[#9CA3AF] hover:border-white/30 hover:text-white"
-              }`}
-            >
-              All
-            </button>
-            {FILTERS.map((f) => (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1" style={{ width: "fit-content", border: "1px solid var(--border-default)" }}>
+              {VIEW_TABS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setView(key)}
+                  className={`text-sm px-4 py-1.5 rounded-md font-medium transition-all ${
+                    view === key
+                      ? "text-white"
+                      : "hover:text-white"
+                  }`}
+                  style={view === key ? { backgroundColor: "var(--brand-primary)" } : { color: "var(--text-muted)" }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              {view === "upcoming" && (
+                <select
+                  value={activeFilter ?? ""}
+                  onChange={(e) => setActiveFilter(e.target.value || null)}
+                  className="text-sm text-white rounded-lg px-3 py-2 focus:outline-none cursor-pointer"
+                  style={{ colorScheme: "dark", backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
+                >
+                  <option value="">All categories</option>
+                  {FILTERS.map((f) => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </select>
+              )}
+
               <button
-                key={f.value}
-                onClick={() => setActiveFilter(activeFilter === f.value ? null : f.value)}
-                className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                  activeFilter === f.value
-                    ? "bg-[#C0392B] border-[#C0392B] text-white"
-                    : "bg-white/5 border-white/10 text-[#9CA3AF] hover:border-white/30 hover:text-white"
-                }`}
+                type="button"
+                onClick={() => setSubmitOpen(true)}
+                className="rounded-lg px-3 py-2 text-xs font-semibold transition-transform hover:-translate-y-0.5 whitespace-nowrap"
+                style={{
+                  border: "1px solid rgba(204, 0, 0, 0.24)",
+                  background: "linear-gradient(135deg, rgba(215, 25, 32, 0.16), rgba(215, 25, 32, 0.08))",
+                  color: "#f7d7d9",
+                }}
               >
-                {f.label}
+                Submit Event
               </button>
-            ))}
+            </div>
           </div>
 
-          {loading && <p className="text-[#9CA3AF] text-sm">Loading...</p>}
-          {!loading && upcoming.length === 0 && (
-            <div className="text-center py-16 text-[#9CA3AF]">
+          {loading && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>}
+          {!loading && displayEvents.length === 0 && (
+            <div className="text-center py-16" style={{ color: "var(--text-muted)" }}>
               <p className="text-4xl mb-3">📅</p>
-              <p className="font-medium text-white">No upcoming events found</p>
-              <p className="text-sm mt-1">{activeFilter ? "Try a different category." : "Check back soon — clubs post new events weekly."}</p>
+              <p className="font-medium text-white">
+                {view === "top-match" ? "Set up your profile to see matches" : "No events found"}
+              </p>
+              <p className="text-sm mt-1">
+                {view === "top-match" ? "Add your major, interests, and clubs in your profile." : activeFilter ? "Try a different category." : "Check back soon."}
+              </p>
             </div>
           )}
-          {upcoming.map((event, i) => (
-            <EventCard key={event.event_id} event={event} index={i} />
+          {displayEvents.map((event, i) => (
+            <EventCard
+              key={event.event_id}
+              event={event}
+              index={i}
+              profile={profile}
+              rsvpStatus={rsvpMap[event.event_id] ?? null}
+              attendees={attendeeMap[event.event_id]}
+              onRsvpToggle={user ? handleRsvpToggle : undefined}
+              connectionIds={connectionIds}
+              onSelect={(e) => { setSelectedEvent(e); setSelectedEventCanRsvp(true); }}
+            />
           ))}
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-5">
+        <div style={{ display: "flex", flexDirection: "column", gap: "40px" }}>
           <HeatmapCalendar />
-          <div className="bg-[#1A1A1A] border border-white/10 rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingUp className="w-4 h-4 text-[#C0392B]" />
+          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
+            <div className="flex items-center gap-2" style={{ marginBottom: "12px" }}>
+              <TrendingUp className="w-4 h-4" style={{ color: "var(--brand-primary)" }} />
               <h3 className="font-semibold text-white text-sm">Trending This Semester</h3>
             </div>
-            {trending.map((c, i) => <SidebarClubRow key={c.club_name} club={c} index={i} />)}
+            <TrendingPodium clubs={sidebarTrending} />
+            {sidebarTrending.length > 3 && (
+              <div style={{ marginTop: "18px", borderTop: "1px solid var(--border-default)", paddingTop: "14px" }}>
+                {sidebarTrending.slice(3).map((c, i) => <SidebarClubRow key={c.club_name} club={c} index={i + 3} />)}
+              </div>
+            )}
           </div>
-          <div className="bg-[#1A1A1A] border border-white/10 rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Zap className="w-4 h-4 text-[#E67E22]" />
+          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
+            <div className="flex items-center gap-2" style={{ marginBottom: "16px" }}>
+              <Zap className="w-4 h-4" style={{ color: "var(--accent-events)" }} />
               <h3 className="font-semibold text-white text-sm">Top Risers This Semester</h3>
             </div>
             {topRisers.map((c, i) => <SidebarClubRow key={c.club_name} club={c} index={i} showScore />)}
           </div>
+          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
+            <div className="flex items-center gap-2" style={{ marginBottom: "4px" }}>
+              <Flame className="w-4 h-4" style={{ color: "var(--status-error)" }} />
+              <h3 className="font-semibold text-white text-sm">Top Events of the Semester</h3>
+            </div>
+            <div>
+              {topEvents.map((event, i) => (
+                <TopEventRow key={event.event_id} event={event} index={i} onSelect={(e) => { setSelectedEvent(e); setSelectedEventCanRsvp(false); }} />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
+
+    {selectedEvent && (
+      <EventDetailModal
+        event={selectedEvent}
+        attendees={modalAttendees}
+        connectionIds={connectionIds}
+        rsvpStatus={rsvpMap[selectedEvent.event_id] ?? null}
+        onRsvpToggle={user && selectedEventCanRsvp ? handleRsvpToggle : undefined}
+        profile={profile}
+        onClose={() => setSelectedEvent(null)}
+        forceReadOnly={!selectedEventCanRsvp}
+      />
+    )}
+
+    <SubmitEventModal
+      open={submitOpen}
+      submitting={submitLoading}
+      categories={FILTERS}
+      onClose={() => setSubmitOpen(false)}
+      onSubmit={handleCreateEvent}
+    />
+    </>
   );
 }

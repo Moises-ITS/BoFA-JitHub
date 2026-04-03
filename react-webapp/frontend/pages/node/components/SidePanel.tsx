@@ -1,8 +1,10 @@
-/// <reference types="vite/client" />
-// ─────────────────────────────────────────────────────────────────────────────
+﻿/// <reference types="vite/client" />
+// 
 // components/SidePanel.tsx
 // Shows node details and connection status (view-only on own node)
 // ─────────────────────────────────────────────────────────────────────────────
+// Shows node details, Add Connection button, and Recommended Connections
+// 
 
 import { useState, useEffect } from "react";
 import type { GraphNode, GraphLink } from "../types/graphNodes";
@@ -13,6 +15,18 @@ import { useAuth } from "../../../context/AuthContext";
 const API = import.meta.env.VITE_API_URL ?? "";
 
 type ConnStatus = "none" | "pending-sent" | "pending-received" | "connected";
+
+const HIDDEN_DETAIL_KEYS = new Set([
+  "id",
+  "graph_node_id",
+  "type",
+  "label",
+  "name",
+  "bio",
+  "interests",
+  "linkedinUrl",
+  "gpa",
+]);
 
 interface SidePanelProps {
   node:         GraphNode | null;
@@ -30,6 +44,12 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
   const [connStatus,    setConnStatus]    = useState<ConnStatus>("none");
   const [connLoading,   setConnLoading]   = useState(false);
   const [connExpanded,  setConnExpanded]  = useState(false);
+  //  Connection status state 
+  const [connStatus,  setConnStatus]  = useState<ConnStatus>("none");
+  const [connLoading, setConnLoading] = useState(false);
+
+  //  Recommendations (shown on own node) 
+  const [recs, setRecs] = useState<Recommendation[]>([]);
 
   // Fetch connection status whenever the selected node changes
   useEffect(() => {
@@ -49,6 +69,16 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
   }, [node?.id, user, isOwnNode]); // eslint-disable-line
 
   // ── Connection actions ────────────────────────────────────────────────────
+  // Fetch recommendations when viewing own node
+  useEffect(() => {
+    if (!isOwnNode || !user) { setRecs([]); return; }
+    fetch(`${API}/api/connections/recommendations`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: Recommendation[]) => setRecs(data))
+      .catch(() => setRecs([]));
+  }, [isOwnNode, user]);
+
+  //  Connection actions 
   const sendRequest = async () => {
     if (!node || !user) return;
     setConnLoading(true);
@@ -64,6 +94,48 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
   };
 
   // ── Early return ──────────────────────────────────────────────────────────
+  const acceptRequest = async () => {
+    if (!node || !user) return;
+    setConnLoading(true);
+    try {
+      const res = await fetch(`${API}/api/connections/accept`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ fromUserId: node.id }),
+      });
+      if (res.ok) setConnStatus("connected");
+    } catch { /* silent */ }
+    setConnLoading(false);
+  };
+
+  const rejectRequest = async () => {
+    if (!node || !user) return;
+    setConnLoading(true);
+    try {
+      await fetch(`${API}/api/connections/reject`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ fromUserId: node.id }),
+      });
+      setConnStatus("none");
+    } catch { /* silent */ }
+    setConnLoading(false);
+  };
+
+  const removeConnection = async () => {
+    if (!node || !user) return;
+    setConnLoading(true);
+    try {
+      const res = await fetch(`${API}/api/connections/${node.id}`, {
+        method:  "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setConnStatus("none");
+    } catch { /* silent */ }
+    setConnLoading(false);
+  };
+
+  //  Early return 
   if (!node) return null;
 
   const connLinks = links.filter(l =>
@@ -83,7 +155,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       {/* Header */}
       <div className="panelHeader">
         <span className="panelHeaderLabel">Node Details</span>
-        <button className="closeBtn" onClick={onClose}>✕</button>
+        <button className="closeBtn" onClick={onClose}>x</button>
       </div>
 
       {/* Avatar + Name */}
@@ -95,6 +167,11 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
           {node.type === "student" && node.details?.bio && (
             <div className="panelBio">{node.details.bio as string}</div>
           )}
+          {node.details?.linkedinUrl && (
+            <a href={node.details.linkedinUrl as string} target="_blank" rel="noopener noreferrer" className="panelLinkedin">
+              LinkedIn {"->"}
+            </a>
+          )}
         </div>
       </div>
 
@@ -103,12 +180,12 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
         {TYPE_EMOJI[node.type]} {node.type.charAt(0).toUpperCase() + node.type.slice(1)}
       </span>
 
-      {/* ── Add Connection ─────────────────────────────────────────────────── */}
+      {/*  Add Connection  */}
       {node.type === "student" && !isOwnNode && (
         <div className="connectSection">
           {connStatus === "none" && (
             <button className="connectBtn" onClick={sendRequest} disabled={connLoading}>
-              {connLoading ? "Sending…" : "+ Add Connection"}
+              {connLoading ? "Sending..." : "+ Add Connection"}
             </button>
           )}
           {connStatus === "pending-sent" && (
@@ -118,7 +195,14 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
             <span className="connectChip connectChip--incoming">Wants to connect with you</span>
           )}
           {connStatus === "connected" && (
-            <span className="connectChip connectChip--connected">✓ Connected</span>
+            <div className="connectIncoming">
+              <span className="connectChip connectChip--connected">Connected</span>
+              <div className="connectActions">
+                <button className="connectBtn connectBtn--decline" onClick={removeConnection} disabled={connLoading}>
+                  {connLoading ? "Removing..." : "Remove"}
+                </button>
+              </div>
+            </div>
           )}
           {node.details?.linkedinUrl && (
             <a href={node.details.linkedinUrl as string} target="_blank" rel="noopener noreferrer" className="panelLinkedin">
@@ -139,10 +223,10 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       <div className="section">
         <h4 className="sectionTitle">Details</h4>
         {Object.entries(node.details || {})
-          .filter(([k]) => !["id","graph_node_id","type","label","name","bio","interests","linkedinUrl"].includes(k))
+          .filter(([k]) => !HIDDEN_DETAIL_KEYS.has(k))
           .map(([k, v]) => (
             <div key={k} className="detailRow">
-              <span className="detailIcon">{DETAIL_ICONS[k] || "•"}</span>
+              <span className="detailIcon">{DETAIL_ICONS[k] || "-"}</span>
               <div>
                 <div className="detailLabel">{k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</div>
                 <div className="detailVal">{v as string}</div>
@@ -178,6 +262,53 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
         )}
       </div>
 
+      {/*  Recommended Connections (own profile only)  */}
+      {isOwnNode && recs.length > 0 && (
+        <div className="section recSection">
+          <h4 className="sectionTitle">Recommended for You</h4>
+          {recs.map(rec => {
+            const reasons: string[] = [];
+            if (rec.sameMajor)          reasons.push(`Same major (${rec.major})`);
+            if (rec.sharedInterests > 0) reasons.push(`${rec.sharedInterests} shared interest${rec.sharedInterests > 1 ? "s" : ""}`);
+            if (rec.sharedClubs > 0)     reasons.push(`${rec.sharedClubs} shared club${rec.sharedClubs > 1 ? "s" : ""}`);
+            return (
+              <div key={rec.id} className="recItem" onClick={() => onSelectNode(rec.id)}>
+                <div className="recAvatar" style={{ background: TYPE_COLOR.student }}>
+                  {rec.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                </div>
+                <div className="recInfo">
+                  <div className="recRowTop">
+                    <div className="recName">{rec.name}</div>
+                    <span className="recScore">Match {Math.min(99, Math.round(rec.score * 11 + 38))}%</span>
+                  </div>
+                  <div className="recReason">{reasons.join(" | ")}</div>
+                  <div className="recActions">
+                    <button
+                      type="button"
+                      className="recBtn recBtn--ghost"
+                      onClick={(e) => { e.stopPropagation(); onSelectNode(rec.id); }}
+                    >
+                      View Profile
+                    </button>
+                    <button
+                      type="button"
+                      className="recBtn recBtn--accent"
+                      onClick={(e) => { e.stopPropagation(); onSelectNode(rec.id); }}
+                    >
+                      Connect
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
     </div>
   );
 }
+
+
+
+

@@ -3,13 +3,13 @@ import { fileURLToPath } from "url"
 import path from "path"
 
 const __filename = fileURLToPath(import.meta.url)
-const __dirname  = path.dirname(__filename)
+const __dirname = path.dirname(__filename)
 
 dotenv.config({ path: path.resolve(__dirname, "../../.env") })
 
 import { db } from "../config/postgres.js"
 
-// SQL is inlined so it works in both dev (src/) and production (dist/) builds
+// SQL is inlined so the runner works in both src/ and dist/ builds.
 const MIGRATIONS: Array<{ name: string; sql: string }> = [
   {
     name: "001_create_users",
@@ -23,10 +23,15 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
         gpa             DECIMAL(3,2),
         graduation_year INTEGER,
         bio             TEXT,
-        clubs           TEXT[]    DEFAULT '{}',
-        companies       TEXT[]    DEFAULT '{}',
-        interests       TEXT[]    DEFAULT '{}',
+        clubs           TEXT[] DEFAULT '{}',
+        companies       TEXT[] DEFAULT '{}',
+        interests       TEXT[] DEFAULT '{}',
         graph_node_id   VARCHAR,
+        linkedin_url    VARCHAR,
+        skills          TEXT[] DEFAULT '{}',
+        looking_for     TEXT[] DEFAULT '{}',
+        year            VARCHAR(20),
+        clerk_id        VARCHAR UNIQUE,
         created_at      TIMESTAMP DEFAULT NOW()
       );
     `,
@@ -45,7 +50,7 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
     `,
   },
   {
-    name: "002_connection_requests",
+    name: "003_connection_requests",
     sql: `
       CREATE TABLE IF NOT EXISTS connection_requests (
         id           SERIAL PRIMARY KEY,
@@ -59,16 +64,54 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
     `,
   },
   {
-    name: "003_interests",
-    sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS interests TEXT[] DEFAULT '{}';`,
+    name: "004_interests",
+    sql: `
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS interests TEXT[] DEFAULT '{}';
+    `,
   },
   {
-    name: "004_graph_node_id",
-    sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS graph_node_id VARCHAR;`,
+    name: "005_graph_node_id",
+    sql: `
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS graph_node_id VARCHAR;
+    `,
   },
   {
-    name: "005_linkedin",
-    sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS linkedin_url VARCHAR;`,
+    name: "006_linkedin",
+    sql: `
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS linkedin_url VARCHAR;
+    `,
+  },
+  {
+    name: "007_skills_looking_for_year",
+    sql: `
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS skills TEXT[] DEFAULT '{}',
+        ADD COLUMN IF NOT EXISTS looking_for TEXT[] DEFAULT '{}',
+        ADD COLUMN IF NOT EXISTS year VARCHAR(20);
+    `,
+  },
+  {
+    name: "008_clerk_id",
+    sql: `
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS clerk_id VARCHAR;
+      CREATE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_id);
+    `,
+  },
+  {
+    name: "009_user_chat_memory",
+    sql: `
+      CREATE TABLE IF NOT EXISTS user_chat_memory (
+        user_id   TEXT NOT NULL,
+        topic     TEXT NOT NULL,
+        weight    INT NOT NULL DEFAULT 1,
+        last_seen TIMESTAMP NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, topic)
+      );
+    `,
   },
   {
     name: "006_password_reset",
@@ -100,13 +143,11 @@ export async function runMigrations() {
       console.log(`Migration ${name} applied`)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
-      // IF NOT EXISTS guards most cases; log and continue for anything else
       console.warn(`Migration ${name} warning: ${message}`)
     }
   }
 }
 
-// Allow running directly: npx tsx src/db/migrate.ts
 if (process.argv[1] && fileURLToPath(import.meta.url).endsWith(path.basename(process.argv[1]))) {
   runMigrations().finally(() => db.end())
 }

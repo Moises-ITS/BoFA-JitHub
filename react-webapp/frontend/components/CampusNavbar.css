@@ -1,22 +1,22 @@
 /* ── Campus Navbar ── */
 .navbar {
-  background: rgba(15, 15, 15, 0.85);
+  background: var(--bg-overlay);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-default);
   padding: 10px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
-  box-shadow: 0 1px 0 rgba(255,255,255,0.04), 0 4px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04), var(--shadow-elevated);
   z-index: 100;
 }
 
 .navLogo {
   display: flex; align-items: center; gap: 10px;
-  font-size: 1.1rem;
-  background: linear-gradient(90deg, #ffffff 0%, #9CA3AF 100%);
+  font-weight: 700; font-size: 1.1rem;
+  background: linear-gradient(90deg, var(--text-primary) 0%, var(--text-muted) 100%);
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -25,9 +25,9 @@
   text-shadow: 0 0 20px rgba(255,107,53,0.3);
 }
 .navTagline {
-  font-size: 0.68rem; color: #9CA3AF; font-weight: 400;
-  -webkit-text-fill-color: #9CA3AF;
-  background: none; letter-spacing: 0.4px;
+  font-size: 0.68rem; color: var(--text-subtle); font-weight: 400;
+  -webkit-text-fill-color: var(--text-subtle);
+  background: none;
 }
 .navRight {
   display: flex;
@@ -53,43 +53,43 @@
   transition: background 0.3s;
   white-space: nowrap;
 }
-.modeBadge.mode-free   { background: rgba(255,255,255,0.08); color: #9CA3AF; border: 1px solid rgba(255,255,255,0.1); }
-.modeBadge.mode-locked { background: rgba(99,179,237,0.15); color: #e0f2fe; border: 1px solid rgba(99,179,237,0.25); }
-.modeBadge.mode-path   { background: rgba(232,121,249,0.15); color: #fae8ff; border: 1px solid rgba(232,121,249,0.25); }
+.modeBadge.mode-free   { background: rgba(255,255,255,0.06); color: var(--text-muted); border: 1px solid var(--border-default); }
+.modeBadge.mode-locked { background: var(--accent-networking-soft); color: var(--accent-networking); border: 1px solid rgba(122,132,240,0.28); }
+.modeBadge.mode-path   { background: var(--accent-orgs-soft); color: var(--accent-orgs); border: 1px solid rgba(186,123,176,0.28); }
 
 .exitModeBtn {
   display: inline-flex; align-items: center; justify-content: center; line-height: 1;
-  background: rgba(192, 57, 43, 0.12); border: 1px solid rgba(192, 57, 43, 0.3); color: #E74C3C;
+  background: var(--brand-primary-soft); border: 1px solid var(--brand-primary-soft-strong); color: var(--brand-primary);
   padding: 6px 14px; border-radius: 999px; font-size: 0.78rem; font-weight: 600;
   cursor: pointer; font-family: inherit; transition: all 0.15s;
   white-space: nowrap;
 }
-.exitModeBtn:hover { background: rgba(192, 57, 43, 0.22); border-color: rgba(192, 57, 43, 0.5); }
+.exitModeBtn:hover { background: var(--brand-primary-soft-strong); border-color: color-mix(in srgb, var(--brand-primary) 50%, transparent); }
 
 .navChip {
   display: inline-flex; align-items: center; justify-content: center; line-height: 1;
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-  padding: 6px 14px; border-radius: 999px; font-size: 0.78rem; font-weight: 500; color: #9CA3AF;
-  white-space: nowrap; transition: background 0.15s, color 0.15s;
+  padding: 6px 14px; border-radius: 999px; font-size: 0.78rem; font-weight: 500; color: var(--text-muted);
+  white-space: nowrap;
 }
 .navChip:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
 
 .profileAvatarBtn {
   width: 32px; height: 32px; border-radius: 50%;
-  background: linear-gradient(135deg, #C0392B, #E67E22);
-  border: 2px solid rgba(192, 57, 43, 0.4);
+  background: var(--brand-gradient);
+  border: 2px solid var(--brand-primary-soft-strong);
   color: #fff; font-weight: 800; font-size: 0.85rem; cursor: pointer;
   font-family: inherit; display: flex; align-items: center; justify-content: center;
   transition: all 0.15s; flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(192, 57, 43, 0.3);
+  box-shadow: var(--shadow-brand);
 }
-.profileAvatarBtn:hover { border-color: rgba(192, 57, 43, 0.7); box-shadow: 0 2px 12px rgba(192, 57, 43, 0.5); transform: translateY(-1px); }
+.profileAvatarBtn:hover { border-color: color-mix(in srgb, var(--brand-primary) 60%, transparent); box-shadow: 0 12px 28px rgba(215, 25, 32, 0.28); transform: translateY(-1px); }
 
 .logoutBtn {
   display: inline-flex; align-items: center; justify-content: center; line-height: 1;
-  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #9CA3AF;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border-default); color: var(--text-muted);
   padding: 6px 16px; border-radius: 999px; font-size: 0.78rem; font-weight: 500;
   cursor: pointer; font-family: inherit; letter-spacing: 0.3px; transition: all 0.15s;
   white-space: nowrap;
 }
-.logoutBtn:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; border-color: rgba(255,255,255,0.2); }
+.logoutBtn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); border-color: var(--border-strong); }

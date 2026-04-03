@@ -76,6 +76,31 @@ interface AuthContextValue {
   syncProfile: (data: SyncData) => Promise<void>
 }
 
+export interface SyncData {
+  email: string
+  name: string
+  major: string
+  gpa: number | null
+  graduationYear: number
+  bio: string
+  clubs: string[]
+  companies: string[]
+  interests: string[]
+  linkedinUrl?: string | null
+}
+
+interface AuthContextValue {
+  user: User | null
+  token: string | null
+  loading: boolean
+  needsProfileSetup: boolean
+  login: (email: string, password: string) => Promise<void>
+  signup: (data: SignupData) => Promise<void>
+  logout: () => void
+  updateProfile: (data: ProfileUpdate) => Promise<void>
+  syncProfile: (data: SyncData) => Promise<void>
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {

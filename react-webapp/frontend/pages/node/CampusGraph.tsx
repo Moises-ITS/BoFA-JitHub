@@ -8,6 +8,18 @@ import { useSearchParams } from "react-router-dom";
 import * as d3 from "d3";
 
 import type { GraphNode, GraphLink, NodeType } from "./types/graphNodes";
+import { TYPE_COLOR }                     from "./constants/maps";
+import { getNodeId }                      from "./utils/getNodeId";
+import { useGraphData }                   from "./hooks/useGraphData";
+import SidePanel                          from "./components/SidePanel";
+import FilterBar                          from "./components/FilterBar";
+import SearchBar                          from "./components/SearchBar";
+import Legend                             from "./components/Legend";
+import TopConnected                       from "./components/TopConnected";
+import HoverCard                          from "./components/HoverCard";
+import { useAuth }                        from "../../context/AuthContext";
+import { NetworkIntro }                   from "../../components/NetworkTransition";
+import CampusNavbar                       from "../../components/CampusNavbar";
 import { TYPE_COLOR } from "./constants/maps";
 import { getNodeId } from "./utils/getNodeId";
 import { useGraphData } from "./hooks/useGraphData";
@@ -181,6 +193,16 @@ export default function CampusGraph() {
   const handleIntroComplete = useCallback(() => setIntroComplete(true), []);
 
   // ── UI State ──────────────────────────────────────────────────────────────
+  const [mode,                setMode]                = useState<GraphMode>("free");
+  const [selectedNode,        setSelectedNode]        = useState<GraphNode | null>(null);
+  const [hiddenTypes,         setHiddenTypes]         = useState<Set<NodeType>>(new Set());
+  const [searchQuery,         setSearchQuery]         = useState("");
+  const [companyQuery,        setCompanyQuery]        = useState("");
+  const [pathNodeIds,         setPathNodeIds]         = useState<string[]>([]);
+  const [pathStatus,          setPathStatus]          = useState<"idle"|"searching"|"found"|"notfound">("idle");
+  const [visibleCount,        setVisibleCount]        = useState(0);
+  const [hoverCard,           setHoverCard]           = useState<{ node: GraphNode; x: number; y: number } | null>(null);
+  const [d3Ready,             setD3Ready]             = useState(false);
   const [mode, setMode] = useState<GraphMode>("free");
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [hiddenTypes, setHiddenTypes] = useState<Set<NodeType>>(new Set());
@@ -248,6 +270,13 @@ export default function CampusGraph() {
   useEffect(() => { setEdgeExplain(null); }, [mode, selectedNode?.id, pathNodeIds.length]);
 
   // ── Stable-ref callbacks (avoids D3 setup re-running on mode changes) ─────
+  const modeRef          = useRef<GraphMode>("free");
+  const selectedIdRef    = useRef<string | null>(null);
+  const nodesRef         = useRef(nodes);
+  const linksRef         = useRef(links);
+  useEffect(() => { modeRef.current       = mode;   }, [mode]);
+  useEffect(() => { nodesRef.current      = nodes;  }, [nodes]);
+  useEffect(() => { linksRef.current      = links;  }, [links]);
   const modeRef = useRef<GraphMode>("free");
   const selectedIdRef = useRef<string | null>(null);
   const nodesRef = useRef(nodes);
@@ -1535,6 +1564,8 @@ export default function CampusGraph() {
 
     nodeSelRef.current = nodeSel;
     linkSelRef.current = linkSel as d3.Selection<SVGPathElement, GraphLink, SVGGElement, unknown>;
+    simRef.current     = sim;
+    setD3Ready(true);
     simRef.current = sim;
     pulseLayerRef.current = pulseLayer;
     rippleLayerRef.current = rippleLayer;
@@ -2308,6 +2339,12 @@ export default function CampusGraph() {
       {/* Intro animation overlay — renders on top while graph loads underneath */}
       {!introComplete && <NetworkIntro onComplete={handleIntroComplete} />}
 
+      {/* Navbar */}
+      <CampusNavbar
+        mode={mode}
+        userConnCount={userConnCount}
+        onExitMode={deselectAll}
+      />
       <div className="graphHeader">
         <div className="graphHeaderCopy">
           <span className="graphEyebrow">Campus Connections</span>
@@ -2418,6 +2455,8 @@ export default function CampusGraph() {
 
       {/* Main */}
       <div className="main">
+        <div className="bgGlow" />
+        <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} />
         <div className="bgGlow" ref={bgGlowRef} />
         <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} className={viewMode === "3d" ? "graph2DHidden" : "graph2DVisible"} />
         <div className={`graph3DWrap${viewMode === "3d" ? " graph3DWrap--active" : ""}`}>
@@ -2459,6 +2498,13 @@ export default function CampusGraph() {
           nodes={nodes}
           links={links}
           onClose={deselectAll}
+          onSelectNode={id => { const n = nodes.find(x => x.id === id); if (n) selectNodeFn(n); }}
+        />
+        <Legend />
+        <TopConnected
+          nodes={nodes}
+          links={links}
+          currentUserId={user?.id ?? ""}
           onSelectNode={id => { const n = nodes.find(x => x.id === id); if (n) selectNodeFn(n); }}
         />
         {!walkthroughLayout2D && (

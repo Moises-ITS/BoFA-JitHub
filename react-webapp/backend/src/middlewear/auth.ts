@@ -15,7 +15,6 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
     res.status(401).json({ error: "Missing or invalid token" })
     return
   }
-
   const token = authHeader.slice(7)
 
   try {

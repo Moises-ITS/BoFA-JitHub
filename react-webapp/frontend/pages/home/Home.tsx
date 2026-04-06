@@ -13,44 +13,6 @@ import type { AttendeeInfo, UserProfile } from "../events/components/EventDetail
 
 const EVENTS_API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
 const AUTH_API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
-const HOME_CACHE_KEY = "jithub.home-overview.v1";
-const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
-
-type HomeOverviewCache = {
-  fetchedAt: number;
-  topEvents: any[];
-  trendingClubs: any[];
-};
-
-function readHomeOverviewCache(): HomeOverviewCache | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(HOME_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as HomeOverviewCache;
-    if (!parsed || !Array.isArray(parsed.topEvents) || !Array.isArray(parsed.trendingClubs) || typeof parsed.fetchedAt !== "number") {
-      return null;
-    }
-    if (Date.now() - parsed.fetchedAt > HOME_CACHE_TTL_MS) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function writeHomeOverviewCache(payload: Omit<HomeOverviewCache, "fetchedAt">) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(HOME_CACHE_KEY, JSON.stringify({
-      ...payload,
-      fetchedAt: Date.now(),
-    }));
-  } catch {
-    /* ignore storage issues */
-  }
-}
 
 function ClubAvatar({ clubId, clubName, index }: { clubId: number; clubName: string; index: number }) {
   const [failed, setFailed] = useState(false);
@@ -110,32 +72,19 @@ export default function Home() {
   const { user } = useAuth();
   const firstName = user?.name?.split(" ")[0] ?? "";
   const topOpportunity = mockOpportunities[0];
-  const cachedOverview = readHomeOverviewCache();
 
   const profile: UserProfile = {
     major: user?.major ?? "",
     interests: user?.interests ?? [],
     clubs: user?.clubs ?? [],
-    skills: user?.skills ?? [],
-    looking_for: user?.looking_for ?? [],
-    year: user?.year ?? null,
   };
 
-  const [topEvents, setTopEvents] = useState<any[]>(cachedOverview?.topEvents ?? []);
-  const [trendingClubs, setTrendingClubs] = useState<any[]>(cachedOverview?.trendingClubs ?? []);
-  const [topEventsLoading, setTopEventsLoading] = useState(!cachedOverview?.topEvents?.length);
-  const [trendingClubsLoading, setTrendingClubsLoading] = useState(!cachedOverview?.trendingClubs?.length);
-  const [topEventsError, setTopEventsError] = useState<string | null>(null);
-  const [trendingClubsError, setTrendingClubsError] = useState<string | null>(null);
+  const [topEvents, setTopEvents] = useState<any[]>([]);
+  const [trendingClubs, setTrendingClubs] = useState<any[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [modalAttendees, setModalAttendees] = useState<AttendeeInfo | null>(null);
-  const [attendeeMap, setAttendeeMap] = useState<Record<number, AttendeeInfo>>({});
   const [connectionIds, setConnectionIds] = useState<Set<string>>(new Set());
   const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
-  const selectedEventId = selectedEvent?.event_id ?? null;
-  const selectedEventAttendees = selectedEventId ? attendeeMap[selectedEventId] : null;
-  const topEventIds = topEvents.map((event: any) => event.event_id);
-  const topEventIdsKey = topEventIds.join(",");
 
   const moduleCards = [
     {
@@ -168,152 +117,74 @@ export default function Home() {
   ];
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadHomeOverview() {
-      setTopEventsError(null);
-      setTrendingClubsError(null);
-      setTopEventsLoading(topEvents.length === 0);
-      setTrendingClubsLoading(trendingClubs.length === 0);
-
-      const [eventsResult, clubsResult] = await Promise.allSettled([
-        fetch(`${EVENTS_API}/events/upcoming?limit=3`).then(async (response) => {
-          if (!response.ok) throw new Error("Could not load upcoming events");
-          const body = await response.json();
-          return body.events ?? body;
-        }),
-        fetch(`${EVENTS_API}/events/clubs/trending?limit=5`).then(async (response) => {
-          if (!response.ok) throw new Error("Could not load trending clubs");
-          return await response.json();
-        }),
-      ]);
-
-      if (cancelled) return;
-
-      let nextTopEvents = topEvents;
-      let nextTrendingClubs = trendingClubs;
-
-      if (eventsResult.status === "fulfilled") {
-        nextTopEvents = eventsResult.value;
-        setTopEvents(eventsResult.value);
-      } else {
-        setTopEventsError("Could not load upcoming events right now.");
-      }
-      setTopEventsLoading(false);
-
-      if (clubsResult.status === "fulfilled") {
-        nextTrendingClubs = clubsResult.value;
-        setTrendingClubs(clubsResult.value);
-      } else {
-        setTrendingClubsError("Could not load trending clubs right now.");
-      }
-      setTrendingClubsLoading(false);
-
-      if (eventsResult.status === "fulfilled" || clubsResult.status === "fulfilled") {
-        writeHomeOverviewCache({
-          topEvents: nextTopEvents,
-          trendingClubs: nextTrendingClubs,
-        });
-      }
-    }
-
-    loadHomeOverview();
-
-    return () => {
-      cancelled = true;
-    };
+    fetch(`${EVENTS_API}/events/upcoming?limit=3`)
+      .then((r) => r.json())
+      .then((d) => setTopEvents(d.events ?? d))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!selectedEventId) return;
-
-    let cancelled = false;
-
-    fetch(`${EVENTS_API}/events/${selectedEventId}`)
-      .then((response) => response.json())
-      .then((data) => {
-        if (cancelled || data?.error) return;
-        setSelectedEvent((prev: any) => (
-          prev?.event_id === selectedEventId
-            ? { ...prev, ...data }
-            : prev
-        ));
-      })
+    fetch(`${EVENTS_API}/events/clubs/trending?limit=5`)
+      .then((r) => r.json())
+      .then(setTrendingClubs)
       .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedEventId]);
+  }, []);
 
   useEffect(() => {
-    if (!selectedEventId) {
-      setModalAttendees(null);
-      return;
-    }
-
-    if (selectedEventAttendees) {
-      setModalAttendees(selectedEventAttendees);
-      return;
-    }
+    if (!selectedEvent) { setModalAttendees(null); return; }
 
     let active = true;
 
-    fetch(`${EVENTS_API}/rsvp/${selectedEventId}/attendees`)
+    fetch(`${EVENTS_API}/rsvp/${selectedEvent.event_id}/attendees`)
       .then(r => r.json())
       .then((data: AttendeeInfo) => {
-        if (!active) return;
-        setAttendeeMap((prev) => ({ ...prev, [selectedEventId]: data }));
-        setModalAttendees(data);
+        if (active) setModalAttendees(data);
       })
       .catch(() => {});
 
+    if (user?.id) {
+      fetch(`${EVENTS_API}/rsvp/batch-status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id, event_ids: [selectedEvent.event_id] }),
+      })
+        .then(r => r.json())
+        .then((data: Record<string, string>) => {
+          if (!active) return;
+          const nextStatus = data[String(selectedEvent.event_id)] ?? null;
+          setRsvpMap(prev => ({ ...prev, [selectedEvent.event_id]: nextStatus }));
+        })
+        .catch(() => {});
+    }
+
     return () => { active = false; };
-  }, [selectedEventAttendees, selectedEventId]);
+  }, [selectedEvent, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
-
-    let cancelled = false;
-
     fetch(`${AUTH_API}/api/connections`, { credentials: "include" })
       .then(r => r.json())
-      .then((data: { id: string }[]) => {
-        if (cancelled) return;
-        setConnectionIds(new Set(data.map((connection) => connection.id)));
-      })
+      .then((data: { id: string }[]) => setConnectionIds(new Set(data.map(c => c.id))))
       .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
   }, [user?.id]);
 
   // Batch-fetch RSVP status for visible events
   useEffect(() => {
-    if (!topEventIds.length || !user?.id) return;
-
-    let cancelled = false;
-
+    if (!topEvents.length || !user?.id) return;
     fetch(`${EVENTS_API}/rsvp/batch-status`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: user.id, event_ids: topEventIds }),
+      body: JSON.stringify({ user_id: user.id, event_ids: topEvents.map((e: any) => e.event_id) }),
     })
       .then(r => r.json())
-      .then((data: Record<string, string>) => {
-        if (cancelled) return;
+      .then((data: Record<string, string>) =>
         setRsvpMap(prev => ({
           ...prev,
           ...Object.fromEntries(Object.entries(data).map(([k, v]) => [Number(k), v])),
-        }));
-      })
+        }))
+      )
       .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [topEventIds, topEventIdsKey, user?.id]);
+  }, [topEvents, user?.id]);
 
   async function handleRsvpToggle(eventId: number) {
     if (!user) return;
@@ -343,7 +214,6 @@ export default function Home() {
     fetch(`${EVENTS_API}/rsvp/${eventId}/attendees`)
       .then(r => r.json())
       .then((data: AttendeeInfo) => {
-        setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
         if (selectedEvent?.event_id === eventId) setModalAttendees(data);
       })
       .catch(() => {});
@@ -367,7 +237,7 @@ export default function Home() {
             key={module.path}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.03 }}
+            transition={{ delay: index * 0.1 }}
             whileHover={{ y: -5 }}
             className="h-full"
           >
@@ -429,36 +299,12 @@ export default function Home() {
           </Link>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {topEventsLoading && topEvents.length === 0 && Array.from({ length: 3 }).map((_, index) => (
-            <div
-              key={`event-skeleton-${index}`}
-              className="rounded-xl p-5 animate-pulse"
-              style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
-            >
-              <div className="w-10 h-10 rounded-lg mb-3" style={{ backgroundColor: "rgba(255,255,255,0.08)" }} />
-              <div className="h-4 rounded mb-2" style={{ backgroundColor: "rgba(255,255,255,0.08)" }} />
-              <div className="h-3 rounded mb-4 w-2/3" style={{ backgroundColor: "rgba(255,255,255,0.06)" }} />
-              <div className="flex gap-2 mb-3">
-                <div className="h-6 w-20 rounded-md" style={{ backgroundColor: "rgba(255,255,255,0.06)" }} />
-                <div className="h-6 w-16 rounded-md" style={{ backgroundColor: "rgba(255,255,255,0.05)" }} />
-              </div>
-              <div className="h-3 rounded w-1/2" style={{ backgroundColor: "rgba(255,255,255,0.05)" }} />
-            </div>
-          ))}
-          {!topEventsLoading && topEvents.length === 0 && (
-            <div
-              className="md:col-span-3 rounded-xl p-5"
-              style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", color: "var(--text-muted)" }}
-            >
-              {topEventsError ?? "No upcoming events right now."}
-            </div>
-          )}
           {topEvents.map((event, index) => (
             <motion.div
               key={event.event_id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 + index * 0.04 }}
+              transition={{ delay: 0.2 + index * 0.1 }}
               whileHover={{ y: -4 }}
               onClick={() => setSelectedEvent(event)}
               className="rounded-xl p-5 transition-all cursor-pointer"
@@ -507,7 +353,7 @@ export default function Home() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 }}
+            transition={{ delay: 0.4 }}
             className="rounded-xl p-6"
             style={{ background: "var(--surface-gradient)", border: "1px solid var(--border-default)" }}
           >
@@ -552,26 +398,11 @@ export default function Home() {
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.12 }}
+            transition={{ delay: 0.5 }}
             className="rounded-xl p-4"
             style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
           >
             <div className="space-y-3">
-              {trendingClubsLoading && trendingClubs.length === 0 && Array.from({ length: 5 }).map((_, index) => (
-                <div key={`club-skeleton-${index}`} className="flex items-center gap-3 animate-pulse">
-                  <div className="w-8 h-8 rounded-lg" style={{ backgroundColor: "rgba(255,255,255,0.08)" }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="h-3 rounded mb-2 w-2/3" style={{ backgroundColor: "rgba(255,255,255,0.08)" }} />
-                    <div className="h-2.5 rounded w-1/3" style={{ backgroundColor: "rgba(255,255,255,0.05)" }} />
-                  </div>
-                  <div className="h-3 w-8 rounded" style={{ backgroundColor: "rgba(255,255,255,0.05)" }} />
-                </div>
-              ))}
-              {!trendingClubsLoading && trendingClubs.length === 0 && (
-                <div className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  {trendingClubsError ?? "No trending clubs right now."}
-                </div>
-              )}
               {trendingClubs.map((club, index) => (
                 <div key={club.club_name} className="flex items-center gap-3 group cursor-pointer">
                   <TrendingClubAvatar clubId={club.club_id} clubName={club.club_name} index={index} />

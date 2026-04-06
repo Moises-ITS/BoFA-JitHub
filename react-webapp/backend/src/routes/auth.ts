@@ -5,6 +5,7 @@ import { db } from "../config/postgres"
 import { requireAuth, AuthRequest } from "../middlewear/auth"
 import { createStudentNode, updateStudentNode } from "../services/graphService"
 import { verifyClerkSessionToken } from "../utils/clerkToken"
+import { syncRateLimiter, profileUpdateRateLimiter } from "../middlewear/authRateLimit"
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
@@ -72,9 +73,41 @@ function toNullableInt(value: unknown): number | null {
   return Number.isNaN(parsed) ? null : parsed
 }
 
+const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+
+async function verifyClerkToken(token: string) {
+  const jwtKey = process.env.CLERK_JWT_PUBLIC_KEY
+  if (jwtKey) {
+    return verifyToken(token, { jwtKey })
+  }
+  return clerk.verifyToken(token)
+}
+
+const SELECT_PROFILE = `
+  SELECT id, name, email, major, gpa, graduation_year, bio,
+         clubs, companies, interests, linkedin_url
+  FROM users WHERE id = $1
+`
+
+function formatUser(u: Record<string, unknown>) {
+  return {
+    id:             u.id,
+    name:           u.name,
+    email:          u.email,
+    major:          u.major,
+    gpa:            u.gpa,
+    graduationYear: u.graduation_year,
+    bio:            u.bio,
+    clubs:          u.clubs,
+    companies:      u.companies,
+    interests:      u.interests,
+    linkedinUrl:    u.linkedin_url,
+  }
+}
+
 const router = Router()
 
-router.post("/sync", async (req: Request, res: Response) => {
+router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
   const token = req.headers.authorization?.slice(7)
   if (!token) {
     res.status(401).json({ error: "Unauthorized" })
@@ -136,6 +169,22 @@ router.post("/sync", async (req: Request, res: Response) => {
       return
     }
 
+    // Legacy user reclaim — same email, no clerk_id yet (no new fields needed)
+    const legacy = await db.query(
+      "SELECT id FROM users WHERE email = $1 AND clerk_id IS NULL", [clerkEmail]
+    )
+    if (legacy.rows.length) {
+      await db.query("UPDATE users SET clerk_id = $1 WHERE id = $2", [clerkId, legacy.rows[0].id])
+      const u = await db.query(SELECT_PROFILE, [legacy.rows[0].id])
+      res.json(formatUser(u.rows[0])); return
+    }
+
+    // Brand-new user — name is required; major/year can be filled in later
+    if (!name) {
+      res.status(400).json({ error: "name is required" }); return
+    }
+
+    // Brand-new user
     const id = uuidv4()
     const majorValue = typeof major === "string" ? major.trim() : ""
     const gpaValue = toNullableNumber(gpa)
@@ -238,7 +287,7 @@ router.get("/interests", async (_req: Request, res: Response) => {
   }
 })
 
-router.put("/profile", requireAuth, async (req: AuthRequest, res: Response) => {
+router.put("/profile", requireAuth, profileUpdateRateLimiter, async (req: AuthRequest, res: Response) => {
   const { gpa, major, graduationYear, bio, clubs, companies, interests, linkedinUrl, skills, looking_for, year } = req.body
 
   if (!major || !graduationYear) {

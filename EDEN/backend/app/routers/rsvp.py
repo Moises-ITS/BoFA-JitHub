@@ -23,6 +23,48 @@ class BatchStatusBody(BaseModel):
     event_ids: List[int]
 
 
+@router.get("/user/{user_id}")
+def get_user_rsvps(user_id: str, db: Session = Depends(get_db)):
+    """Return every event the user is currently RSVP'd to."""
+    rows = (
+        db.query(
+            models.EventRSVP.event_id,
+            models.EventRSVP.status,
+            models.EventRSVP.rsvp_time,
+            models.Event.event_name,
+            models.Event.date,
+            models.Event.start_time,
+            models.Event.event_category,
+            models.Event.virtual,
+            models.Event.has_free_food,
+            models.Club.name.label("club_name"),
+        )
+        .join(models.Event, models.Event.event_id == models.EventRSVP.event_id)
+        .outerjoin(models.Club, models.Club.club_id == models.Event.club_id)
+        .filter(
+            models.EventRSVP.user_id == user_id,
+            models.EventRSVP.status == "going",
+        )
+        .all()
+    )
+
+    return [
+        {
+            "event_id": row.event_id,
+            "status": row.status,
+            "rsvp_time": row.rsvp_time.isoformat() if row.rsvp_time else None,
+            "event_name": row.event_name,
+            "date": row.date.isoformat() if row.date else None,
+            "start_time": row.start_time.strftime("%H:%M:%S") if row.start_time else None,
+            "event_category": row.event_category,
+            "virtual": row.virtual,
+            "has_free_food": row.has_free_food,
+            "club_name": row.club_name or "NJIT",
+        }
+        for row in rows
+    ]
+
+
 @router.post("/{event_id}")
 def upsert_rsvp(event_id: int, body: RSVPBody, db: Session = Depends(get_db)):
     """Create or update an RSVP for an event."""

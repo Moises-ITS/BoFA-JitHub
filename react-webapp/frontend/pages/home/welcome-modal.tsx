@@ -18,12 +18,12 @@ export function WelcomeModal({ isOpen, onClose }: WelcomeModalProps) {
     },
     {
       title: "Discover Events",
-      description: "Find events tailored to your interests with AI-powered matching. Never miss recruiting events, free food, or networking opportunities.",
+      description: "Find events relevant to campus life and your interests. Never miss recruiting events, free food, or networking opportunities.",
       image: "📅",
     },
     {
       title: "Find Opportunities",
-      description: "Access internships, scholarships, jobs, and research positions. Get personalized match scores and deadline alerts.",
+      description: "Access internships, scholarships, jobs, and research positions with clear details and deadline alerts.",
       image: "💼",
     },
     {
@@ -51,16 +51,17 @@ export function WelcomeModal({ isOpen, onClose }: WelcomeModalProps) {
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-[#1A1A1A] border border-white/10 rounded-2xl p-8 max-w-lg w-full relative overflow-hidden"
+              className="rounded-2xl p-8 max-w-lg w-full relative overflow-hidden"
+              style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
             >
               {/* Gradient background */}
-              <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-br from-[#C0392B]/20 to-[#E67E22]/20 blur-3xl" />
+              <div className="absolute top-0 left-0 right-0 h-32 blur-3xl" style={{ background: "linear-gradient(135deg, rgba(215,25,32,0.18), rgba(186,123,176,0.18))" }} />
 
               <button
                 onClick={onClose}
                 className="absolute top-4 right-4 p-2 hover:bg-white/5 rounded-lg transition-colors z-10"
               >
-                <X className="w-5 h-5 text-[#9CA3AF]" />
+                <X className="w-5 h-5" style={{ color: "var(--text-muted)" }} />
               </button>
 
               <div className="relative z-10">
@@ -69,7 +70,7 @@ export function WelcomeModal({ isOpen, onClose }: WelcomeModalProps) {
                   <h2 className="text-2xl font-semibold text-white mb-2">
                     {currentStep.title}
                   </h2>
-                  <p className="text-[#9CA3AF]">{currentStep.description}</p>
+                  <p style={{ color: "var(--text-muted)" }}>{currentStep.description}</p>
                 </div>
 
                 {/* Progress dots */}
@@ -79,9 +80,10 @@ export function WelcomeModal({ isOpen, onClose }: WelcomeModalProps) {
                       key={idx}
                       className={`h-2 rounded-full transition-all ${
                         idx + 1 === step
-                          ? "w-8 bg-gradient-to-r from-[#C0392B] to-[#E67E22]"
+                          ? "w-8"
                           : "w-2 bg-white/20"
                       }`}
+                      style={idx + 1 === step ? { background: "var(--brand-gradient)" } : undefined}
                     />
                   ))}
                 </div>
@@ -97,7 +99,8 @@ export function WelcomeModal({ isOpen, onClose }: WelcomeModalProps) {
                       </button>
                       <button
                         onClick={() => setStep(step + 1)}
-                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#C0392B] to-[#E74C3C] text-white rounded-lg font-medium hover:shadow-lg hover:shadow-[#C0392B]/30 transition-all"
+                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 text-white rounded-lg font-medium transition-all"
+                        style={{ background: "var(--brand-gradient)", boxShadow: "var(--shadow-brand)" }}
                       >
                         Next
                         <ChevronRight className="w-4 h-4" />
@@ -106,7 +109,8 @@ export function WelcomeModal({ isOpen, onClose }: WelcomeModalProps) {
                   ) : (
                     <button
                       onClick={onClose}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#C0392B] to-[#E74C3C] text-white rounded-lg font-medium hover:shadow-lg hover:shadow-[#C0392B]/30 transition-all"
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 text-white rounded-lg font-medium transition-all"
+                      style={{ background: "var(--brand-gradient)", boxShadow: "var(--shadow-brand)" }}
                     >
                       <Sparkles className="w-4 h-4" />
                       Get Started

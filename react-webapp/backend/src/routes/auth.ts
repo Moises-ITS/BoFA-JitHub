@@ -1,151 +1,279 @@
 import { Router, Request, Response } from "express"
-import bcrypt from "bcryptjs"
-import jwt from "jsonwebtoken"
 import { v4 as uuidv4 } from "uuid"
+import { createClerkClient } from "@clerk/backend"
 import { db } from "../config/postgres"
 import { requireAuth, AuthRequest } from "../middlewear/auth"
 import { createStudentNode, updateStudentNode } from "../services/graphService"
+import { verifyClerkSessionToken } from "../utils/clerkToken"
+import { syncRateLimiter, profileUpdateRateLimiter } from "../middlewear/authRateLimit"
+
+const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+
+const SELECT_PROFILE = `
+  SELECT id, name, email, major, gpa, graduation_year, bio,
+         clubs, companies, interests, linkedin_url, skills, looking_for, year
+  FROM users WHERE id = $1
+`
+
+const SELECT_PUBLIC_PROFILE = `
+  SELECT id, name, major, graduation_year, bio,
+         clubs, companies, interests, linkedin_url, skills, looking_for, year
+  FROM users WHERE id = $1
+`
+
+function formatUser(user: Record<string, unknown>) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    major: user.major,
+    gpa: user.gpa,
+    graduationYear: user.graduation_year,
+    bio: user.bio,
+    clubs: (user.clubs as string[] | null) ?? [],
+    companies: (user.companies as string[] | null) ?? [],
+    interests: (user.interests as string[] | null) ?? [],
+    linkedinUrl: user.linkedin_url,
+    skills: (user.skills as string[] | null) ?? [],
+    looking_for: (user.looking_for as string[] | null) ?? [],
+    year: (user.year as string | null) ?? null,
+  }
+}
+
+function formatPublicProfile(user: Record<string, unknown>) {
+  return {
+    id: user.id,
+    name: user.name,
+    major: user.major,
+    graduationYear: user.graduation_year,
+    bio: user.bio,
+    clubs: (user.clubs as string[] | null) ?? [],
+    companies: (user.companies as string[] | null) ?? [],
+    interests: (user.interests as string[] | null) ?? [],
+    linkedinUrl: user.linkedin_url,
+    skills: (user.skills as string[] | null) ?? [],
+    looking_for: (user.looking_for as string[] | null) ?? [],
+    year: (user.year as string | null) ?? null,
+  }
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+}
+
+function toNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function toNullableInt(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null
+  const parsed = Number.parseInt(String(value), 10)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
+
+async function verifyClerkToken(token: string) {
+  const jwtKey = process.env.CLERK_JWT_PUBLIC_KEY
+  if (jwtKey) {
+    return verifyToken(token, { jwtKey })
+  }
+  return clerk.verifyToken(token)
+}
+
+const SELECT_PROFILE = `
+  SELECT id, name, email, major, gpa, graduation_year, bio,
+         clubs, companies, interests, linkedin_url
+  FROM users WHERE id = $1
+`
+
+function formatUser(u: Record<string, unknown>) {
+  return {
+    id:             u.id,
+    name:           u.name,
+    email:          u.email,
+    major:          u.major,
+    gpa:            u.gpa,
+    graduationYear: u.graduation_year,
+    bio:            u.bio,
+    clubs:          u.clubs,
+    companies:      u.companies,
+    interests:      u.interests,
+    linkedinUrl:    u.linkedin_url,
+  }
+}
 
 const router = Router()
 
-// POST /api/auth/signup
-router.post("/signup", async (req: Request, res: Response) => {
-  const { name, email, password, major, gpa, graduationYear, bio, clubs, companies, interests, linkedinUrl } = req.body
-
-  if (!name || !email || !password || !major || !graduationYear) {
-    res.status(400).json({ error: "name, email, password, major, and graduationYear are required" })
+router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
+  const token = req.headers.authorization?.slice(7)
+  if (!token) {
+    res.status(401).json({ error: "Unauthorized" })
     return
   }
 
-  if (!email.toLowerCase().endsWith("@njit.edu")) {
-    res.status(400).json({ error: "Only @njit.edu email addresses are allowed" })
+  let clerkId: string
+  try {
+    const payload = await verifyClerkSessionToken(token)
+    clerkId = payload.sub
+  } catch (error) {
+    console.error("Clerk token verification failed in /api/auth/sync:", error)
+    res.status(401).json({ error: "Invalid token" })
+    return
+  }
+
+  const {
+    email: clerkEmail,
+    name,
+    major,
+    gpa,
+    graduationYear,
+    bio,
+    clubs,
+    companies,
+    interests,
+    linkedinUrl,
+    skills,
+    looking_for,
+    year,
+  } = req.body
+
+  if (!clerkEmail || !String(clerkEmail).toLowerCase().endsWith("@njit.edu")) {
+    res.status(400).json({ error: "Only @njit.edu addresses are allowed" })
     return
   }
 
   try {
-    const existing = await db.query("SELECT id FROM users WHERE email = $1", [email])
+    const existing = await db.query("SELECT id FROM users WHERE clerk_id = $1", [clerkId])
     if (existing.rows.length > 0) {
-      res.status(409).json({ error: "An account with that email already exists" })
+      const user = await db.query(SELECT_PROFILE, [existing.rows[0].id])
+      res.json(formatUser(user.rows[0]))
       return
     }
 
+    const legacy = await db.query(
+      "SELECT id FROM users WHERE email = $1 AND clerk_id IS NULL",
+      [clerkEmail]
+    )
+    if (legacy.rows.length > 0) {
+      await db.query("UPDATE users SET clerk_id = $1 WHERE id = $2", [clerkId, legacy.rows[0].id])
+      const user = await db.query(SELECT_PROFILE, [legacy.rows[0].id])
+      res.json(formatUser(user.rows[0]))
+      return
+    }
+
+    if (!name) {
+      res.status(400).json({ error: "name is required" })
+      return
+    }
+
+    // Legacy user reclaim — same email, no clerk_id yet (no new fields needed)
+    const legacy = await db.query(
+      "SELECT id FROM users WHERE email = $1 AND clerk_id IS NULL", [clerkEmail]
+    )
+    if (legacy.rows.length) {
+      await db.query("UPDATE users SET clerk_id = $1 WHERE id = $2", [clerkId, legacy.rows[0].id])
+      const u = await db.query(SELECT_PROFILE, [legacy.rows[0].id])
+      res.json(formatUser(u.rows[0])); return
+    }
+
+    // Brand-new user — name is required; major/year can be filled in later
+    if (!name) {
+      res.status(400).json({ error: "name is required" }); return
+    }
+
+    // Brand-new user
     const id = uuidv4()
-    const passwordHash = await bcrypt.hash(password, 12)
-    const clubList: string[]     = clubs     ?? []
-    const companyList: string[]  = companies ?? []
-    const interestList: string[] = interests ?? []
-    const linkedinUrlVal = linkedinUrl?.trim() || null
+    const majorValue = typeof major === "string" ? major.trim() : ""
+    const gpaValue = toNullableNumber(gpa)
+    const graduationYearValue = toNullableInt(graduationYear)
+    const bioValue = typeof bio === "string" ? bio : ""
+    const clubList = toStringArray(clubs)
+    const companyList = toStringArray(companies)
+    const interestList = toStringArray(interests)
+    const skillList = toStringArray(skills)
+    const lookingForList = toStringArray(looking_for)
+    const yearValue = typeof year === "string" && year.trim() ? year.trim() : null
+    const linkedinUrlValue =
+      typeof linkedinUrl === "string" && linkedinUrl.trim() ? linkedinUrl.trim() : null
 
     const graphNodeId = await createStudentNode({
-      id, name, major,
-      gpa: gpa ?? null,
-      graduationYear,
-      bio: bio ?? "",
+      id,
+      name,
+      major: majorValue,
+      gpa: gpaValue,
+      graduationYear: graduationYearValue,
+      bio: bioValue,
       clubs: clubList,
       companies: companyList,
       interests: interestList,
-      linkedinUrl: linkedinUrlVal,
+      linkedinUrl: linkedinUrlValue,
     })
 
     await db.query(
-      `INSERT INTO users (id, email, name, password_hash, major, gpa, graduation_year, bio, clubs, companies, interests, graph_node_id, linkedin_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-      [id, email, name, passwordHash, major, gpa ?? null, graduationYear, bio ?? null, clubList, companyList, interestList, graphNodeId, linkedinUrlVal]
+      `INSERT INTO users
+         (id, email, name, major, gpa, graduation_year, bio, clubs,
+          companies, interests, graph_node_id, linkedin_url, skills,
+          looking_for, year, clerk_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [
+        id,
+        clerkEmail,
+        name,
+        majorValue,
+        gpaValue,
+        graduationYearValue,
+        bioValue || null,
+        clubList,
+        companyList,
+        interestList,
+        graphNodeId,
+        linkedinUrlValue,
+        skillList,
+        lookingForList,
+        yearValue,
+        clerkId,
+      ]
     )
 
-    const token = jwt.sign({ userId: id }, process.env.JWT_SECRET!, { expiresIn: "7d" })
-    res.status(201).json({
-      token,
-      user: { id, name, email, major, gpa, graduationYear, bio, clubs: clubList, companies: companyList, interests: interestList, linkedinUrl: linkedinUrlVal },
-    })
+    const user = await db.query(SELECT_PROFILE, [id])
+    res.status(201).json(formatUser(user.rows[0]))
   } catch (err) {
-    console.error("Signup error:", err)
+    console.error("Sync error:", err)
     res.status(500).json({ error: "Internal server error" })
   }
 })
 
-// POST /api/auth/login
-router.post("/login", async (req: Request, res: Response) => {
-  const { email, password } = req.body
-
-  if (!email || !password) {
-    res.status(400).json({ error: "email and password are required" })
-    return
-  }
-
-  try {
-    const result = await db.query(
-      "SELECT id, name, email, password_hash, major, gpa, graduation_year, bio, clubs, companies, interests, linkedin_url FROM users WHERE email = $1",
-      [email]
-    )
-
-    if (result.rows.length === 0) {
-      res.status(401).json({ error: "Invalid email or password" })
-      return
-    }
-
-    const user = result.rows[0]
-    const valid = await bcrypt.compare(password, user.password_hash)
-    if (!valid) {
-      res.status(401).json({ error: "Invalid email or password" })
-      return
-    }
-
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, { expiresIn: "7d" })
-    res.json({
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        major: user.major,
-        gpa: user.gpa,
-        graduationYear: user.graduation_year,
-        bio: user.bio,
-        clubs: user.clubs,
-        companies: user.companies,
-        interests: user.interests,
-        linkedinUrl: user.linkedin_url,
-      },
-    })
-  } catch (err) {
-    console.error("Login error:", err)
-    res.status(500).json({ error: "Internal server error" })
-  }
-})
-
-// GET /api/auth/me — returns current user from Bearer token
 router.get("/me", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const result = await db.query(
-      "SELECT id, name, email, major, gpa, graduation_year, bio, clubs, companies, interests, linkedin_url FROM users WHERE id = $1",
-      [req.userId]
-    )
+    const result = await db.query(SELECT_PROFILE, [req.userId])
     if (result.rows.length === 0) {
       res.status(404).json({ error: "User not found" })
       return
     }
-    const u = result.rows[0]
-    res.json({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      major: u.major,
-      gpa: u.gpa,
-      graduationYear: u.graduation_year,
-      bio: u.bio,
-      clubs: u.clubs,
-      companies: u.companies,
-      interests: u.interests,
-      linkedinUrl: u.linkedin_url,
-    })
+    res.json(formatUser(result.rows[0]))
   } catch (err) {
     console.error("Me error:", err)
     res.status(500).json({ error: "Internal server error" })
   }
 })
 
-// GET /api/auth/interests
+router.get("/users/:id/profile", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await db.query(SELECT_PUBLIC_PROFILE, [req.params.id])
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "User not found" })
+      return
+    }
+    res.json(formatPublicProfile(result.rows[0]))
+  } catch (err) {
+    console.error("Profile fetch error:", err)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
 router.get("/interests", async (_req: Request, res: Response) => {
   try {
     const result = await db.query(
@@ -153,26 +281,35 @@ router.get("/interests", async (_req: Request, res: Response) => {
        WHERE array_length(interests, 1) > 0
        ORDER BY interest`
     )
-    res.json(result.rows.map((r: { interest: string }) => r.interest).filter(Boolean))
+    res.json(result.rows.map((row: { interest: string }) => row.interest).filter(Boolean))
   } catch {
     res.json([])
   }
 })
 
-// PUT /api/auth/profile
-router.put("/profile", requireAuth, async (req: AuthRequest, res: Response) => {
-  const { gpa, major, graduationYear, bio, clubs, companies, interests, linkedinUrl } = req.body
+router.put("/profile", requireAuth, profileUpdateRateLimiter, async (req: AuthRequest, res: Response) => {
+  const { gpa, major, graduationYear, bio, clubs, companies, interests, linkedinUrl, skills, looking_for, year } = req.body
 
   if (!major || !graduationYear) {
     res.status(400).json({ error: "major and graduationYear are required" })
     return
   }
 
-  const clubList: string[]     = clubs     ?? []
-  const companyList: string[]  = companies ?? []
-  const interestList: string[] = interests ?? []
-  const gpaVal                 = gpa ?? null
-  const linkedinUrlVal         = linkedinUrl?.trim() || null
+  const clubList = toStringArray(clubs)
+  const companyList = toStringArray(companies)
+  const interestList = toStringArray(interests)
+  const skillList = toStringArray(skills)
+  const lookingForList = toStringArray(looking_for)
+  const yearValue = typeof year === "string" && year.trim() ? year.trim() : null
+  const gpaValue = toNullableNumber(gpa)
+  const graduationYearValue = toNullableInt(graduationYear)
+  const linkedinUrlValue =
+    typeof linkedinUrl === "string" && linkedinUrl.trim() ? linkedinUrl.trim() : null
+
+  if (graduationYearValue === null) {
+    res.status(400).json({ error: "graduationYear must be a valid year" })
+    return
+  }
 
   try {
     const existing = await db.query("SELECT name FROM users WHERE id = $1", [req.userId])
@@ -182,33 +319,50 @@ router.put("/profile", requireAuth, async (req: AuthRequest, res: Response) => {
     }
 
     await db.query(
-      `UPDATE users SET major=$1, gpa=$2, graduation_year=$3, bio=$4, clubs=$5, companies=$6, interests=$7, linkedin_url=$8
-       WHERE id=$9`,
-      [major, gpaVal, graduationYear, bio ?? null, clubList, companyList, interestList, linkedinUrlVal, req.userId]
+      `UPDATE users
+       SET major = $1,
+           gpa = $2,
+           graduation_year = $3,
+           bio = $4,
+           clubs = $5,
+           companies = $6,
+           interests = $7,
+           linkedin_url = $8,
+           skills = $9,
+           looking_for = $10,
+           year = $11
+       WHERE id = $12`,
+      [
+        major,
+        gpaValue,
+        graduationYearValue,
+        typeof bio === "string" ? bio : null,
+        clubList,
+        companyList,
+        interestList,
+        linkedinUrlValue,
+        skillList,
+        lookingForList,
+        yearValue,
+        req.userId,
+      ]
     )
 
     await updateStudentNode({
       id: req.userId!,
       name: existing.rows[0].name,
-      major, gpa: gpaVal, graduationYear,
-      bio: bio ?? "",
+      major,
+      gpa: gpaValue,
+      graduationYear: graduationYearValue,
+      bio: typeof bio === "string" ? bio : "",
       clubs: clubList,
       companies: companyList,
       interests: interestList,
-      linkedinUrl: linkedinUrlVal,
+      linkedinUrl: linkedinUrlValue,
     })
 
-    const updated = await db.query(
-      "SELECT id, name, email, major, gpa, graduation_year, bio, clubs, companies, interests, linkedin_url FROM users WHERE id=$1",
-      [req.userId]
-    )
-    const u = updated.rows[0]
-    res.json({
-      id: u.id, name: u.name, email: u.email, major: u.major, gpa: u.gpa,
-      graduationYear: u.graduation_year, bio: u.bio,
-      clubs: u.clubs, companies: u.companies, interests: u.interests,
-      linkedinUrl: u.linkedin_url,
-    })
+    const updated = await db.query(SELECT_PROFILE, [req.userId])
+    res.json(formatUser(updated.rows[0]))
   } catch (err) {
     console.error("Profile update error:", err)
     res.status(500).json({ error: "Internal server error" })

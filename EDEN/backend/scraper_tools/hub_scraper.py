@@ -136,6 +136,47 @@ async def extract_instagram(page) -> str:
     return ""
 
 
+async def extract_description(page) -> str:
+    """
+    Extract the organization description from a Highlander Hub detail page.
+    Campus Labs / Engage pages put the org summary in the main content area.
+    Returns the description text (up to 500 chars), or empty string.
+    """
+    # Try known Campus Labs selectors first
+    candidate_selectors = [
+        "[data-testid='organization-description']",
+        "[data-testid='description']",
+        ".org-description",
+        "#about p",
+        "section[aria-label='About'] p",
+    ]
+    for sel in candidate_selectors:
+        try:
+            locator = page.locator(sel).first
+            if await locator.count() > 0:
+                text = (await locator.inner_text()).strip()
+                if len(text) > 20:
+                    return text[:500]
+        except Exception:
+            continue
+
+    # Fall back: find the first substantial paragraph in the main content
+    # that isn't navigation boilerplate
+    try:
+        paragraphs = await page.locator("main p, article p, [role='main'] p").evaluate_all(
+            "els => els.map(el => el.innerText.trim())"
+        )
+        for p in paragraphs:
+            p = p.strip()
+            # Skip short/boilerplate text
+            if len(p) > 40 and not p.lower().startswith(("sign in", "log in", "back to", "home")):
+                return p[:500]
+    except Exception:
+        pass
+
+    return ""
+
+
 async def scrape_highlander_hub():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=HEADLESS, slow_mo=SLOW_MO)
@@ -167,11 +208,13 @@ async def scrape_highlander_hub():
                     await detail.wait_for_timeout(800)
                     name = await get_org_name(detail) or fallback_name
                     instagram = await extract_instagram(detail)
-                    print(f"  [{i}/{len(orgs)}] {name} -> {instagram or 'no IG'}")
+                    description = await extract_description(detail)
+                    print(f"  [{i}/{len(orgs)}] {name} -> {instagram or 'no IG'} | bio: {len(description)} chars")
                     return {
                         "organization_name": name,
                         "instagram_handle": instagram,
                         "organization_url": url,
+                        "description": description,
                     }
                 except PlaywrightTimeoutError:
                     print(f"  [{i}/{len(orgs)}] {fallback_name} -> timeout")
@@ -179,6 +222,7 @@ async def scrape_highlander_hub():
                         "organization_name": fallback_name,
                         "instagram_handle": "",
                         "organization_url": url,
+                        "description": "",
                     }
                 finally:
                     await detail.close()
@@ -191,13 +235,14 @@ async def scrape_highlander_hub():
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=["organization_name", "instagram_handle", "organization_url"]
+            fieldnames=["organization_name", "instagram_handle", "organization_url", "description"]
         )
         writer.writeheader()
         writer.writerows(rows)
 
     with_ig = sum(1 for r in rows if r["instagram_handle"])
-    print(f"\nDone. {len(rows)} orgs scraped, {with_ig} have Instagram handles.")
+    with_bio = sum(1 for r in rows if r.get("description"))
+    print(f"\nDone. {len(rows)} orgs scraped, {with_ig} have Instagram handles, {with_bio} have descriptions.")
     print(f"Saved to: {OUTPUT_CSV}")
 
 

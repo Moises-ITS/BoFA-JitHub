@@ -2,21 +2,25 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import cesium from 'vite-plugin-cesium'
 
 export default defineConfig({
   plugins: [
-    // The React and Tailwind plugins are both required for Make, even if
-    // Tailwind is not being actively used – do not remove them
     react(),
     tailwindcss(),
+    cesium(),
   ],
 
   server: {
     host: '0.0.0.0',
-    port: 5174,
+    port: 5173,
+    strictPort: true,
   },
 
-  // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'resium', 'cesium'],
+  },
+
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
   test: {

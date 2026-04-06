@@ -3,13 +3,19 @@ import { useAuth } from "../../../context/AuthContext"
 import "./EditProfileModal.css"
 
 const NJIT_MAJORS = [
-  "Actuarial Mathematics", "Applied Mathematics", "Applied Statistics", "Architecture",
-  "Biomedical Engineering", "Biology", "Business Administration", "Chemical Engineering",
-  "Chemistry", "Civil Engineering", "Communication Studies", "Computer Engineering",
-  "Computer Science", "Construction Management", "Data Science", "Digital Marketing",
-  "Electrical Engineering", "Environmental Engineering", "Environmental Science", "Finance",
-  "History", "Humanities", "Industrial Engineering", "Information Technology", "Management",
-  "Mechanical Engineering", "Music Technology", "Physics", "Pre-Medical Studies", "Urban Systems",
+  "Accounting", "Actuarial Mathematics", "Applied Mathematics", "Applied Statistics",
+  "Architecture", "Biomedical Engineering", "Biomedical Sciences", "Biology",
+  "Business Administration", "Chemical Biology", "Chemical Engineering", "Chemistry",
+  "Civil Engineering", "Communication Studies", "Computer Engineering", "Computer Science",
+  "Construction Management", "Criminal Justice", "Data Science", "Digital Design",
+  "Digital Marketing", "Electrical Engineering", "Engineering Science", "Engineering Technology",
+  "Environmental Engineering", "Environmental Science", "Finance", "Health Informatics",
+  "History", "Humanities", "Imaging Science", "Industrial Engineering", "Information Systems",
+  "Information Technology", "Interior Design", "Liberal Studies", "Management",
+  "Materials Science and Engineering", "Mathematics", "Mechanical Engineering",
+  "Medical Informatics", "Music Technology", "Nursing", "Physics", "Pre-Medical Studies",
+  "Professional and Technical Communication", "Real Estate Development",
+  "Science Technology and Society", "Statistics", "Urban Systems",
 ]
 
 const KNOWN_INTERESTS = [
@@ -23,7 +29,40 @@ const KNOWN_INTERESTS = [
   "Structural Engineering", "Sustainability", "Technical Sales",
 ]
 
+const KNOWN_SKILLS = [
+  "C++", "CAD", "Data Analysis", "Excel", "Figma", "Java", "JavaScript",
+  "Leadership", "MATLAB", "Photoshop", "Public Speaking", "Python",
+  "React", "Research", "Rust", "SQL", "TypeScript", "Writing",
+]
+
+const LOOKING_FOR_OPTIONS = [
+  "Co-op", "Hackathon Partner", "Internship", "Job",
+  "Networking", "New Friends", "Research Opportunity", "Study Group",
+]
+
+const YEAR_OPTIONS = ["Freshman", "Sophomore", "Junior", "Senior", "Graduate"]
+
 const NJIT_CLUBS = [
+  "American Institute of Aeronautics and Astronautics", "American Institute of Chemical Engineers",
+  "American Chemical Society", "American Society of Civil Engineers",
+  "American Society of Mechanical Engineers", "Alpha Phi Omega",
+  "Association for Computing Machinery", "Biomedical Engineering Society",
+  "Caribbean Student Association", "Chess Club", "Chinese Student Association",
+  "Climbing Club", "Computer Science Honors Society", "Cooking Club",
+  "Cyber Defense Organization", "Data Science Club", "Debate Club",
+  "Engineering Without Borders", "Entrepreneurship Club", "ESports Club", "Film Club",
+  "Finance Club", "Google Developer Student Club", "Hack@NJIT",
+  "Indian Student Association", "Institute of Electrical and Electronics Engineers",
+  "International Students Organization", "Investment Club", "Korean Student Association",
+  "Latino American Student Organization", "Martial Arts Club", "Mathematics Club",
+  "Mathematics Honor Society", "Model United Nations", "Muslim Student Association",
+  "National Society of Black Engineers", "Pakistani Student Association", "Photography Club",
+  "Physics Club", "Pre-Medical Society", "Robotics Club", "Rugby Club", "Soccer Club",
+  "Society of Hispanic Professional Engineers", "Society of Women Engineers",
+  "Software Engineering Club", "Step Team", "Student Government Association",
+  "Table Tennis Club", "Tau Beta Pi", "Tennis Club", "Theatre Arts Group",
+  "Turkish Student Association", "Vietnamese Student Association", "Volleyball Club",
+  "Women in Computer Science", "Women in Engineering",
   "AIChE", "ASCE",
   "ASME", "ACM",
   "BMES", "Caribbean Student Association", "Chinese Student Association",
@@ -57,6 +96,9 @@ export default function EditProfileModal({ open, onClose }: Props) {
   const [interests, setInterests]   = useState<string[]>([])
   const [companies, setCompanies]   = useState<string[]>([])
   const [companyInput, setCompanyInput] = useState("")
+  const [skills, setSkills]           = useState<string[]>([])
+  const [lookingFor, setLookingFor]   = useState<string[]>([])
+  const [year, setYear]               = useState("")
   const [saving, setSaving]         = useState(false)
   const [error, setError]           = useState("")
   const [success, setSuccess]       = useState(false)
@@ -73,6 +115,9 @@ export default function EditProfileModal({ open, onClose }: Props) {
       setClubs(user.clubs ?? [])
       setInterests(user.interests ?? [])
       setCompanies(user.companies ?? [])
+      setSkills(user.skills ?? [])
+      setLookingFor(user.looking_for ?? [])
+      setYear(user.year ?? "")
       setCompanyInput("")
       setError("")
       setSuccess(false)
@@ -112,7 +157,7 @@ export default function EditProfileModal({ open, onClose }: Props) {
     }
     setSaving(true)
     try {
-      await updateProfile({ gpa: gpaNum, major, graduationYear: gradNum, bio, clubs, companies, interests, linkedinUrl: linkedinUrl.trim() || null })
+      await updateProfile({ gpa: gpaNum, major, graduationYear: gradNum, bio, clubs, companies, interests, linkedinUrl: linkedinUrl.trim() || null, skills, looking_for: lookingFor, year: year || null })
       setSuccess(true)
       setTimeout(onClose, 900)
     } catch (e: unknown) {
@@ -185,6 +230,12 @@ export default function EditProfileModal({ open, onClose }: Props) {
                 value={gradYear}
                 onChange={e => setGradYear(e.target.value)}
               />
+
+              <label className="epLabel">Year</label>
+              <select className="epSelect" value={year} onChange={e => setYear(e.target.value)}>
+                <option value="">Select year…</option>
+                {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
             </div>
           )}
 
@@ -212,6 +263,32 @@ export default function EditProfileModal({ open, onClose }: Props) {
                     onClick={() => toggleItem(interests, i, setInterests)}
                   >
                     {i}
+                  </button>
+                ))}
+              </div>
+
+              <label className="epLabel" style={{ marginTop: 20 }}>Skills</label>
+              <div className="epChipGrid">
+                {KNOWN_SKILLS.map(s => (
+                  <button
+                    key={s}
+                    className={`epChip${skills.includes(s) ? " epChipOn" : ""}`}
+                    onClick={() => toggleItem(skills, s, setSkills)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+
+              <label className="epLabel" style={{ marginTop: 20 }}>Looking for</label>
+              <div className="epChipGrid">
+                {LOOKING_FOR_OPTIONS.map(opt => (
+                  <button
+                    key={opt}
+                    className={`epChip${lookingFor.includes(opt) ? " epChipOn" : ""}`}
+                    onClick={() => toggleItem(lookingFor, opt, setLookingFor)}
+                  >
+                    {opt}
                   </button>
                 ))}
               </div>

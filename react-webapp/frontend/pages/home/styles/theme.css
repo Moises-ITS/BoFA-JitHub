@@ -1,90 +1,99 @@
 @custom-variant dark (&:is(.dark *));
 
-:root {
-  --font-size: 16px;
-  
-  /* JitHub Brand Colors */
-  --jithub-red: #C0392B;
-  --jithub-orange: #E67E22;
-  --jithub-bg: #0F0F0F;
-  --jithub-card: #1A1A1A;
-  --jithub-card-hover: #222222;
-  
-  --background: #0F0F0F;
-  --foreground: #FAFAFA;
-  --card: #1A1A1A;
-  --card-foreground: #FAFAFA;
-  --popover: #1A1A1A;
-  --popover-foreground: #FAFAFA;
-  --primary: #C0392B;
-  --primary-foreground: #FFFFFF;
-  --secondary: #2A2A2A;
-  --secondary-foreground: #FAFAFA;
-  --muted: #2A2A2A;
-  --muted-foreground: #9CA3AF;
-  --accent: #E67E22;
-  --accent-foreground: #FFFFFF;
-  --destructive: #EF4444;
-  --destructive-foreground: #FFFFFF;
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.05);
-  --input-background: #1A1A1A;
-  --switch-background: #2A2A2A;
-  --font-weight-medium: 500;
-  --font-weight-normal: 400;
-  --ring: rgba(192, 57, 43, 0.4);
-  --chart-1: #C0392B;
-  --chart-2: #E67E22;
-  --chart-3: #3498DB;
-  --chart-4: #9B59B6;
-  --chart-5: #1ABC9C;
-  --radius: 0.5rem;
-  --sidebar: #0F0F0F;
-  --sidebar-foreground: #FAFAFA;
-  --sidebar-primary: #C0392B;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1A1A1A;
-  --sidebar-accent-foreground: #FAFAFA;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: rgba(192, 57, 43, 0.4);
-}
-
+:root,
 .dark {
-  /* Already using dark theme as default */
-  --background: #0F0F0F;
-  --foreground: #FAFAFA;
-  --card: #1A1A1A;
-  --card-foreground: #FAFAFA;
-  --popover: #1A1A1A;
-  --popover-foreground: #FAFAFA;
-  --primary: #C0392B;
+  --font-size: 16px;
+
+  /* Brand + exported design tokens */
+  --brand-primary: #D71920;
+  --brand-primary-hover: #A80E13;
+  --brand-primary-soft: rgba(215, 25, 32, 0.14);
+  --brand-primary-soft-strong: rgba(215, 25, 32, 0.24);
+  --brand-gradient: linear-gradient(135deg, #D71920 0%, #BA7BB0 100%);
+
+  --bg-canvas: #090B10;
+  --bg-surface: #111624;
+  --bg-elevated: #171D2C;
+  --bg-surface-hover: #1D2433;
+  --bg-overlay: rgba(9, 11, 16, 0.82);
+  --hero-gradient: linear-gradient(135deg, #090B10 0%, #111624 52%, #231118 100%);
+  --surface-gradient: linear-gradient(180deg, #111624 0%, #171D2C 100%);
+
+  --text-primary: #F3F6FB;
+  --text-secondary: #B8C3D3;
+  --text-muted: #8993A5;
+  --text-subtle: #6D7687;
+
+  --border-default: #283142;
+  --border-strong: #364257;
+
+  --status-success: #3FC78D;
+  --status-success-soft: rgba(63, 199, 141, 0.16);
+  --status-warning: #D88724;
+  --status-warning-soft: rgba(216, 135, 36, 0.18);
+  --status-error: #F36F6F;
+  --status-error-soft: rgba(243, 111, 111, 0.16);
+  --status-info: #4F9DFF;
+  --status-info-soft: rgba(79, 157, 255, 0.16);
+
+  --accent-events: #E29A3B;
+  --accent-events-soft: rgba(226, 154, 59, 0.16);
+  --accent-orgs: #BA7BB0;
+  --accent-orgs-soft: rgba(186, 123, 176, 0.16);
+  --accent-opportunities: #31C58F;
+  --accent-opportunities-soft: rgba(49, 197, 143, 0.16);
+  --accent-networking: #7A84F0;
+  --accent-networking-soft: rgba(122, 132, 240, 0.16);
+  --accent-research: #BA7BB0;
+  --accent-research-soft: rgba(186, 123, 176, 0.16);
+
+  --shadow-brand: 0 16px 48px rgba(215, 25, 32, 0.24);
+  --shadow-elevated: 0 18px 40px rgba(0, 0, 0, 0.38);
+
+  /* Legacy aliases kept for existing UI */
+  --jithub-red: var(--brand-primary);
+  --jithub-orange: var(--accent-events);
+  --jithub-bg: var(--bg-canvas);
+  --jithub-card: var(--bg-surface);
+  --jithub-card-hover: var(--bg-surface-hover);
+
+  --background: var(--bg-canvas);
+  --foreground: var(--text-primary);
+  --card: var(--bg-surface);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--brand-primary);
   --primary-foreground: #FFFFFF;
-  --secondary: #2A2A2A;
-  --secondary-foreground: #FAFAFA;
-  --muted: #2A2A2A;
-  --muted-foreground: #9CA3AF;
-  --accent: #E67E22;
+  --secondary: var(--bg-elevated);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-surface-hover);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--accent-events);
   --accent-foreground: #FFFFFF;
-  --destructive: #EF4444;
+  --destructive: var(--status-error);
   --destructive-foreground: #FFFFFF;
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.05);
-  --ring: rgba(192, 57, 43, 0.4);
+  --border: var(--border-default);
+  --input: rgba(255, 255, 255, 0.06);
+  --input-background: #131A27;
+  --switch-background: #1F2636;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --chart-1: #C0392B;
-  --chart-2: #E67E22;
-  --chart-3: #3498DB;
-  --chart-4: #9B59B6;
-  --chart-5: #1ABC9C;
-  --sidebar: #0F0F0F;
-  --sidebar-foreground: #FAFAFA;
-  --sidebar-primary: #C0392B;
+  --ring: rgba(215, 25, 32, 0.35);
+  --chart-1: var(--brand-primary);
+  --chart-2: var(--accent-events);
+  --chart-3: var(--status-info);
+  --chart-4: var(--accent-orgs);
+  --chart-5: var(--accent-opportunities);
+  --radius: 0.5rem;
+  --sidebar: var(--bg-canvas);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--brand-primary);
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1A1A1A;
-  --sidebar-accent-foreground: #FAFAFA;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: rgba(192, 57, 43, 0.4);
+  --sidebar-accent: var(--bg-surface);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border-default);
+  --sidebar-ring: rgba(215, 25, 32, 0.35);
 }
 
 @theme inline {
@@ -135,6 +144,7 @@
 
   body {
     @apply bg-background text-foreground;
+    color-scheme: dark;
   }
 
   /**

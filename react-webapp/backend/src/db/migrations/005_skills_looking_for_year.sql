@@ -1,0 +1,4 @@
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS skills       TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS looking_for  TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS year         VARCHAR(20);

@@ -15,7 +15,6 @@ export const mockEvents = [
   {
     id: "1",
     clubLogo: "🎯",
-    matchScore: 94,
     title: "Google Career Fair",
     club: "ACM NJIT",
     type: "Recruiting",
@@ -26,7 +25,6 @@ export const mockEvents = [
   {
     id: "2",
     clubLogo: "🍕",
-    matchScore: 87,
     title: "Free Pizza & AI Workshop",
     club: "CS Society",
     type: "Free Food",
@@ -37,7 +35,6 @@ export const mockEvents = [
   {
     id: "3",
     clubLogo: "💡",
-    matchScore: 76,
     title: "Startup Pitch Night",
     club: "Entrepreneur Society",
     type: "Networking",
@@ -48,7 +45,6 @@ export const mockEvents = [
   {
     id: "4",
     clubLogo: "🔬",
-    matchScore: 72,
     title: "Research Symposium",
     club: "NJIT Research Council",
     type: "Academic",
@@ -61,7 +57,6 @@ export const mockEvents = [
 export const mockOpportunities = [
   {
     logo: "🔴",
-    matchScore: 92,
     role: "Software Engineering Intern",
     company: "Google",
     type: "Internship",
@@ -71,7 +66,6 @@ export const mockOpportunities = [
   },
   {
     logo: "🟦",
-    matchScore: 88,
     role: "Full Stack Developer Intern",
     company: "Microsoft",
     type: "Internship",
@@ -81,7 +75,6 @@ export const mockOpportunities = [
   },
   {
     logo: "🟧",
-    matchScore: 80,
     role: "Data Science Co-op",
     company: "Amazon",
     type: "Co-op",

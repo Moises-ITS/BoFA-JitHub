@@ -1,7 +1,8 @@
-from datetime import date
+from datetime import date, datetime, time, timezone
 
 SEMESTER_START = date(2026, 1, 1)
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
@@ -60,6 +61,31 @@ def _format_event(event, post, club):
     }
 
 
+class CommunityEventBody(BaseModel):
+    club_name: str
+    event_name: str
+    event_category: str
+    date: date
+    start_time: str
+    end_time: str | None = None
+    campus_location: str | None = None
+    event_room: str | None = None
+    virtual: bool = False
+    has_free_food: bool = False
+    is_open_to_public: bool = True
+    event_link: str | None = None
+    description: str | None = None
+
+
+def _parse_time_string(value: str | None) -> time | None:
+    if value is None:
+        return None
+    try:
+        return time.fromisoformat(value.strip())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid time format. Use HH:MM.") from exc
+
+
 def _base_query(db):
     return (
         db.query(models.Event, models.EventPost, models.Club)
@@ -74,6 +100,96 @@ def _apply_filters(q, public_only, event_type):
     if event_type:
         q = q.filter(models.Event.event_type == event_type)
     return q
+
+
+@router.post("/community", status_code=201)
+def create_community_event(body: CommunityEventBody, db: Session = Depends(get_db)):
+    club_name = body.club_name.strip()
+    event_name = body.event_name.strip()
+    event_category = body.event_category.strip().lower()
+    campus_location = (body.campus_location or "").strip()
+    event_room = (body.event_room or "").strip()
+    event_link = (body.event_link or "").strip()
+    description = (body.description or "").strip()
+
+    if not club_name or not event_name or not event_category:
+        raise HTTPException(status_code=400, detail="Missing required fields")
+
+    if not body.virtual and not campus_location:
+        raise HTTPException(status_code=400, detail="Campus location is required for in-person events")
+
+    start_at = _parse_time_string(body.start_time)
+    end_at = _parse_time_string(body.end_time)
+
+    if start_at is None:
+        raise HTTPException(status_code=400, detail="Start time is required")
+
+    existing = (
+        db.query(models.Event)
+        .join(models.Club, models.Club.club_id == models.Event.club_id)
+        .filter(func.lower(models.Club.name) == club_name.lower())
+        .filter(func.lower(models.Event.event_name) == event_name.lower())
+        .filter(models.Event.date == body.date)
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="That event already exists")
+
+    club = (
+        db.query(models.Club)
+        .filter(func.lower(models.Club.name) == club_name.lower())
+        .first()
+    )
+    if club is None:
+        club = models.Club(name=club_name, is_active=True)
+        db.add(club)
+        db.flush()
+
+    event = models.Event(
+        club_id=club.club_id,
+        event_name=event_name,
+        event_type="promo",
+        date=body.date,
+        day_of_week=body.date.strftime("%A"),
+        start_time=start_at,
+        end_time=end_at,
+        virtual=body.virtual,
+        is_external=False,
+        campus_location=campus_location or None,
+        event_room=event_room or None,
+        has_free_food=body.has_free_food,
+        is_open_to_public=body.is_open_to_public,
+        event_link=event_link or None,
+        promo_link=event_link or None,
+        event_category=event_category,
+    )
+    db.add(event)
+    db.flush()
+
+    post = models.EventPost(
+        event_id=event.event_id,
+        post_type="promo",
+        post_datetime=datetime.now(timezone.utc),
+        likes=0,
+        likes_estimated=False,
+        comments=0,
+        engagement_score=0,
+        post_url=event_link or None,
+        caption=description or None,
+    )
+    db.add(post)
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        print("community event insert failed:", exc)
+        raise HTTPException(status_code=500, detail="Could not create event") from exc
+
+    db.refresh(event)
+    db.refresh(post)
+    db.refresh(club)
+    return _format_event(event, post, club)
 
 
 from difflib import SequenceMatcher
@@ -310,7 +426,12 @@ def get_top_clubs(limit: int = Query(5, le=20), db: Session = Depends(get_db)):
 def get_clubs_trending(limit: int = Query(5, le=20), db: Session = Depends(get_db)):
     """Top clubs by total likes this semester."""
     results = (
-        db.query(models.Club.name, func.sum(models.EventPost.likes).label("total_likes"), func.count(models.EventPost.post_id).label("event_count"))
+        db.query(
+            models.Club.club_id,
+            models.Club.name,
+            func.sum(models.EventPost.likes).label("total_likes"),
+            func.count(models.EventPost.post_id).label("event_count"),
+        )
         .join(models.Event, models.Event.club_id == models.Club.club_id)
         .join(models.EventPost, models.EventPost.event_id == models.Event.event_id)
         .filter(models.EventPost.post_datetime >= SEMESTER_START)
@@ -320,14 +441,26 @@ def get_clubs_trending(limit: int = Query(5, le=20), db: Session = Depends(get_d
         .all()
     )
     # change_pct reserved for future weekly-snapshot comparison; None until historical data is tracked
-    return [{"rank": i + 1, "club_name": _display_name(r.name), "total_likes": r.total_likes, "event_count": r.event_count, "change_pct": None} for i, r in enumerate(results)]
+    return [{
+        "rank": i + 1,
+        "club_id": r.club_id,
+        "club_name": _display_name(r.name),
+        "total_likes": r.total_likes,
+        "event_count": r.event_count,
+        "change_pct": None,
+    } for i, r in enumerate(results)]
 
 
 @router.get("/clubs/top-risers")
 def get_clubs_top_risers(limit: int = Query(5, le=20), db: Session = Depends(get_db)):
     """Top clubs by avg engagement score this semester."""
     results = (
-        db.query(models.Club.name, func.avg(models.EventPost.engagement_score).label("avg_score"), func.count(models.EventPost.post_id).label("event_count"))
+        db.query(
+            models.Club.club_id,
+            models.Club.name,
+            func.avg(models.EventPost.engagement_score).label("avg_score"),
+            func.count(models.EventPost.post_id).label("event_count"),
+        )
         .join(models.Event, models.Event.club_id == models.Club.club_id)
         .join(models.EventPost, models.EventPost.event_id == models.Event.event_id)
         .filter(models.EventPost.engagement_score != None)
@@ -337,7 +470,13 @@ def get_clubs_top_risers(limit: int = Query(5, le=20), db: Session = Depends(get
         .limit(limit)
         .all()
     )
-    return [{"rank": i + 1, "club_name": _display_name(r.name), "avg_score": round(float(r.avg_score), 2), "event_count": r.event_count} for i, r in enumerate(results)]
+    return [{
+        "rank": i + 1,
+        "club_id": r.club_id,
+        "club_name": _display_name(r.name),
+        "avg_score": round(float(r.avg_score), 2),
+        "event_count": r.event_count,
+    } for i, r in enumerate(results)]
 
 
 @router.get("/{event_id}")

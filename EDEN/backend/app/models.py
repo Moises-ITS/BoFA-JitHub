@@ -18,6 +18,7 @@ class Club(Base):
   instagram_handle = Column(String(255))
   follower_count = Column(Integer)
   is_active = Column(Boolean, default=True)
+  bio = Column(Text)
 
 class Event(Base):
   __tablename__ = "events"

@@ -4,7 +4,7 @@ import { Topbar } from "./topbar";
 
 export function Layout() {
   return (
-    <div className="min-h-screen bg-[#0F0F0F]">
+    <div className="min-h-screen" style={{ backgroundColor: "var(--bg-canvas)" }}>
       <Sidebar />
       <Topbar />
       {/* inline styles are immune to global CSS resets (e.g. CampusGraph.css * { margin:0 }) */}

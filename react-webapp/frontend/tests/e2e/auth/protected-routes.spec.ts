@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { setupAuth } from '../../fixtures/auth'
 
-const PROTECTED = ['/home', '/profile', '/events', '/opportunities', '/research', '/network']
+const PROTECTED = ['/home', '/profile', '/events', '/opportunities', '/network']
 
 test.describe('Protected Route Guards', () => {
   test('unauthenticated user is redirected to / from protected routes', async ({ page }) => {

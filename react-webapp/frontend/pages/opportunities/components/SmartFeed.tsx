@@ -1,15 +1,17 @@
-import type { Opportunity, TrackedApplication } from '../types/opportunities';
-import type { FilterType } from '../hooks/useOpportunities';
+import type { Opportunity, TrackedApplication, ApplicationStatus } from '../types/opportunities';
 import ListingCard from './ListingCard';
 
 interface Props {
   opportunities: Opportunity[];
-  filter: FilterType;
   tracked: TrackedApplication[];
+  activeId: string | null;
   onSelect: (id: string) => void;
+  onDeselect: () => void;
+  trackApplication: (id: string, status: ApplicationStatus) => void;
+  getTracked: (id: string) => TrackedApplication | undefined;
 }
 
-export default function SmartFeed({ opportunities, filter, tracked, onSelect }: Props) {
+export default function SmartFeed({ opportunities, tracked, onSelect }: Props) {
   const visibleOpportunities = opportunities;
 
   return (
@@ -32,7 +34,7 @@ export default function SmartFeed({ opportunities, filter, tracked, onSelect }: 
           Opportunity Feed
         </div>
         <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
-          {visibleOpportunities.length} {filter === 'all' ? '' : filter} opportunit{visibleOpportunities.length !== 1 ? 'ies' : 'y'} available
+          {visibleOpportunities.length} opportunit{visibleOpportunities.length !== 1 ? 'ies' : 'y'} available
         </div>
       </div>
 

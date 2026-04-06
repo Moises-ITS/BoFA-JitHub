@@ -1,16 +1,17 @@
 /* ─── CSS Variables (dark theme) ─────────────────────────────────────────────── */
 :root {
-  --bg:           #0a0c12;
-  --surface:      #12151f;
-  --surface2:     #1a1f2e;
-  --border:       #252d40;
-  --text:         #e2e8f0;
-  --muted:        #8a97b0;
-  --blue-light:   #60a5fa;
-  --green-light:  #4ade80;
-  --green:        #22c55e;
+  --bg: #0a0c12;
+  --surface: #12151f;
+  --surface2: #1a1f2e;
+  --border: #252d40;
+  --text: #e2e8f0;
+  --muted: #8a97b0;
+  --blue-light: #60a5fa;
+  --green-light: #4ade80;
+  --green: #22c55e;
   --purple-light: #c4b5fd;
 }
+
 
 /* ─── Map View ──────────────────────────────────────────────────────────────── */
 .map-view {
@@ -20,6 +21,7 @@
   background: var(--bg);
   overflow-y: auto;
 }
+
 
 /* ─── Map Header ────────────────────────────────────────────────────────────── */
 .map-header {
@@ -34,6 +36,7 @@
   flex-shrink: 0;
 }
 
+
 .map-title {
   font-size: 1.1rem;
   font-weight: 800;
@@ -44,11 +47,13 @@
   gap: 8px;
 }
 
+
 .map-subtitle {
   font-size: 0.76rem;
   color: var(--muted);
   margin: 0;
 }
+
 
 /* ─── Map Filters ────────────────────────────────────────────────────────────── */
 .map-filters {
@@ -57,6 +62,7 @@
   flex-wrap: wrap;
 }
 
+
 .map-header-actions {
   display: flex;
   align-items: center;
@@ -64,6 +70,7 @@
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+
 
 .map-submit-btn {
   border: 1px solid rgba(204, 0, 0, 0.28);
@@ -78,11 +85,13 @@
   transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
+
 .map-submit-btn:hover {
   transform: translateY(-1px);
   border-color: rgba(204, 0, 0, 0.48);
   background: linear-gradient(135deg, rgba(215, 25, 32, 0.24), rgba(215, 25, 32, 0.12));
 }
+
 
 .map-filter-btn {
   display: flex;
@@ -100,12 +109,37 @@
   transition: all 0.2s;
 }
 
-.map-filter-btn:hover { color: var(--text); border-color: #4a5568; }
 
-.map-filter-btn.active.all         { border-color: rgba(59, 130, 246, 0.6);  color: var(--blue-light);   background: rgba(59, 130, 246, 0.1); }
-.map-filter-btn.active.scholarship { border-color: rgba(34, 197, 94, 0.6);   color: var(--green-light);  background: rgba(34, 197, 94, 0.1); }
-.map-filter-btn.active.internship  { border-color: rgba(59, 130, 246, 0.6);  color: var(--blue-light);   background: rgba(59, 130, 246, 0.1); }
-.map-filter-btn.active.networking  { border-color: rgba(167, 139, 250, 0.6); color: var(--purple-light); background: rgba(167, 139, 250, 0.1); }
+.map-filter-btn:hover {
+  color: var(--text);
+  border-color: #4a5568;
+}
+
+
+.map-filter-btn.active.all {
+  border-color: rgba(59, 130, 246, 0.6);
+  color: var(--blue-light);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.map-filter-btn.active.scholarship {
+  border-color: rgba(34, 197, 94, 0.6);
+  color: var(--green-light);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.map-filter-btn.active.internship {
+  border-color: rgba(59, 130, 246, 0.6);
+  color: var(--blue-light);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.map-filter-btn.active.networking {
+  border-color: rgba(167, 139, 250, 0.6);
+  color: var(--purple-light);
+  background: rgba(167, 139, 250, 0.1);
+}
+
 
 .map-filter-count {
   background: rgba(255, 255, 255, 0.07);
@@ -113,6 +147,7 @@
   border-radius: 10px;
   font-size: 0.68rem;
 }
+
 
 /* ─── Map Container ──────────────────────────────────────────────────────────── */
 .map-container {
@@ -123,6 +158,7 @@
   gap: 14px;
   min-height: 0;
 }
+
 
 /* ─── Map Image Wrapper ──────────────────────────────────────────────────────── */
 .map-img-wrap {
@@ -136,12 +172,14 @@
   background: #06091a;
 }
 
+
 .map-img {
   width: 100%;
   height: 100%;
   display: block;
   user-select: none;
 }
+
 
 /* ─── Map Pins ───────────────────────────────────────────────────────────────── */
 .map-pin-wrap {
@@ -155,7 +193,11 @@
   transition: z-index 0s;
 }
 
-.map-pin-wrap:hover { z-index: 20; }
+
+.map-pin-wrap:hover {
+  z-index: 20;
+}
+
 
 /* Teardrop pin shape */
 .map-pin {
@@ -171,10 +213,12 @@
   position: relative;
 }
 
+
 .map-pin-wrap:hover .map-pin {
   transform: rotate(-45deg) scale(1.25);
   filter: brightness(1.25);
 }
+
 
 /* content inside rotates back upright */
 .map-pin-inner {
@@ -188,6 +232,7 @@
   justify-content: center;
 }
 
+
 /* small stem dot under the pin */
 .map-pin-stem {
   width: 5px;
@@ -196,6 +241,7 @@
   margin-top: 2px;
   opacity: 0.75;
 }
+
 
 /* ─── Map Legend ─────────────────────────────────────────────────────────────── */
 .map-legend {
@@ -209,6 +255,7 @@
   flex-shrink: 0;
 }
 
+
 .legend-item {
   display: flex;
   align-items: center;
@@ -216,6 +263,7 @@
   font-size: 0.78rem;
   color: var(--muted);
 }
+
 
 .legend-dot {
   width: 10px;
@@ -225,11 +273,20 @@
   display: inline-block;
 }
 
+
 /* ─── Map Popup ──────────────────────────────────────────────────────────────── */
 @keyframes popupIn {
-  from { opacity: 0; transform: translateY(6px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
+
 
 .map-popup {
   position: fixed;
@@ -244,12 +301,14 @@
   pointer-events: all;
 }
 
+
 .popup-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 9px;
 }
+
 
 .popup-type-badge {
   font-size: 0.68rem;
@@ -260,9 +319,25 @@
   letter-spacing: 0.5px;
 }
 
-.popup-type-badge.scholarship { background: rgba(34, 197, 94, 0.15);  color: var(--green-light);  border: 1px solid rgba(34, 197, 94, 0.2); }
-.popup-type-badge.internship  { background: rgba(59, 130, 246, 0.15); color: var(--blue-light);   border: 1px solid rgba(59, 130, 246, 0.2); }
-.popup-type-badge.networking  { background: rgba(139, 92, 246, 0.15); color: var(--purple-light); border: 1px solid rgba(139, 92, 246, 0.2); }
+
+.popup-type-badge.scholarship {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--green-light);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.popup-type-badge.internship {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--blue-light);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.popup-type-badge.networking {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--purple-light);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
 
 .popup-title {
   font-size: 0.9rem;
@@ -272,9 +347,20 @@
   margin-bottom: 4px;
 }
 
-.popup-org  { font-size: 0.74rem; color: var(--muted); margin-bottom: 5px; }
 
-.popup-city { font-size: 0.72rem; color: var(--blue-light); margin-bottom: 8px; }
+.popup-org {
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+
+.popup-city {
+  font-size: 0.72rem;
+  color: var(--blue-light);
+  margin-bottom: 8px;
+}
+
 
 .popup-meta {
   display: flex;
@@ -285,12 +371,14 @@
   flex-wrap: wrap;
 }
 
+
 .popup-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   margin-bottom: 12px;
 }
+
 
 .popup-tag {
   padding: 3px 8px;
@@ -299,6 +387,7 @@
   font-size: 0.68rem;
   color: var(--muted);
 }
+
 
 .popup-action {
   width: 100%;
@@ -312,13 +401,35 @@
   transition: all 0.15s;
 }
 
-.popup-action.scholarship { background: rgba(34, 197, 94, 0.2);  color: var(--green-light); }
-.popup-action.internship  { background: rgba(59, 130, 246, 0.2); color: var(--blue-light); }
-.popup-action.networking  { background: rgba(139, 92, 246, 0.2); color: var(--purple-light); }
 
-.popup-action.scholarship:hover { background: rgba(34, 197, 94, 0.35); }
-.popup-action.internship:hover  { background: rgba(59, 130, 246, 0.35); }
-.popup-action.networking:hover  { background: rgba(139, 92, 246, 0.35); }
+.popup-action.scholarship {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--green-light);
+}
+
+.popup-action.internship {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--blue-light);
+}
+
+.popup-action.networking {
+  background: rgba(139, 92, 246, 0.2);
+  color: var(--purple-light);
+}
+
+
+.popup-action.scholarship:hover {
+  background: rgba(34, 197, 94, 0.35);
+}
+
+.popup-action.internship:hover {
+  background: rgba(59, 130, 246, 0.35);
+}
+
+.popup-action.networking:hover {
+  background: rgba(139, 92, 246, 0.35);
+}
+
 
 .popup-close {
   position: absolute;
@@ -339,7 +450,12 @@
   transition: all 0.15s;
 }
 
-.popup-close:hover { background: rgba(255, 255, 255, 0.12); color: var(--text); }
+
+.popup-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
 
 .submission-modal-backdrop {
   position: fixed;
@@ -353,6 +469,7 @@
   padding: 24px;
 }
 
+
 .submission-modal-card {
   width: min(720px, 100%);
   max-height: min(88vh, 880px);
@@ -364,6 +481,7 @@
   padding: 24px;
 }
 
+
 .submission-modal-header {
   display: flex;
   align-items: flex-start;
@@ -372,6 +490,7 @@
   margin-bottom: 20px;
 }
 
+
 .submission-modal-title {
   margin: 0 0 6px;
   font-size: 1.3rem;
@@ -379,11 +498,13 @@
   color: var(--text);
 }
 
+
 .submission-modal-copy {
   margin: 0;
   font-size: 0.85rem;
   color: var(--muted);
 }
+
 
 .submission-modal-close,
 .submission-secondary-btn {
@@ -398,11 +519,13 @@
   font-family: inherit;
 }
 
+
 .submission-modal-form {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
+
 
 .submission-grid {
   display: grid;
@@ -410,9 +533,11 @@
   gap: 16px;
 }
 
+
 .submission-grid-compact {
   grid-template-columns: 1.5fr 0.8fr 1fr;
 }
+
 
 .submission-field {
   display: flex;
@@ -420,11 +545,13 @@
   gap: 8px;
 }
 
+
 .submission-field span {
   font-size: 0.78rem;
   font-weight: 700;
   color: #cbd5e1;
 }
+
 
 .submission-field input,
 .submission-field select,
@@ -441,6 +568,7 @@
   resize: vertical;
 }
 
+
 .submission-field input:focus,
 .submission-field select:focus,
 .submission-field textarea:focus {
@@ -448,10 +576,12 @@
   box-shadow: 0 0 0 1px rgba(204, 0, 0, 0.25);
 }
 
+
 .submission-field input::placeholder,
 .submission-field textarea::placeholder {
   color: #70809b;
 }
+
 
 .submission-modal-error {
   margin: 0;
@@ -464,12 +594,14 @@
   font-weight: 600;
 }
 
+
 .submission-modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
   margin-top: 4px;
 }
+
 
 .submission-primary-btn {
   border: none;
@@ -484,24 +616,190 @@
   box-shadow: 0 14px 30px rgba(183, 15, 22, 0.2);
 }
 
+
 .submission-primary-btn:disabled {
   opacity: 0.72;
   cursor: wait;
 }
 
+
+/* ─── Globe Panel (left side — spinning Earth in space) ──────────────────────── */
+.globe-panel {
+  width: 55%;
+  min-width: 320px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  /* Deep-space nebula background — blue/purple galaxy tones */
+  background:
+    radial-gradient(ellipse at 15% 80%, rgba(48, 0, 100, 0.55) 0%, transparent 52%),
+    radial-gradient(ellipse at 85% 15%, rgba(0, 18, 95, 0.45) 0%, transparent 52%),
+    radial-gradient(ellipse at 55% 50%, rgba(18, 0, 75, 0.35) 0%, transparent 65%),
+    radial-gradient(ellipse at 28% 28%, rgba(28, 0, 120, 0.30) 0%, transparent 48%),
+    radial-gradient(ellipse at 72% 72%, rgba(60, 0, 80, 0.25) 0%, transparent 48%),
+    #06091a;
+}
+
+
+/* ─── Globe Canvas Wrapper ───────────────────────────────────────────────────── */
+.globe-canvas-wrap {
+  width: 100%;
+  height: 100%;
+}
+
+
+.globe-canvas-wrap canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+
+/* ─── Right Panel ────────────────────────────────────────────────────────────── */
+.right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+  min-width: 0;
+}
+
+
+/* ─── Right Panel Header ─────────────────────────────────────────────────────── */
+.right-panel-header {
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+
+.right-panel-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+
+.right-panel-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0 0 2px;
+}
+
+
+.right-panel-subtitle {
+  font-size: 0.73rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+
+/* ─── Expanded Listing Card (accordion) ──────────────────────────────────────── */
+@keyframes cardExpand {
+  from {
+    opacity: 0.5;
+    transform: scaleY(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+
+.listing-card-expanded {
+  background: rgba(14, 18, 32, 0.98) !important;
+  border: 1px solid rgba(59, 130, 246, 0.32) !important;
+  border-radius: 12px !important;
+  padding: 16px !important;
+  margin-bottom: 10px;
+  box-shadow: 0 0 28px rgba(59, 130, 246, 0.08);
+  cursor: default !important;
+  animation: cardExpand 0.18s ease;
+  transform-origin: top center;
+}
+
+
+.card-back-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: color 0.15s;
+  display: block;
+  margin-bottom: 4px;
+}
+
+
+.card-back-btn:hover {
+  color: var(--text);
+}
+
+
+.card-url-link {
+  display: inline-block;
+  color: var(--blue-light);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-decoration: none;
+  margin-bottom: 6px;
+  transition: opacity 0.15s;
+}
+
+
+.card-url-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+
 /* ─── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 800px) {
+  .globe-panel {
+    width: 42%;
+    min-width: 240px;
+  }
+}
+
+
+@media (max-width: 580px) {
+  .globe-panel {
+    display: none;
+  }
+
+  .right-panel {
+    border-left: none;
+  }
+}
+
+
 @media (max-width: 700px) {
-  .map-header    { flex-direction: column; align-items: flex-start; padding: 14px 16px; }
-  .map-header-actions { width: 100%; justify-content: flex-start; }
-  .map-container { padding: 12px; }
-  .map-img-wrap  { min-height: 240px; }
-  .map-legend    { flex-wrap: wrap; gap: 12px; }
-  .map-popup     { width: 270px; }
-  .submission-modal-card { padding: 18px; }
+  .submission-modal-card {
+    padding: 18px;
+  }
+
   .submission-grid,
-  .submission-grid-compact { grid-template-columns: 1fr; }
-  .submission-modal-actions { flex-direction: column-reverse; }
+  .submission-grid-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .submission-modal-actions {
+    flex-direction: column-reverse;
+  }
+
   .submission-primary-btn,
   .submission-secondary-btn,
-  .submission-modal-close { width: 100%; }
+  .submission-modal-close {
+    width: 100%;
+  }
 }

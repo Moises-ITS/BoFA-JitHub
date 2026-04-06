@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import { memo } from "react";
 import type { NodeType } from "../types/graphNodes";
 import { TYPE_COLOR } from "../constants/maps";
 
@@ -18,6 +18,7 @@ const FilterBar = memo(function FilterBar({ hiddenTypes, onToggleType }: FilterB
           <button
             key={type}
             className="toggle"
+            data-active={active ? "true" : "false"}
             onClick={() => onToggleType(type)}
             // these values are dynamic (change per type + active state) so stay inline
             style={{

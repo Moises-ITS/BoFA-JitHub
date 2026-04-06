@@ -57,6 +57,33 @@
   flex-wrap: wrap;
 }
 
+.map-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.map-submit-btn {
+  border: 1px solid rgba(204, 0, 0, 0.28);
+  background: linear-gradient(135deg, rgba(215, 25, 32, 0.18), rgba(215, 25, 32, 0.08));
+  color: #f7d7d9;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.map-submit-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(204, 0, 0, 0.48);
+  background: linear-gradient(135deg, rgba(215, 25, 32, 0.24), rgba(215, 25, 32, 0.12));
+}
+
 .map-filter-btn {
   display: flex;
   align-items: center;
@@ -237,8 +264,6 @@
 .popup-type-badge.internship  { background: rgba(59, 130, 246, 0.15); color: var(--blue-light);   border: 1px solid rgba(59, 130, 246, 0.2); }
 .popup-type-badge.networking  { background: rgba(139, 92, 246, 0.15); color: var(--purple-light); border: 1px solid rgba(139, 92, 246, 0.2); }
 
-.popup-match { font-size: 0.8rem; font-weight: 700; color: var(--green); }
-
 .popup-title {
   font-size: 0.9rem;
   font-weight: 700;
@@ -316,11 +341,167 @@
 
 .popup-close:hover { background: rgba(255, 255, 255, 0.12); color: var(--text); }
 
+.submission-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(4, 7, 16, 0.74);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.submission-modal-card {
+  width: min(720px, 100%);
+  max-height: min(88vh, 880px);
+  overflow-y: auto;
+  background: rgba(18, 21, 31, 0.98);
+  border: 1px solid rgba(37, 45, 64, 0.9);
+  border-radius: 20px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  padding: 24px;
+}
+
+.submission-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.submission-modal-title {
+  margin: 0 0 6px;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.submission-modal-copy {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.submission-modal-close,
+.submission-secondary-btn {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.submission-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.submission-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.submission-grid-compact {
+  grid-template-columns: 1.5fr 0.8fr 1fr;
+}
+
+.submission-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.submission-field span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.submission-field input,
+.submission-field select,
+.submission-field textarea {
+  width: 100%;
+  border: 1px solid rgba(37, 45, 64, 0.95);
+  background: rgba(9, 12, 20, 0.96);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+}
+
+.submission-field input:focus,
+.submission-field select:focus,
+.submission-field textarea:focus {
+  border-color: rgba(204, 0, 0, 0.5);
+  box-shadow: 0 0 0 1px rgba(204, 0, 0, 0.25);
+}
+
+.submission-field input::placeholder,
+.submission-field textarea::placeholder {
+  color: #70809b;
+}
+
+.submission-modal-error {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(243, 111, 111, 0.2);
+  background: rgba(243, 111, 111, 0.1);
+  color: #fecaca;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.submission-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.submission-primary-btn {
+  border: none;
+  background: linear-gradient(135deg, #d71920, #b70f16);
+  color: white;
+  border-radius: 12px;
+  padding: 11px 16px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 14px 30px rgba(183, 15, 22, 0.2);
+}
+
+.submission-primary-btn:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
 /* ─── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 700px) {
   .map-header    { flex-direction: column; align-items: flex-start; padding: 14px 16px; }
+  .map-header-actions { width: 100%; justify-content: flex-start; }
   .map-container { padding: 12px; }
   .map-img-wrap  { min-height: 240px; }
   .map-legend    { flex-wrap: wrap; gap: 12px; }
   .map-popup     { width: 270px; }
+  .submission-modal-card { padding: 18px; }
+  .submission-grid,
+  .submission-grid-compact { grid-template-columns: 1fr; }
+  .submission-modal-actions { flex-direction: column-reverse; }
+  .submission-primary-btn,
+  .submission-secondary-btn,
+  .submission-modal-close { width: 100%; }
 }

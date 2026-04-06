@@ -19,16 +19,17 @@ export function EmptyState({ icon: Icon, title, description, action }: EmptyStat
       className="flex flex-col items-center justify-center py-12 px-6 text-center"
     >
       <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
-        <Icon className="w-8 h-8 text-[#9CA3AF]" />
+        <Icon className="w-8 h-8" style={{ color: "var(--text-muted)" }} />
       </div>
       <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
-      <p className="text-sm text-[#9CA3AF] max-w-md mb-6">{description}</p>
+      <p className="text-sm max-w-md mb-6" style={{ color: "var(--text-muted)" }}>{description}</p>
       {action && (
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={action.onClick}
-          className="px-6 py-2 bg-gradient-to-r from-[#C0392B] to-[#E74C3C] text-white rounded-lg font-medium hover:shadow-lg hover:shadow-[#C0392B]/30 transition-all"
+          className="px-6 py-2 text-white rounded-lg font-medium transition-all"
+          style={{ background: "var(--brand-gradient)", boxShadow: "var(--shadow-brand)" }}
         >
           {action.label}
         </motion.button>

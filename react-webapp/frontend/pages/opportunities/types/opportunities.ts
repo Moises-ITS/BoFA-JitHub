@@ -11,12 +11,29 @@ export interface Opportunity {
   state:       string;
   lat:         number;
   lng:         number;
+  // Optional mapping back to a Research District (ai, cyber, engineering, bio, data)
+  districtId?: string;
   amount?:     string;
   stipend?:    string;
   deadline?:   string;
-  matchPct:    number;
   tags:        string[];
   description: string;
+  url?:        string;
+  matchPct?:   number;
+}
+
+export interface CreateOpportunityInput {
+  type: OpportunityType;
+  title: string;
+  org: string;
+  city: string;
+  state: string;
+  amount?: string;
+  stipend?: string;
+  deadline?: string;
+  tags: string[];
+  description: string;
+  url?: string;
 }
 
 export interface TrackedApplication {

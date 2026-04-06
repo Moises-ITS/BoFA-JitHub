@@ -93,8 +93,8 @@ export function NetworkGraph({ nodes, onNodeClick }: NetworkGraphProps) {
         ctx.moveTo(source.x!, source.y!);
         ctx.lineTo(target.x!, target.y!);
         ctx.strokeStyle = link.type === 'club' 
-          ? 'rgba(192, 57, 43, 0.3)' 
-          : 'rgba(230, 126, 34, 0.2)';
+          ? 'rgba(215, 25, 32, 0.24)' 
+          : 'rgba(122, 132, 240, 0.2)';
         ctx.lineWidth = link.type === 'club' ? 2 : 1;
         ctx.stroke();
       });
@@ -106,15 +106,15 @@ export function NetworkGraph({ nodes, onNodeClick }: NetworkGraphProps) {
         
         if (node.id === 'user') {
           const gradient = ctx.createLinearGradient(node.x! - 20, node.y! - 20, node.x! + 20, node.y! + 20);
-          gradient.addColorStop(0, '#C0392B');
-          gradient.addColorStop(1, '#E67E22');
+          gradient.addColorStop(0, '#D71920');
+          gradient.addColorStop(1, '#BA7BB0');
           ctx.fillStyle = gradient;
         } else {
-          ctx.fillStyle = hoveredNode?.id === node.id ? '#E74C3C' : 'rgba(255, 255, 255, 0.1)';
+          ctx.fillStyle = hoveredNode?.id === node.id ? '#F36F6F' : 'rgba(255, 255, 255, 0.1)';
         }
         
         ctx.fill();
-        ctx.strokeStyle = node.id === 'user' ? 'rgba(192, 57, 43, 0.5)' : 'rgba(255, 255, 255, 0.2)';
+        ctx.strokeStyle = node.id === 'user' ? 'rgba(215, 25, 32, 0.42)' : 'rgba(255, 255, 255, 0.2)';
         ctx.lineWidth = 2;
         ctx.stroke();
 
@@ -189,13 +189,14 @@ export function NetworkGraph({ nodes, onNodeClick }: NetworkGraphProps) {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
-            className="absolute bottom-4 left-4 bg-[#0F0F0F] border border-white/20 rounded-lg p-3 pointer-events-none z-10 shadow-xl"
+            className="absolute bottom-4 left-4 rounded-lg p-3 pointer-events-none z-10 shadow-xl"
+            style={{ backgroundColor: "var(--bg-canvas)", border: "1px solid var(--border-strong)" }}
           >
             <p className="font-semibold text-white">{hoveredNode.name}</p>
-            <p className="text-xs text-[#9CA3AF]">{hoveredNode.major} • {hoveredNode.year}</p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>{hoveredNode.major} • {hoveredNode.year}</p>
             <div className="flex flex-wrap gap-1 mt-2">
               {hoveredNode.clubs.slice(0, 2).map((club, idx) => (
-                <span key={idx} className="text-xs px-2 py-0.5 rounded bg-[#C0392B]/20 text-[#E74C3C]">
+                <span key={idx} className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: "var(--brand-primary-soft)", color: "var(--brand-primary)" }}>
                   {club}
                 </span>
               ))}
@@ -219,32 +220,33 @@ export function NetworkGraph({ nodes, onNodeClick }: NetworkGraphProps) {
               initial={{ x: 300, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 300, opacity: 0 }}
-              className="absolute right-0 top-0 bottom-0 w-80 bg-[#1A1A1A] border-l border-white/20 p-6 overflow-y-auto z-30"
+              className="absolute right-0 top-0 bottom-0 w-80 p-6 overflow-y-auto z-30"
+              style={{ backgroundColor: "var(--bg-surface)", borderLeft: "1px solid var(--border-strong)" }}
             >
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h3 className="text-xl font-semibold text-white">{selectedNode.name}</h3>
-                  <p className="text-sm text-[#9CA3AF]">{selectedNode.major}</p>
+                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>{selectedNode.major}</p>
                 </div>
                 <button
                   onClick={() => setSelectedNode(null)}
                   className="p-2 hover:bg-white/5 rounded-lg transition-colors"
                 >
-                  <X className="w-5 h-5 text-[#9CA3AF]" />
+                  <X className="w-5 h-5" style={{ color: "var(--text-muted)" }} />
                 </button>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <p className="text-xs text-[#9CA3AF] mb-2">Year</p>
+                  <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>Year</p>
                   <p className="text-sm text-white">{selectedNode.year}</p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-[#9CA3AF] mb-2">Clubs</p>
+                  <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>Clubs</p>
                   <div className="flex flex-wrap gap-2">
                     {selectedNode.clubs.map((club, idx) => (
-                      <span key={idx} className="text-xs px-2.5 py-1 rounded-md bg-[#C0392B]/20 text-[#E74C3C]">
+                      <span key={idx} className="text-xs px-2.5 py-1 rounded-md" style={{ backgroundColor: "var(--brand-primary-soft)", color: "var(--brand-primary)" }}>
                         {club}
                       </span>
                     ))}
@@ -252,10 +254,10 @@ export function NetworkGraph({ nodes, onNodeClick }: NetworkGraphProps) {
                 </div>
 
                 <div>
-                  <p className="text-xs text-[#9CA3AF] mb-2">Interests</p>
+                  <p className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>Interests</p>
                   <div className="flex flex-wrap gap-2">
                     {selectedNode.interests.map((interest, idx) => (
-                      <span key={idx} className="text-xs px-2.5 py-1 rounded-md bg-[#E67E22]/20 text-[#F39C12]">
+                      <span key={idx} className="text-xs px-2.5 py-1 rounded-md" style={{ backgroundColor: "var(--accent-networking-soft)", color: "var(--accent-networking)" }}>
                         {interest}
                       </span>
                     ))}
@@ -263,7 +265,7 @@ export function NetworkGraph({ nodes, onNodeClick }: NetworkGraphProps) {
                 </div>
 
                 {selectedNode.id !== 'user' && (
-                  <button className="w-full py-2 bg-gradient-to-r from-[#C0392B] to-[#E74C3C] text-white rounded-lg font-medium hover:shadow-lg hover:shadow-[#C0392B]/30 transition-all">
+                  <button className="w-full py-2 text-white rounded-lg font-medium transition-all" style={{ background: "var(--brand-gradient)", boxShadow: "var(--shadow-brand)" }}>
                     Connect
                   </button>
                 )}

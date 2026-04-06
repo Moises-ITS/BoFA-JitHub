@@ -17,7 +17,11 @@ const [
   authMod,
   connMod,
   oppMod,
+  chatMemMod,
+  buildingsMod,
   { startScheduler },
+  { runMigrations },
+  { ensureNodeIds },
 ] = await Promise.all([
   import("express"),
   import("cors"),
@@ -27,8 +31,20 @@ const [
   import("./routes/auth.js"),
   import("./routes/connections.js"),
   import("./routes/opportunities.js"),
+  import("./routes/chatMemory.js"),
+  import("./routes/buildings.js"),
   import("./scrapers/runner.js"),
+  import("./db/migrate.js"),
+  import("./services/graphService.js"),
 ])
+
+try {
+  await runMigrations()
+  await ensureNodeIds()
+} catch (err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err)
+  console.error("Startup migration/setup failed:", msg)
+}
 
 // Run the opportunities migration on startup
 try {
@@ -46,13 +62,31 @@ try {
 const express = expressModule.default
 const app = express()
 
-app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173" }))
+const configuredFrontendOrigin = process.env.FRONTEND_URL || "http://localhost:5173"
+const allowedOrigins = new Set<string>([
+  configuredFrontendOrigin,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+])
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true)
+      return
+    }
+
+    callback(new Error(`CORS blocked for origin ${origin}`))
+  },
+}))
 app.use(express.json())
 
-app.use("/api/graph",         graphMod.default)
-app.use("/api/auth",          authMod.default)
-app.use("/api/connections",   connMod.default)
+app.use("/api/graph", graphMod.default)
+app.use("/api/auth", authMod.default)
+app.use("/api/connections", connMod.default)
 app.use("/api/opportunities", oppMod.default)
+app.use("/api/chat-memory", chatMemMod.default)
+app.use("/api/buildings",   buildingsMod.default)
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" })

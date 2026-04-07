@@ -36,5 +36,5 @@ jobs:
         run: npm run build
 
       - name: Confirm Deployment
-        run: echo: "Main branch is validated. Connected platform will handle deployment."
+        run: echo "Main branch is validated. Connected platform will handle deployment."
         

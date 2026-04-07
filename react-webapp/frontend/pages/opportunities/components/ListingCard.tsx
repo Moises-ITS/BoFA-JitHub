@@ -18,10 +18,22 @@ export default function ListingCard({ opportunity: o, tracked, active = false, o
   const deadlineStr = o.deadline
     ? new Date(o.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : null;
+  const highlightLabel = o.deadline
+    ? (() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const due = new Date(o.deadline);
+        due.setHours(0, 0, 0, 0);
+        const days = Math.ceil((due.getTime() - today.getTime()) / 86400000);
+        if (days >= 0 && days <= 3) return 'Closing Soon';
+        if (days >= 0 && days <= 7) return 'Hot';
+        return null;
+      })()
+    : null;
 
   return (
     <div
-      className="listing-card"
+      className={`listing-card ${active ? 'active' : ''}`}
       onClick={() => onSelect(o.id)}
       style={{
         background: active ? 'rgba(14, 18, 32, 0.98)' : 'var(--surface)',
@@ -43,11 +55,14 @@ export default function ListingCard({ opportunity: o, tracked, active = false, o
         e.currentTarget.style.transform = active ? 'translateY(-1px)' : 'translateY(0)';
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: '1rem' }}>{TYPE_ICON[o.type]}</span>
+          <span className={`listing-card-icon ${o.type}`}>{TYPE_ICON[o.type]}</span>
           <NetworkBadge type={o.type} />
         </div>
+        {highlightLabel && (
+          <span className="listing-card-badge">{highlightLabel}</span>
+        )}
       </div>
 
       <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>

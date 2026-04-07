@@ -834,6 +834,20 @@
     linear-gradient(180deg, rgba(17, 24, 39, 0.98), rgba(17, 24, 39, 0.92)),
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 42%);
   flex-shrink: 0;
+  animation: panelRise 0.28s ease;
+}
+
+
+@keyframes panelRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 
@@ -938,6 +952,42 @@
 }
 
 
+.opportunities-feed-utility-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+
+.opportunities-focus-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  background: rgba(59, 130, 246, 0.1);
+  color: #dbeafe;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+
+.opportunities-clear-btn {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 7px 11px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+
 .opportunities-why-panel {
   display: flex;
   flex-direction: column;
@@ -965,6 +1015,156 @@
   font-weight: 800;
   color: var(--text);
   line-height: 1.35;
+}
+
+
+.opportunities-detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+
+.opportunities-detail-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+
+.opportunities-detail-org {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  font-weight: 700;
+}
+
+
+.opportunities-hot-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.14);
+  border: 1px solid rgba(248, 113, 113, 0.26);
+  color: #fca5a5;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+
+.opportunities-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+
+.opportunities-status-pill {
+  color: #93c5fd;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+
+.opportunities-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+
+.opportunities-type-chip,
+.opportunities-detail-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+
+.opportunities-detail-tag {
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+}
+
+
+.opportunities-type-chip.scholarship {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+
+
+.opportunities-type-chip.internship {
+  background: rgba(59, 130, 246, 0.14);
+  color: #93c5fd;
+}
+
+
+.opportunities-type-chip.networking {
+  background: rgba(167, 139, 250, 0.14);
+  color: #c4b5fd;
+}
+
+
+.opportunities-cta-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+
+.opportunities-primary-cta,
+.opportunities-secondary-cta,
+.opportunities-link-cta {
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  font-family: inherit;
+  text-decoration: none;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+
+.opportunities-primary-cta {
+  border: none;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: white;
+  cursor: pointer;
+}
+
+
+.opportunities-secondary-cta {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+}
+
+
+.opportunities-link-cta {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--blue-light);
+}
+
+
+.opportunities-primary-cta:hover,
+.opportunities-secondary-cta:hover,
+.opportunities-link-cta:hover {
+  transform: translateY(-1px);
 }
 
 
@@ -997,6 +1197,188 @@
 }
 
 
+.opportunities-empty-state {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  padding: 24px 12px;
+  color: var(--muted);
+}
+
+
+.opportunities-empty-orb {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 35%, rgba(96, 165, 250, 0.6), rgba(59, 130, 246, 0.1) 55%, transparent 70%);
+  box-shadow: 0 0 28px rgba(59, 130, 246, 0.24);
+  animation: floatOrb 2.8s ease-in-out infinite;
+}
+
+
+@keyframes floatOrb {
+  0%, 100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+
+.opportunities-empty-title {
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+
+.opportunities-empty-copy {
+  max-width: 320px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+
+.opportunities-empty-action {
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.12);
+  color: #dbeafe;
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+
+.opportunities-tracker-empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 32px 16px;
+  font-size: 0.8rem;
+}
+
+
+.opportunities-tracker-list {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+
+.opportunities-tracker-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+
+.opportunities-tracker-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+
+.opportunities-tracker-progress {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+
+.opportunities-tracker-node {
+  height: 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  opacity: 0.4;
+}
+
+
+.opportunities-tracker-node.active {
+  opacity: 1;
+  box-shadow: 0 0 14px currentColor;
+}
+
+
+.opportunities-tracker-date {
+  font-size: 0.65rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+
+.opportunities-globe-legend {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(6, 9, 26, 0.62);
+  backdrop-filter: blur(10px);
+  max-width: 260px;
+}
+
+
+.opportunities-globe-legend-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+
+.opportunities-globe-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+
+.opportunities-globe-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+
+.opportunities-globe-legend-dot.scholarship {
+  background: #4ade80;
+}
+
+
+.opportunities-globe-legend-dot.internship {
+  background: #60a5fa;
+}
+
+
+.opportunities-globe-legend-dot.networking {
+  background: #c4b5fd;
+}
+
+
 /* ─── Expanded Listing Card (accordion) ──────────────────────────────────────── */
 @keyframes cardExpand {
   from {
@@ -1021,6 +1403,53 @@
   cursor: default !important;
   animation: cardExpand 0.18s ease;
   transform-origin: top center;
+}
+
+
+.listing-card {
+  animation: panelRise 0.22s ease;
+}
+
+
+.listing-card-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+
+.listing-card-icon.scholarship {
+  background: rgba(34, 197, 94, 0.16);
+}
+
+
+.listing-card-icon.internship {
+  background: rgba(59, 130, 246, 0.16);
+}
+
+
+.listing-card-icon.networking {
+  background: rgba(167, 139, 250, 0.16);
+}
+
+
+.listing-card-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.14);
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  color: #fca5a5;
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 
@@ -1089,6 +1518,18 @@
   .opportunities-insight-grid,
   .opportunities-control-row {
     grid-template-columns: 1fr;
+  }
+
+  .opportunities-cta-row {
+    flex-direction: column;
+  }
+
+  .opportunities-primary-cta,
+  .opportunities-secondary-cta,
+  .opportunities-link-cta {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
   }
 
   .submission-grid,

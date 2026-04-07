@@ -2,6 +2,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { Stars, useTexture } from '@react-three/drei';
 import { useRef, useMemo, useEffect, Suspense, useState } from 'react';
 import * as THREE from 'three';
+import type { BufferGeometry, LineBasicMaterial } from 'three';
 import type { Opportunity } from '../types/opportunities';
 
 const GLOBE_R     = 2.0;
@@ -66,10 +67,12 @@ function dominantColor(opps: Opportunity[]): string {
 function ClusterGroup({
   cluster,
   activeId,
+  zoomLevel,
   phase,
 }: {
   cluster: Cluster;
   activeId: string | null;
+  zoomLevel: number;
   phase: number;
 }) {
   const n        = cluster.opps.length;
@@ -80,19 +83,10 @@ function ClusterGroup({
     [cluster.lat, cluster.lng],
   );
 
-  const ringPos = useMemo(
+  const targetDotPos = useMemo(
     () =>
-      cluster.opps.map((_, i) => {
-        if (n <= 1) return center;
-        const a = (2 * Math.PI * i) / n;
-        return ll(
-          cluster.lat + 3.8 * Math.sin(a),
-          cluster.lng + 3.8 * Math.cos(a),
-          GLOBE_R + 0.065,
-        );
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cluster, n],
+      cluster.opps.map((opp) => ll(opp.lat, opp.lng, GLOBE_R + 0.07)),
+    [cluster.opps],
   );
 
   const clusterSize  = Math.min(0.034 + n * 0.011, 0.10);
@@ -103,49 +97,69 @@ function ClusterGroup({
   const clusterHaloRef = useRef<THREE.Mesh>(null!);
   const dotRefs    = useRef<(THREE.Mesh | null)[]>([]);
   const dotHaloRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const lineRefs = useRef<(THREE.Line<BufferGeometry, LineBasicMaterial> | null)[]>([]);
 
   useFrame((state, delta) => {
     const t         = state.clock.elapsedTime;
-    const targetExp = isActive && n > 1 ? 1 : 0;
+    const targetExp = isActive && n > 1
+      ? [0.12, 0.68, 1][zoomLevel] ?? 0
+      : 0;
     exp.current    += (targetExp - exp.current) * Math.min(1, delta * 4);
     const e         = exp.current;
     const pulse     = 1 + Math.sin(t * 2.5 + phase) * 0.18;
+    const zoomShrink = isActive ? [0.92, 0.54, 0.22][zoomLevel] ?? 0.92 : 1;
 
     /* Cluster bubble shrinks as dots expand */
     if (clusterRef.current) {
-      const s = (1 - e * 0.92) * pulse * (isActive ? 1.4 : 1);
+      const s = (1 - e * 0.94) * pulse * (isActive ? 1.35 * zoomShrink : 1);
       clusterRef.current.scale.setScalar(Math.max(0.001, s));
       (clusterRef.current.material as THREE.MeshBasicMaterial).opacity =
-        Math.max(0, 1 - e * 1.5);
+        Math.max(0, (1 - e * 1.7) * (isActive ? 0.8 : 1));
     }
     if (clusterHaloRef.current) {
-      const haloScale = (1 - e * 0.86) * (1.45 + (isActive ? 0.2 : 0)) * pulse;
+      const haloScale = (1 - e * 0.9) * (1.35 + (isActive ? 0.18 : 0)) * pulse * zoomShrink;
       clusterHaloRef.current.scale.setScalar(Math.max(0.001, haloScale));
       (clusterHaloRef.current.material as THREE.MeshBasicMaterial).opacity =
-        Math.max(0, (1 - e * 1.2) * 0.28);
+        Math.max(0, (1 - e * 1.35) * 0.22);
     }
 
     /* Individual dots expand outward from center to ring positions */
     dotRefs.current.forEach((ref, i) => {
       if (!ref) return;
       const [sx, sy, sz] = center;
-      const [ex, ey, ez] = ringPos[i];
-      ref.position.set(
-        sx + (ex - sx) * e,
-        sy + (ey - sy) * e,
-        sz + (ez - sz) * e,
-      );
+      const [ex, ey, ez] = targetDotPos[i];
+      const px = sx + (ex - sx) * e;
+      const py = sy + (ey - sy) * e;
+      const pz = sz + (ez - sz) * e;
+      ref.position.set(px, py, pz);
       const dp = 1 + Math.sin(t * 2.5 + phase + i * 0.6) * 0.18;
-      const sc = e * dp * (cluster.opps[i].id === activeId ? 1.6 : 1);
+      const baseDotScale = [0.82, 0.58, 0.4][zoomLevel] ?? 0.82;
+      const sc = Math.max(0.16, 0.28 + e * 0.82) * baseDotScale * dp * (cluster.opps[i].id === activeId ? 1.45 : 1);
       ref.scale.setScalar(Math.max(0.001, sc));
-      (ref.material as THREE.MeshBasicMaterial).opacity = e * 0.95;
+      (ref.material as THREE.MeshBasicMaterial).opacity = Math.max(0.2, e * 0.95);
 
       const haloRef = dotHaloRefs.current[i];
       if (!haloRef) return;
       haloRef.position.copy(ref.position);
       haloRef.scale.setScalar(Math.max(0.001, sc * 1.9));
       (haloRef.material as THREE.MeshBasicMaterial).opacity =
-        e * (cluster.opps[i].id === activeId ? 0.45 : 0.24);
+        Math.max(0.08, e * (cluster.opps[i].id === activeId ? 0.45 : 0.24));
+
+      const lineRef = lineRefs.current[i];
+      if (lineRef) {
+        const positions = lineRef.geometry.attributes.position.array as Float32Array;
+        positions[0] = sx;
+        positions[1] = sy;
+        positions[2] = sz;
+        positions[3] = px;
+        positions[4] = py;
+        positions[5] = pz;
+        lineRef.geometry.attributes.position.needsUpdate = true;
+        (lineRef.material as THREE.LineBasicMaterial).opacity = Math.max(
+          0,
+          e * ([0.08, 0.2, 0.34][zoomLevel] ?? 0.08),
+        );
+      }
     });
   });
 
@@ -170,6 +184,24 @@ function ClusterGroup({
       {/* Individual dots — start at center, animate to ring */}
       {cluster.opps.map((opp, i) => (
         <group key={opp.id}>
+          <line
+            ref={(el) => { lineRefs.current[i] = el; }}
+            position={[0, 0, 0]}
+          >
+            <bufferGeometry>
+              <bufferAttribute
+                attach="attributes-position"
+                args={[new Float32Array([...center, ...center]), 3]}
+              />
+            </bufferGeometry>
+            <lineBasicMaterial
+              color={TYPE_COLOR[opp.type]}
+              transparent
+              opacity={0}
+              blending={THREE.AdditiveBlending}
+              depthWrite={false}
+            />
+          </line>
           <mesh
             ref={(el) => { dotHaloRefs.current[i] = el; }}
             position={center}
@@ -331,6 +363,7 @@ function GlobeGroup({
           key={`${c.lat.toFixed(1)},${c.lng.toFixed(1)}`}
           cluster={c}
           activeId={activeId}
+          zoomLevel={zoomLevel}
           phase={i * 0.73}
         />
       ))}
@@ -398,6 +431,7 @@ export default function GlobeView({
             bottom: 20,
             left: '50%',
             transform: 'translateX(-50%)',
+            zIndex: 3,
             display: 'flex',
             gap: 6,
             alignItems: 'center',
@@ -432,6 +466,22 @@ export default function GlobeView({
           ))}
         </div>
       )}
+
+      <div className="opportunities-globe-legend">
+        <div className="opportunities-globe-legend-title">Globe Guide</div>
+        <div className="opportunities-globe-legend-item">
+          <span className="opportunities-globe-legend-dot internship" />
+          Orb size grows with opportunity density
+        </div>
+        <div className="opportunities-globe-legend-item">
+          <span className="opportunities-globe-legend-dot scholarship" />
+          Color shows the dominant opportunity type
+        </div>
+        <div className="opportunities-globe-legend-item">
+          <span className="opportunities-globe-legend-dot networking" />
+          Zoom in to unpack clusters into real locations
+        </div>
+      </div>
     </div>
   );
 }

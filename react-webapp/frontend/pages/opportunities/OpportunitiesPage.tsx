@@ -22,7 +22,7 @@ export default function OpportunitiesPage() {
   const {
     filtered, sortedFiltered, counts, filter, setFilter,
     activeId, setActiveId,
-    tracked, trackApplication, createOpportunity,
+    tracked, trackApplication, untrackApplication, getTracked, createOpportunity,
     districtFilter, setDistrictFilter,
     locationFilter, setLocationFilter, locationOptions,
     sortBy, setSortBy, urgencyFilter, setUrgencyFilter,
@@ -119,6 +119,15 @@ export default function OpportunitiesPage() {
     { label: 'Due This Week', value: dueThisWeek, tone: 'red' },
     { label: 'Saved / Applied', value: trackedInView, tone: 'green' },
   ] as const;
+  const selectedTracked = selectedOpportunity ? getTracked(selectedOpportunity.id) : undefined;
+  const hasActiveFilters =
+    filter !== 'all' ||
+    locationFilter !== 'all' ||
+    urgencyFilter !== 'all' ||
+    districtFilter !== null;
+  const focusedLabel = selectedOpportunity
+    ? `${selectedOpportunity.city}, ${getLocationLabel(getCountry(selectedOpportunity.city).country)}`
+    : null;
 
   const whyThisMatters = selectedOpportunity
     ? [
@@ -340,14 +349,26 @@ export default function OpportunitiesPage() {
               urgencyOptions={urgencyOptions}
               insightCards={insightCards}
               selectedOpportunity={selectedOpportunity}
+              selectedTracked={selectedTracked}
+              focusedLabel={focusedLabel}
               whyThisMatters={whyThisMatters}
+              hasActiveFilters={hasActiveFilters}
               onSelect={(id) => {
                 setActiveId(id);
                 setSideTab('feed');
               }}
               onDeselect={() => setActiveId(null)}
+              onClearFilters={() => {
+                setFilter('all');
+                setLocationFilter('all');
+                setUrgencyFilter('all');
+                setDistrictFilter(null);
+                setActiveId(null);
+              }}
               onSortChange={setSortBy}
               onUrgencyChange={setUrgencyFilter}
+              onTrackStatus={trackApplication}
+              onUnsave={untrackApplication}
             />
           ) : (
             <ApplicationTracker

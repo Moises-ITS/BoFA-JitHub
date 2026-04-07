@@ -200,6 +200,10 @@ export function useOpportunities(initialDistrict?: string | null) {
     return tracked.find((item) => item.opportunityId === opportunityId);
   }
 
+  function untrackApplication(opportunityId: string) {
+    setTracked((previous) => previous.filter((item) => item.opportunityId !== opportunityId));
+  }
+
   async function createOpportunity(input: CreateOpportunityInput, token: string) {
     const response = await fetch(`${API}/api/opportunities`, {
       method: 'POST',
@@ -230,6 +234,7 @@ export function useOpportunities(initialDistrict?: string | null) {
     setActiveId,
     tracked,
     trackApplication,
+    untrackApplication,
     getTracked,
     createOpportunity,
     districtFilter,

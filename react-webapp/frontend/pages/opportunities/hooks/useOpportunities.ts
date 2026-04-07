@@ -6,6 +6,7 @@ import type {
   ApplicationStatus,
   CreateOpportunityInput,
 } from '../types/opportunities';
+import { COUNTRY_FLAG, getCountry } from '../utils/getCountry';
 
 const MOCK_OPPORTUNITIES: Opportunity[] = [
   { id:'opp-1',  type:'scholarship', title:'NJIT Merit Excellence Award',        org:'NJIT Financial Aid',           city:'Newark',        state:'NJ', lat:40.7357,  lng:-74.1724,  amount:'$8,000/yr',  deadline:'2026-04-15', tags:['GPA 3.5+','STEM','Undergraduate'],          description:'Merit-based scholarship for high-achieving STEM undergrads at NJIT.' },
@@ -55,6 +56,7 @@ export function useOpportunities(initialDistrict?: string | null) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [apiOpps, setApiOpps] = useState<Opportunity[]>([]);
   const [districtFilter, setDistrictFilter] = useState<string | null>(initialDistrict ?? null);
+  const [locationFilter, setLocationFilter] = useState<string>('all');
 
   useEffect(() => {
     fetch(`${API}/api/opportunities?limit=300`)
@@ -82,18 +84,41 @@ export function useOpportunities(initialDistrict?: string | null) {
     );
   }, [allOpportunities, districtFilter]);
 
+  const locationOptions = useMemo(() => {
+    const allCountries = Array.from(new Set([
+      ...Object.keys(COUNTRY_FLAG),
+      ...districtScoped.map((opportunity) => getCountry(opportunity.city).country),
+    ]));
+
+    const sortedCountries = allCountries.sort((a, b) => {
+      if (a === 'USA') return -1;
+      if (b === 'USA') return 1;
+      return a.localeCompare(b);
+    });
+
+    return ['all', ...sortedCountries];
+  }, [districtScoped]);
+
+  const locationScoped = useMemo(() => (
+    locationFilter === 'all'
+      ? districtScoped
+      : districtScoped.filter(
+          (opportunity) => getCountry(opportunity.city).country === locationFilter,
+        )
+  ), [districtScoped, locationFilter]);
+
   const filtered = useMemo(() => (
     filter === 'all'
-      ? districtScoped
-      : districtScoped.filter((opportunity) => opportunity.type === filter)
-  ), [filter, districtScoped]);
+      ? locationScoped
+      : locationScoped.filter((opportunity) => opportunity.type === filter)
+  ), [filter, locationScoped]);
 
   const counts = useMemo(() => ({
-    all: districtScoped.length,
-    scholarship: districtScoped.filter((opportunity) => opportunity.type === 'scholarship').length,
-    internship: districtScoped.filter((opportunity) => opportunity.type === 'internship').length,
-    networking: districtScoped.filter((opportunity) => opportunity.type === 'networking').length,
-  }), [districtScoped]);
+    all: locationScoped.length,
+    scholarship: locationScoped.filter((opportunity) => opportunity.type === 'scholarship').length,
+    internship: locationScoped.filter((opportunity) => opportunity.type === 'internship').length,
+    networking: locationScoped.filter((opportunity) => opportunity.type === 'networking').length,
+  }), [locationScoped]);
 
   function trackApplication(opportunityId: string, status: ApplicationStatus) {
     setTracked((previous) => {
@@ -144,5 +169,8 @@ export function useOpportunities(initialDistrict?: string | null) {
     createOpportunity,
     districtFilter,
     setDistrictFilter,
+    locationFilter,
+    setLocationFilter,
+    locationOptions,
   };
 }

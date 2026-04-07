@@ -23,6 +23,7 @@ export default function OpportunitiesPage() {
     activeId, setActiveId,
     tracked, trackApplication, getTracked, createOpportunity,
     districtFilter, setDistrictFilter,
+    locationFilter, setLocationFilter, locationOptions,
   } = useOpportunities(districtParam);
 
 
@@ -54,6 +55,12 @@ export default function OpportunitiesPage() {
     { key: 'internship', label: 'Internships' },
     { key: 'networking', label: 'Networking' },
   ];
+
+  function getLocationLabel(option: string) {
+    if (option === 'all') return 'All locations';
+    if (option === 'USA') return 'United States';
+    return option;
+  }
 
 
   useEffect(() => {
@@ -131,6 +138,29 @@ export default function OpportunitiesPage() {
             ))}
           </div>
 
+          <div className="opportunities-location-filter">
+            <label
+              className="opportunities-location-label"
+              htmlFor="opportunities-location"
+            >
+              Location
+            </label>
+            <select
+              id="opportunities-location"
+              className="opportunities-location-select"
+              value={locationFilter}
+              onChange={(event) => {
+                setLocationFilter(event.target.value);
+                setActiveId(null);
+              }}
+            >
+              {locationOptions.map((option) => (
+                <option key={option} value={option}>
+                  {getLocationLabel(option)}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {districtFilter && (
             <div
@@ -264,5 +294,3 @@ export default function OpportunitiesPage() {
     </div>
   );
 }
-
-

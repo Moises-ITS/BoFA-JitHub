@@ -47,8 +47,19 @@ const MOCK_OPPORTUNITIES: Opportunity[] = [
 ];
 
 export type FilterType = OpportunityType | 'all';
+export type SortType = 'best-match' | 'due-soon' | 'newest' | 'saved-first';
+export type UrgencyFilter = 'all' | 'due-soon' | 'this-week' | 'this-month';
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+
+function getDaysUntilDeadline(deadline?: string) {
+  if (!deadline) return Number.POSITIVE_INFINITY;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(deadline);
+  due.setHours(0, 0, 0, 0);
+  return Math.ceil((due.getTime() - today.getTime()) / 86400000);
+}
 
 export function useOpportunities(initialDistrict?: string | null) {
   const [filter, setFilter] = useState<FilterType>('all');
@@ -57,6 +68,8 @@ export function useOpportunities(initialDistrict?: string | null) {
   const [apiOpps, setApiOpps] = useState<Opportunity[]>([]);
   const [districtFilter, setDistrictFilter] = useState<string | null>(initialDistrict ?? null);
   const [locationFilter, setLocationFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<SortType>('best-match');
+  const [urgencyFilter, setUrgencyFilter] = useState<UrgencyFilter>('all');
 
   useEffect(() => {
     fetch(`${API}/api/opportunities?limit=300`)
@@ -107,18 +120,69 @@ export function useOpportunities(initialDistrict?: string | null) {
         )
   ), [districtScoped, locationFilter]);
 
+  const urgencyScoped = useMemo(() => {
+    if (urgencyFilter === 'all') return locationScoped;
+    return locationScoped.filter((opportunity) => {
+      const days = getDaysUntilDeadline(opportunity.deadline);
+      if (!Number.isFinite(days)) return false;
+      if (urgencyFilter === 'due-soon') return days >= 0 && days <= 3;
+      if (urgencyFilter === 'this-week') return days >= 0 && days <= 7;
+      return days >= 0 && days <= 30;
+    });
+  }, [locationScoped, urgencyFilter]);
+
   const filtered = useMemo(() => (
     filter === 'all'
-      ? locationScoped
-      : locationScoped.filter((opportunity) => opportunity.type === filter)
-  ), [filter, locationScoped]);
+      ? urgencyScoped
+      : urgencyScoped.filter((opportunity) => opportunity.type === filter)
+  ), [filter, urgencyScoped]);
+
+  const sortedFiltered = useMemo(() => {
+    const indexMap = new Map(allOpportunities.map((opportunity, index) => [opportunity.id, index]));
+    const trackedMap = new Map(tracked.map((item) => [item.opportunityId, item]));
+
+    const bestMatchScore = (opportunity: Opportunity) => {
+      let score = opportunity.matchPct ?? 0;
+      if (districtFilter && opportunity.districtId?.toLowerCase() === districtFilter.toLowerCase()) {
+        score += 40;
+      }
+      if (trackedMap.has(opportunity.id)) {
+        score += 18;
+      }
+      score += Math.max(0, 15 - Math.min(getDaysUntilDeadline(opportunity.deadline), 15));
+      if (opportunity.type === 'internship') score += 6;
+      return score;
+    };
+
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'due-soon') {
+        const delta = getDaysUntilDeadline(a.deadline) - getDaysUntilDeadline(b.deadline);
+        if (delta !== 0) return delta;
+      }
+
+      if (sortBy === 'saved-first') {
+        const aTracked = trackedMap.has(a.id) ? 1 : 0;
+        const bTracked = trackedMap.has(b.id) ? 1 : 0;
+        if (aTracked !== bTracked) return bTracked - aTracked;
+      }
+
+      if (sortBy === 'best-match') {
+        const delta = bestMatchScore(b) - bestMatchScore(a);
+        if (delta !== 0) return delta;
+      }
+
+      const aIndex = indexMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+      const bIndex = indexMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+      return aIndex - bIndex;
+    });
+  }, [allOpportunities, districtFilter, filtered, sortBy, tracked]);
 
   const counts = useMemo(() => ({
-    all: locationScoped.length,
-    scholarship: locationScoped.filter((opportunity) => opportunity.type === 'scholarship').length,
-    internship: locationScoped.filter((opportunity) => opportunity.type === 'internship').length,
-    networking: locationScoped.filter((opportunity) => opportunity.type === 'networking').length,
-  }), [locationScoped]);
+    all: urgencyScoped.length,
+    scholarship: urgencyScoped.filter((opportunity) => opportunity.type === 'scholarship').length,
+    internship: urgencyScoped.filter((opportunity) => opportunity.type === 'internship').length,
+    networking: urgencyScoped.filter((opportunity) => opportunity.type === 'networking').length,
+  }), [urgencyScoped]);
 
   function trackApplication(opportunityId: string, status: ApplicationStatus) {
     setTracked((previous) => {
@@ -158,6 +222,7 @@ export function useOpportunities(initialDistrict?: string | null) {
 
   return {
     filtered,
+    sortedFiltered,
     counts,
     filter,
     setFilter,
@@ -172,5 +237,9 @@ export function useOpportunities(initialDistrict?: string | null) {
     locationFilter,
     setLocationFilter,
     locationOptions,
+    sortBy,
+    setSortBy,
+    urgencyFilter,
+    setUrgencyFilter,
   };
 }

@@ -4,6 +4,7 @@ import NetworkBadge from './NetworkBadge';
 interface Props {
   opportunity: Opportunity;
   tracked?: TrackedApplication;
+  active?: boolean;
   onSelect: (id: string) => void;
 }
 
@@ -13,7 +14,7 @@ const TYPE_ICON: Record<string, string> = {
   networking:  '🤝',
 };
 
-export default function ListingCard({ opportunity: o, tracked, onSelect }: Props) {
+export default function ListingCard({ opportunity: o, tracked, active = false, onSelect }: Props) {
   const deadlineStr = o.deadline
     ? new Date(o.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : null;
@@ -23,16 +24,24 @@ export default function ListingCard({ opportunity: o, tracked, onSelect }: Props
       className="listing-card"
       onClick={() => onSelect(o.id)}
       style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 10,
+        background: active ? 'rgba(14, 18, 32, 0.98)' : 'var(--surface)',
+        border: active ? '1px solid rgba(59, 130, 246, 0.48)' : '1px solid var(--border)',
+        borderRadius: 12,
         padding: '12px 14px',
         cursor: 'pointer',
-        transition: 'border-color 0.15s',
-        marginBottom: 8,
+        transition: 'border-color 0.15s, transform 0.15s, box-shadow 0.15s',
+        marginBottom: 10,
+        boxShadow: active ? '0 0 28px rgba(59, 130, 246, 0.14)' : 'none',
+        transform: active ? 'translateY(-1px)' : 'translateY(0)',
       }}
-      onMouseEnter={e => (e.currentTarget.style.borderColor = '#4a5568')}
-      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = active ? 'rgba(59, 130, 246, 0.6)' : '#4a5568';
+        e.currentTarget.style.transform = 'translateY(-1px)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = active ? 'rgba(59, 130, 246, 0.48)' : 'var(--border)';
+        e.currentTarget.style.transform = active ? 'translateY(-1px)' : 'translateY(0)';
+      }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

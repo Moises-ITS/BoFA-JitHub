@@ -1,12 +1,13 @@
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOpportunities } from './hooks/useOpportunities';
-import type { FilterType } from './hooks/useOpportunities';
+import type { FilterType, SortType, UrgencyFilter } from './hooks/useOpportunities';
 import SmartFeed from './components/SmartFeed';
 import ApplicationTracker from './components/ApplicationTracker';
 import GlobeView from './components/GlobeView';
 import SubmitOpportunityModal from './components/SubmitOpportunityModal';
 import { useAuth } from '../../context/AuthContext';
+import { getCountry } from './utils/getCountry';
 import './Opportunities.css';
 
 
@@ -19,11 +20,12 @@ export default function OpportunitiesPage() {
   const districtParam = searchParams.get('district');
   const { token } = useAuth();
   const {
-    filtered, counts, filter, setFilter,
+    filtered, sortedFiltered, counts, filter, setFilter,
     activeId, setActiveId,
-    tracked, trackApplication, getTracked, createOpportunity,
+    tracked, trackApplication, createOpportunity,
     districtFilter, setDistrictFilter,
     locationFilter, setLocationFilter, locationOptions,
+    sortBy, setSortBy, urgencyFilter, setUrgencyFilter,
   } = useOpportunities(districtParam);
 
 
@@ -62,6 +64,20 @@ export default function OpportunitiesPage() {
     return option;
   }
 
+  const sortOptions: { key: SortType; label: string }[] = [
+    { key: 'best-match', label: 'Best Match' },
+    { key: 'due-soon', label: 'Due Soon' },
+    { key: 'newest', label: 'Newest' },
+    { key: 'saved-first', label: 'Saved First' },
+  ];
+
+  const urgencyOptions: { key: UrgencyFilter; label: string }[] = [
+    { key: 'all', label: 'All dates' },
+    { key: 'due-soon', label: 'Due Soon' },
+    { key: 'this-week', label: 'This Week' },
+    { key: 'this-month', label: 'This Month' },
+  ];
+
 
   useEffect(() => {
     setSearchParams((prev) => {
@@ -75,6 +91,60 @@ export default function OpportunitiesPage() {
 
   const activeCount =
     counts[filter === 'all' ? 'all' : (filter as keyof typeof counts)];
+
+  const selectedOpportunity =
+    sortedFiltered.find((opportunity) => opportunity.id === activeId) ?? null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const msPerDay = 86400000;
+  const daysUntil = (deadline?: string) => {
+    if (!deadline) return Number.POSITIVE_INFINITY;
+    const due = new Date(deadline);
+    due.setHours(0, 0, 0, 0);
+    return Math.ceil((due.getTime() - today.getTime()) / msPerDay);
+  };
+
+  const dueThisWeek = sortedFiltered.filter((opportunity) => {
+    const days = daysUntil(opportunity.deadline);
+    return Number.isFinite(days) && days >= 0 && days <= 7;
+  }).length;
+
+  const trackedInView = tracked.filter((item) =>
+    sortedFiltered.some((opportunity) => opportunity.id === item.opportunityId),
+  ).length;
+
+  const insightCards = [
+    { label: 'Open Now', value: sortedFiltered.length, tone: 'blue' },
+    { label: 'Due This Week', value: dueThisWeek, tone: 'red' },
+    { label: 'Saved / Applied', value: trackedInView, tone: 'green' },
+  ] as const;
+
+  const whyThisMatters = selectedOpportunity
+    ? [
+        (() => {
+          const days = daysUntil(selectedOpportunity.deadline);
+          if (!Number.isFinite(days)) return 'Flexible timeline with no posted deadline.';
+          if (days < 0) return 'Deadline recently passed, so this one may need verification.';
+          if (days === 0) return 'Deadline is today, making this the highest-priority action.';
+          if (days <= 7) return `Deadline closes in ${days} day${days === 1 ? '' : 's'}, so it deserves fast follow-up.`;
+          return `Deadline is ${days} days out, which gives you room to prepare a stronger application.`;
+        })(),
+        `${getLocationLabel(getCountry(selectedOpportunity.city).country)} opportunity anchored in ${selectedOpportunity.city}, ${selectedOpportunity.state}.`,
+        selectedOpportunity.districtId
+          ? `Strong tie to the ${selectedOpportunity.districtId.replace(/-/g, ' ')} district, which makes it feel more tailored to this experience.`
+          : `${selectedOpportunity.type === 'networking' ? 'Great relationship-building opportunity' : 'Clear career-building opportunity'} with a focused ${selectedOpportunity.type} path.`,
+      ]
+    : [
+        'Pick a pin on the globe or a card in the feed to see why an opportunity stands out.',
+        'This panel will surface urgency, location context, and why it is worth attention.',
+      ];
+
+  useEffect(() => {
+    if (activeId && !sortedFiltered.some((opportunity) => opportunity.id === activeId)) {
+      setActiveId(null);
+    }
+  }, [activeId, setActiveId, sortedFiltered]);
 
 
   return (
@@ -261,16 +331,23 @@ export default function OpportunitiesPage() {
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           {sideTab === 'feed' ? (
             <SmartFeed
-              opportunities={filtered}
+              opportunities={sortedFiltered}
               tracked={tracked}
               activeId={activeId}
+              sortBy={sortBy}
+              urgencyFilter={urgencyFilter}
+              sortOptions={sortOptions}
+              urgencyOptions={urgencyOptions}
+              insightCards={insightCards}
+              selectedOpportunity={selectedOpportunity}
+              whyThisMatters={whyThisMatters}
               onSelect={(id) => {
                 setActiveId(id);
                 setSideTab('feed');
               }}
               onDeselect={() => setActiveId(null)}
-              trackApplication={trackApplication}
-              getTracked={getTracked}
+              onSortChange={setSortBy}
+              onUrgencyChange={setUrgencyFilter}
             />
           ) : (
             <ApplicationTracker

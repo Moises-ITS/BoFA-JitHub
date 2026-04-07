@@ -1,103 +1,102 @@
 name: Security
 
-on:
+on: #code runs on pull and push request
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop] 
   push:
     branches: [main, develop]
   schedule:
-    - cron: "0 6 * * 1"
+    - cron: "0 6 * * 1" #schedules run for every monday at 6:00 UTC
 
-  permissions:
-    contents: read
-    security-events: write
+permissions: #has permissions to read contents of repo but edit security events
+  contents: read
+  security-events: write
 
-  concurrency:
-    group: security-${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
+concurrency: #if run multiple times only the most recent is run to prevent multiple copies running at once
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
   
-  jobs:
-    secrets-and-dependencies:
-      name: Secrets and Dependency Scans
-      runs-on: ubuntu-latest
-      timeout-minutes: 20
+jobs:
+  secrets-and-dependencies:
+    name: Secrets and Dependency Scans #opens ubuntu
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 #kills task after 20 minutes
 
-      steps:
-        - name: Checkout repository
-          uses: actions/checkout@v4
-          with:
-            fetch-depth: 0
+    steps:
+      - name: Checkout repository #downloads repository onto ubuntu VM
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 #checks full git history not latest commit
 
-        - name: Setup Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: 20
-            cache: npm
+      - name: Setup Node.js #setup node.js in setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20 #version
+          cache: npm #enables caching for npm dependencies, speed up job
 
-        - name: Install dependencies
-          run: npm ci
+      - name: Install dependencies #install dependencies used instead of npm install because more consistant and strict
+        run: npm ci
 
-        - name: Scan for Hardcoded Secrets #Smartbot that looks for Strings resembling AWS keys or Firebase tokens
-          uses: trufflesecurity/trufflehog@main #trufflehog is the the bot type and @main is branch being used on
-          with:
-            path: ./ #means scan entire repository
-            base: ${{ github.event.repository.default_branch }} #grabs repo default branch which is usually main
-            extra_args: --debug --only-verified #modifies how the scanner behaves: --debug gives verbose logs which makes it easier to troubleshoot
+      - name: Scan for Hardcoded Secrets #Smartbot that looks for Strings resembling AWS keys or Firebase tokens
+        uses: trufflesecurity/trufflehog@main #trufflehog is the the bot type and @main is branch being used on
+        with:
+          path: ./ #means scan entire repository
+          base: ${{ github.event.repository.default_branch }} #grabs repo default branch which is usually main
+          extra_args: --debug --only-verified #modifies how the scanner behaves: --debug gives verbose logs which makes it easier to troubleshoot
             #--only-verified only shows real secrets and reduces false positives
         
-        - name: GitGuardian Scan
-          uses: GitGuardian/ggshield-action@v1.27.0 #Pulls in GitGuardian engine that scans for over 400+ credential types
-          env:
-            GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }} #Secure variable that connects to private API key without showing in logs
-          
-        - name: Dependency Scan (Snyk) #checks project libraries and packages(npm, pip, etc.) for known CVEs
-        #Could be outdated or insecure packages
-        uses: snyk/actions/node@master # Snyk version for node.js and master means latest or could do:
-        #snyk/actions/python@master for python code, etc.
+      - name: GitGuardian Scan
+        uses: GitGuardian/ggshield-action@v1.27.0 #Pulls in GitGuardian engine that scans for over 400+ credential types
         env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }} #Requires API token
-        with:
-          args: --severity-threshold=high #Controls what level of issues fail the pipeline
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }} #Secure variable that connects to private API key without showing in logs
+          
+      - name: Dependency Scan (Snyk) #checks project libraries and packages(npm, pip, etc.) for known CVEs
+        #Could be outdated or insecure packages
+      uses: snyk/actions/node@master # Snyk version for node.js and master means latest or could do:
+        #snyk/actions/python@master for python code, etc.
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }} #Requires API token
+      with:
+        args: --severity-threshold=high #Controls what level of issues fail the pipeline
 
-        - name: Audit npm package
-          run: npm audit --audit-level=high
+      - name: Audit npm package
+        run: npm audit --audit-level=high
 
-  codeql:
-    name: SAST with CodeQL #Dependency: if secret scan failed(Ex. Leaked password), this task wont start
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+codeql:
+  name: SAST with CodeQL #Dependency: if secret scan failed(Ex. Leaked password), this task wont start
+  runs-on: ubuntu-latest
+  timeout-minutes: 30
   
-    steps:
-      - name: Checkout repository
-        uses: actions: actions/checkout@v4
+  steps:
+    - name: Checkout repository
+      uses: actions: actions/checkout@v4
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: javascript-typescript, python, javascript
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+    - name: Initialize CodeQL #setup codeql analysis
+      uses: github/codeql-action/init@v3
+      with:
+        languages: javascript-typescript, python, javascript
+    - name: Autobuild #automatically build the project so analysis can work properly
+      uses: github/codeql-action/autobuild@v3
 
-      - name: Perform CodeQL analysis
-        uses: github/codeql-actions/analyze@v3
+    - name: Perform CodeQL analysis
+      uses: github/codeql-action/analyze@v3 #runs analysis and uploads results
 
-  gatekeeper:
-    name: Gatekeeper
-    runs-on: ubuntu-latest
-    if: always()
-    needs:
-      - secrets-and-dependencies
-      - codeql
-      - infrastructure-security
-      - container-security
-    steps:
-      - name: Fail if any required security job failed
-        if: ${{ contains(needs.*.result, 'failure') }}
-        run: |
-          echo "Security breach detected. Deployment blocked."
-          exit 1
+gatekeeper:
+  name: Gatekeeper
+  runs-on: ubuntu-latest
+  if: always()
+  needs:
+    - secrets-and-dependencies
+    - codeql
+    - infrastructure-security
+  steps:
+    - name: Fail if any required security job failed
+      if: ${{ contains(needs.*.result, 'failure') }}
+      run: |
+        echo "Security breach detected. Deployment blocked."
+        exit 1
 
-      - name: Pass when all security jobs are green
-        if: ${{ !contains(needs.*.result, 'failure') }}
-        run: echo "Guardian is active. Code is secure."
+    - name: Pass when all security jobs are green
+      if: ${{ !contains(needs.*.result, 'failure') }}
+      run: echo "Guardian is active. Code is secure."
         

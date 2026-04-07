@@ -20,12 +20,12 @@ concurrency: #Prevents wasting time runner: Ex. You make X commit and 30 seconds
 jobs:
   validate:
     name: Lint, Typecheck, Test, Build
-    runs-on: ubunut-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 15
   
     steps:
       - name: Checkout Repo
-      - uses: actions/checkout@v4
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

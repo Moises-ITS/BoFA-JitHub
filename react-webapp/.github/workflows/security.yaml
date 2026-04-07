@@ -52,51 +52,50 @@ jobs:
           
       - name: Dependency Scan (Snyk) #checks project libraries and packages(npm, pip, etc.) for known CVEs
         #Could be outdated or insecure packages
-      uses: snyk/actions/node@master # Snyk version for node.js and master means latest or could do:
+        uses: snyk/actions/node@master # Snyk version for node.js and master means latest or could do:
         #snyk/actions/python@master for python code, etc.
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }} #Requires API token
-      with:
-        args: --severity-threshold=high #Controls what level of issues fail the pipeline
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }} #Requires API token
+        with:
+          args: --severity-threshold=high #Controls what level of issues fail the pipeline
 
       - name: Audit npm package
         run: npm audit --audit-level=high
 
-codeql:
-  name: SAST with CodeQL #Dependency: if secret scan failed(Ex. Leaked password), this task wont start
-  runs-on: ubuntu-latest
-  timeout-minutes: 30
+  codeql:
+    name: SAST with CodeQL #Dependency: if secret scan failed(Ex. Leaked password), this task wont start
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
   
   steps:
     - name: Checkout repository
-      uses: actions: actions/checkout@v4
+      uses: actions/checkout@v4
 
     - name: Initialize CodeQL #setup codeql analysis
       uses: github/codeql-action/init@v3
       with:
-        languages: javascript-typescript, python, javascript
+        languages: javascript-typescript, python
     - name: Autobuild #automatically build the project so analysis can work properly
       uses: github/codeql-action/autobuild@v3
 
     - name: Perform CodeQL analysis
       uses: github/codeql-action/analyze@v3 #runs analysis and uploads results
 
-gatekeeper:
-  name: Gatekeeper
-  runs-on: ubuntu-latest
-  if: always()
-  needs:
-    - secrets-and-dependencies
-    - codeql
-    - infrastructure-security
-  steps:
-    - name: Fail if any required security job failed
-      if: ${{ contains(needs.*.result, 'failure') }}
-      run: |
-        echo "Security breach detected. Deployment blocked."
-        exit 1
+  gatekeeper:
+    name: Gatekeeper
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - secrets-and-dependencies
+      - codeql
+    steps:
+      - name: Fail if any required security job failed
+        if: ${{ contains(needs.*.result, 'failure') }}
+        run: |
+          echo "Security breach detected. Deployment blocked."
+          exit 1
 
-    - name: Pass when all security jobs are green
-      if: ${{ !contains(needs.*.result, 'failure') }}
-      run: echo "Guardian is active. Code is secure."
+      - name: Pass when all security jobs are green
+        if: ${{ !contains(needs.*.result, 'failure') }}
+        run: echo "Guardian is active. Code is secure."
         

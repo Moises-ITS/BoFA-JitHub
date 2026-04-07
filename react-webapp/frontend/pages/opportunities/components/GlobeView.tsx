@@ -1,8 +1,7 @@
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Stars, useTexture } from '@react-three/drei';
+import { Stars } from '@react-three/drei';
 import { useRef, useMemo, useEffect, Suspense, useState } from 'react';
 import * as THREE from 'three';
-import type { BufferGeometry, LineBasicMaterial } from 'three';
 import type { Opportunity } from '../types/opportunities';
 
 const GLOBE_R     = 2.0;
@@ -79,13 +78,13 @@ function ClusterGroup({
   const isActive = cluster.opps.some((o) => o.id === activeId);
 
   const center = useMemo(
-    () => ll(cluster.lat, cluster.lng, GLOBE_R + 0.065),
+    () => ll(cluster.lat, cluster.lng, GLOBE_R + 0.028),
     [cluster.lat, cluster.lng],
   );
 
   const targetDotPos = useMemo(
     () =>
-      cluster.opps.map((opp) => ll(opp.lat, opp.lng, GLOBE_R + 0.07)),
+      cluster.opps.map((opp) => ll(opp.lat, opp.lng, GLOBE_R + 0.03)),
     [cluster.opps],
   );
 
@@ -97,7 +96,14 @@ function ClusterGroup({
   const clusterHaloRef = useRef<THREE.Mesh>(null!);
   const dotRefs    = useRef<(THREE.Mesh | null)[]>([]);
   const dotHaloRefs = useRef<(THREE.Mesh | null)[]>([]);
-  const lineRefs = useRef<(THREE.Line<BufferGeometry, LineBasicMaterial> | null)[]>([]);
+  const centerVector = useMemo(
+    () => new THREE.Vector3(...center).normalize(),
+    [center],
+  );
+  const targetVectors = useMemo(
+    () => targetDotPos.map((position) => new THREE.Vector3(...position).normalize()),
+    [targetDotPos],
+  );
 
   useFrame((state, delta) => {
     const t         = state.clock.elapsedTime;
@@ -126,40 +132,24 @@ function ClusterGroup({
     /* Individual dots expand outward from center to ring positions */
     dotRefs.current.forEach((ref, i) => {
       if (!ref) return;
-      const [sx, sy, sz] = center;
-      const [ex, ey, ez] = targetDotPos[i];
-      const px = sx + (ex - sx) * e;
-      const py = sy + (ey - sy) * e;
-      const pz = sz + (ez - sz) * e;
+      const current = centerVector.clone().slerp(targetVectors[i], e).multiplyScalar(GLOBE_R + 0.03);
+      const px = current.x;
+      const py = current.y;
+      const pz = current.z;
       ref.position.set(px, py, pz);
       const dp = 1 + Math.sin(t * 2.5 + phase + i * 0.6) * 0.18;
-      const baseDotScale = [0.82, 0.58, 0.4][zoomLevel] ?? 0.82;
-      const sc = Math.max(0.16, 0.28 + e * 0.82) * baseDotScale * dp * (cluster.opps[i].id === activeId ? 1.45 : 1);
+      const baseDotScale = [0.78, 0.5, 0.28][zoomLevel] ?? 0.78;
+      const sc = Math.max(0.12, 0.2 + e * 0.68) * baseDotScale * dp * (cluster.opps[i].id === activeId ? 1.32 : 1);
+      const frontness = THREE.MathUtils.clamp((pz + GLOBE_R + 0.18) / (GLOBE_R * 2.3), 0.18, 1);
       ref.scale.setScalar(Math.max(0.001, sc));
-      (ref.material as THREE.MeshBasicMaterial).opacity = Math.max(0.2, e * 0.95);
+      (ref.material as THREE.MeshBasicMaterial).opacity = Math.max(0.1, e * 0.95 * frontness);
 
       const haloRef = dotHaloRefs.current[i];
       if (!haloRef) return;
       haloRef.position.copy(ref.position);
       haloRef.scale.setScalar(Math.max(0.001, sc * 1.9));
       (haloRef.material as THREE.MeshBasicMaterial).opacity =
-        Math.max(0.08, e * (cluster.opps[i].id === activeId ? 0.45 : 0.24));
-
-      const lineRef = lineRefs.current[i];
-      if (lineRef) {
-        const positions = lineRef.geometry.attributes.position.array as Float32Array;
-        positions[0] = sx;
-        positions[1] = sy;
-        positions[2] = sz;
-        positions[3] = px;
-        positions[4] = py;
-        positions[5] = pz;
-        lineRef.geometry.attributes.position.needsUpdate = true;
-        (lineRef.material as THREE.LineBasicMaterial).opacity = Math.max(
-          0,
-          e * ([0.08, 0.2, 0.34][zoomLevel] ?? 0.08),
-        );
-      }
+        Math.max(0.04, e * (cluster.opps[i].id === activeId ? 0.45 : 0.24) * frontness);
     });
   });
 
@@ -184,29 +174,11 @@ function ClusterGroup({
       {/* Individual dots — start at center, animate to ring */}
       {cluster.opps.map((opp, i) => (
         <group key={opp.id}>
-          <line
-            ref={(el) => { lineRefs.current[i] = el; }}
-            position={[0, 0, 0]}
-          >
-            <bufferGeometry>
-              <bufferAttribute
-                attach="attributes-position"
-                args={[new Float32Array([...center, ...center]), 3]}
-              />
-            </bufferGeometry>
-            <lineBasicMaterial
-              color={TYPE_COLOR[opp.type]}
-              transparent
-              opacity={0}
-              blending={THREE.AdditiveBlending}
-              depthWrite={false}
-            />
-          </line>
           <mesh
             ref={(el) => { dotHaloRefs.current[i] = el; }}
             position={center}
           >
-            <sphereGeometry args={[0.062, 12, 12]} />
+            <sphereGeometry args={[0.044, 12, 12]} />
             <meshBasicMaterial
               color={TYPE_COLOR[opp.type]}
               transparent
@@ -219,7 +191,7 @@ function ClusterGroup({
             ref={(el) => { dotRefs.current[i] = el; }}
             position={center}
           >
-            <sphereGeometry args={[0.036, 16, 16]} />
+            <sphereGeometry args={[0.024, 16, 16]} />
             <meshBasicMaterial
               color={TYPE_COLOR[opp.type]}
               transparent
@@ -234,34 +206,28 @@ function ClusterGroup({
 
 /* ── Earth sphere + atmosphere (uses useTexture → must be inside Suspense) ── */
 function EarthMesh() {
-  const night = useTexture('https://unpkg.com/three-globe/example/img/earth-night.jpg');
-
   return (
     <>
-      {/* Layer 1 — base: standard material so ambient light lifts landmasses
-          slightly, while high emissiveIntensity makes city lights blaze.   */}
+      {/* Layer 1 — safer single-texture earth base */}
       <mesh>
         <sphereGeometry args={[GLOBE_R, 64, 64]} />
         <meshStandardMaterial
-          map={night}
-          emissiveMap={night}
-          emissive={new THREE.Color('#ffffff')}
-          emissiveIntensity={2.9}
-          roughness={0.82}
-          metalness={0}
-          color={new THREE.Color('#dbeafe')}
+          color={new THREE.Color('#173a63')}
+          emissive={new THREE.Color('#10233c')}
+          emissiveIntensity={0.75}
+          roughness={0.92}
+          metalness={0.04}
         />
       </mesh>
 
-      {/* Layer 2 — bloom halo: additive blending causes bright city-light
-          pixels to bleed outward, faking a glow without post-processing.   */}
-      <mesh>
-        <sphereGeometry args={[GLOBE_R * 1.01, 64, 64]} />
+      {/* Layer 2 — night lights */}
+      <mesh rotation={[0, 0.35, 0]}>
+        <sphereGeometry args={[GLOBE_R * 1.003, 48, 48]} />
         <meshBasicMaterial
-          map={night}
-          blending={THREE.AdditiveBlending}
+          color="#56b3ff"
           transparent
-          opacity={0.5}
+          opacity={0.06}
+          wireframe
           depthWrite={false}
         />
       </mesh>
@@ -278,13 +244,13 @@ function EarthMesh() {
         />
       </mesh>
 
-      {/* Layer 4 — soft cyan aura for a brighter silhouette */}
+      {/* Layer 4 — fresnel-like outer aura */}
       <mesh>
-        <sphereGeometry args={[GLOBE_R * 1.09, 32, 32]} />
+        <sphereGeometry args={[GLOBE_R * 1.085, 40, 40]} />
         <meshBasicMaterial
-          color="#38bdf8"
+          color="#8edcff"
           transparent
-          opacity={0.05}
+          opacity={0.07}
           side={THREE.BackSide}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
@@ -307,7 +273,9 @@ function GlobeGroup({
   const groupRef   = useRef<THREE.Group>(null!);
   const spinning   = useRef(true);
   const targetY    = useRef(0);
+  const targetX    = useRef(0);
   const targetCamZ = useRef(CAM_DEFAULT);
+  const targetCamX = useRef(0);
   const targetCamY = useRef(0);
 
   const clusters  = useMemo(() => buildClusters(opportunities), [opportunities]);
@@ -319,14 +287,17 @@ function GlobeGroup({
   useEffect(() => {
     if (activeOpp) {
       spinning.current = false;
-      /* Rotate so activeOpp.lng faces the camera (+Z side) */
-      targetY.current   = -(90 + activeOpp.lng) * (Math.PI / 180);
+      /* Rotate so the selected longitude faces the camera and latitude is centered. */
+      targetY.current   = THREE.MathUtils.degToRad(-activeOpp.lng - 90);
+      targetX.current   = THREE.MathUtils.degToRad(activeOpp.lat);
       targetCamZ.current = CAM_LEVELS[zoomLevel];
-      /* Shift camera vertically so the selected latitude is centred */
-      targetCamY.current = GLOBE_R * Math.sin(activeOpp.lat * (Math.PI / 180));
+      targetCamX.current = 0;
+      targetCamY.current = 0;
     } else {
       spinning.current   = true;
+      targetX.current    = 0;
       targetCamZ.current = CAM_DEFAULT;
+      targetCamX.current = 0;
       targetCamY.current = 0;
     }
   }, [activeOpp, zoomLevel]);
@@ -336,20 +307,26 @@ function GlobeGroup({
 
     if (spinning.current) {
       groupRef.current.rotation.y += delta * 0.08;
+      groupRef.current.rotation.x += (0 - groupRef.current.rotation.x) * Math.min(1, delta * 1.6);
     } else {
       /* Normalise to shortest arc before lerping */
       let cur = groupRef.current.rotation.y;
       while (cur - targetY.current >  Math.PI) cur -= 2 * Math.PI;
       while (cur - targetY.current < -Math.PI) cur += 2 * Math.PI;
       groupRef.current.rotation.y =
-        cur + (targetY.current - cur) * Math.min(1, delta * 1.8);
+        cur + (targetY.current - cur) * Math.min(1, delta * 1.35);
+      groupRef.current.rotation.x +=
+        (targetX.current - groupRef.current.rotation.x) * Math.min(1, delta * 1.35);
     }
 
-    /* Smooth camera zoom + vertical pan */
+    /* Smooth camera zoom */
     state.camera.position.z +=
-      (targetCamZ.current - state.camera.position.z) * Math.min(1, delta * 1.8);
+      (targetCamZ.current - state.camera.position.z) * Math.min(1, delta * 1.35);
+    state.camera.position.x +=
+      (targetCamX.current - state.camera.position.x) * Math.min(1, delta * 1.35);
     state.camera.position.y +=
-      (targetCamY.current - state.camera.position.y) * Math.min(1, delta * 1.8);
+      (targetCamY.current - state.camera.position.y) * Math.min(1, delta * 1.35);
+    state.camera.lookAt(0, 0, 0);
   });
 
   return (
@@ -367,6 +344,29 @@ function GlobeGroup({
           phase={i * 0.73}
         />
       ))}
+
+      {activeOpp && (
+        <group position={ll(activeOpp.lat, activeOpp.lng, GLOBE_R + 0.035)}>
+          <mesh>
+            <ringGeometry args={[0.045, 0.072, 32]} />
+            <meshBasicMaterial
+              color={TYPE_COLOR[activeOpp.type]}
+              transparent
+              opacity={0.82}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+          <mesh>
+            <sphereGeometry args={[0.028, 18, 18]} />
+            <meshBasicMaterial
+              color={TYPE_COLOR[activeOpp.type]}
+              transparent
+              opacity={0.95}
+              blending={THREE.AdditiveBlending}
+            />
+          </mesh>
+        </group>
+      )}
     </group>
   );
 }
@@ -466,22 +466,6 @@ export default function GlobeView({
           ))}
         </div>
       )}
-
-      <div className="opportunities-globe-legend">
-        <div className="opportunities-globe-legend-title">Globe Guide</div>
-        <div className="opportunities-globe-legend-item">
-          <span className="opportunities-globe-legend-dot internship" />
-          Orb size grows with opportunity density
-        </div>
-        <div className="opportunities-globe-legend-item">
-          <span className="opportunities-globe-legend-dot scholarship" />
-          Color shows the dominant opportunity type
-        </div>
-        <div className="opportunities-globe-legend-item">
-          <span className="opportunities-globe-legend-dot networking" />
-          Zoom in to unpack clusters into real locations
-        </div>
-      </div>
     </div>
   );
 }

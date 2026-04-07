@@ -47,7 +47,7 @@ jobs:
           CI: true
 
       - name: Wait for app to be ready
-        run: npx wait-on http://127.0.0.1:3000
+        run: npx wait-on http://127.0.0.1:3001
 
       - name: Run Playwright tests
         run: npx playwright test

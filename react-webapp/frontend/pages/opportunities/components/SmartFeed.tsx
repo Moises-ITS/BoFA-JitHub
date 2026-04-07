@@ -16,12 +16,13 @@ export default function SmartFeed({ opportunities, tracked, onSelect }: Props) {
 
   return (
     <div style={{
-      width: 300,
-      flexShrink: 0,
+      width: '100%',
+      minWidth: 0,
+      minHeight: '100%',
+      flex: 1,
       display: 'flex',
       flexDirection: 'column',
       background: 'var(--surface)',
-      borderLeft: '1px solid var(--border)',
       overflow: 'hidden',
     }}>
       {/* Feed header */}

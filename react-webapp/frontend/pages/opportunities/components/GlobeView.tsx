@@ -100,7 +100,9 @@ function ClusterGroup({
 
   const exp        = useRef(0);
   const clusterRef = useRef<THREE.Mesh>(null!);
+  const clusterHaloRef = useRef<THREE.Mesh>(null!);
   const dotRefs    = useRef<(THREE.Mesh | null)[]>([]);
+  const dotHaloRefs = useRef<(THREE.Mesh | null)[]>([]);
 
   useFrame((state, delta) => {
     const t         = state.clock.elapsedTime;
@@ -115,6 +117,12 @@ function ClusterGroup({
       clusterRef.current.scale.setScalar(Math.max(0.001, s));
       (clusterRef.current.material as THREE.MeshBasicMaterial).opacity =
         Math.max(0, 1 - e * 1.5);
+    }
+    if (clusterHaloRef.current) {
+      const haloScale = (1 - e * 0.86) * (1.45 + (isActive ? 0.2 : 0)) * pulse;
+      clusterHaloRef.current.scale.setScalar(Math.max(0.001, haloScale));
+      (clusterHaloRef.current.material as THREE.MeshBasicMaterial).opacity =
+        Math.max(0, (1 - e * 1.2) * 0.28);
     }
 
     /* Individual dots expand outward from center to ring positions */
@@ -131,6 +139,13 @@ function ClusterGroup({
       const sc = e * dp * (cluster.opps[i].id === activeId ? 1.6 : 1);
       ref.scale.setScalar(Math.max(0.001, sc));
       (ref.material as THREE.MeshBasicMaterial).opacity = e * 0.95;
+
+      const haloRef = dotHaloRefs.current[i];
+      if (!haloRef) return;
+      haloRef.position.copy(ref.position);
+      haloRef.scale.setScalar(Math.max(0.001, sc * 1.9));
+      (haloRef.material as THREE.MeshBasicMaterial).opacity =
+        e * (cluster.opps[i].id === activeId ? 0.45 : 0.24);
     });
   });
 
@@ -141,21 +156,45 @@ function ClusterGroup({
         <sphereGeometry args={[clusterSize, 8, 8]} />
         <meshBasicMaterial color={clusterColor} transparent opacity={1} />
       </mesh>
+      <mesh ref={clusterHaloRef} position={center}>
+        <sphereGeometry args={[clusterSize * 1.7, 14, 14]} />
+        <meshBasicMaterial
+          color={clusterColor}
+          transparent
+          opacity={0.24}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
 
       {/* Individual dots — start at center, animate to ring */}
       {cluster.opps.map((opp, i) => (
-        <mesh
-          key={opp.id}
-          ref={(el) => { dotRefs.current[i] = el; }}
-          position={center}
-        >
-          <sphereGeometry args={[0.03, 8, 8]} />
-          <meshBasicMaterial
-            color={TYPE_COLOR[opp.type]}
-            transparent
-            opacity={0}
-          />
-        </mesh>
+        <group key={opp.id}>
+          <mesh
+            ref={(el) => { dotHaloRefs.current[i] = el; }}
+            position={center}
+          >
+            <sphereGeometry args={[0.062, 12, 12]} />
+            <meshBasicMaterial
+              color={TYPE_COLOR[opp.type]}
+              transparent
+              opacity={0}
+              blending={THREE.AdditiveBlending}
+              depthWrite={false}
+            />
+          </mesh>
+          <mesh
+            ref={(el) => { dotRefs.current[i] = el; }}
+            position={center}
+          >
+            <sphereGeometry args={[0.036, 16, 16]} />
+            <meshBasicMaterial
+              color={TYPE_COLOR[opp.type]}
+              transparent
+              opacity={0}
+            />
+          </mesh>
+        </group>
       ))}
     </>
   );
@@ -175,9 +214,10 @@ function EarthMesh() {
           map={night}
           emissiveMap={night}
           emissive={new THREE.Color('#ffffff')}
-          emissiveIntensity={2.2}
-          roughness={1}
+          emissiveIntensity={2.9}
+          roughness={0.82}
           metalness={0}
+          color={new THREE.Color('#dbeafe')}
         />
       </mesh>
 
@@ -189,19 +229,32 @@ function EarthMesh() {
           map={night}
           blending={THREE.AdditiveBlending}
           transparent
-          opacity={0.38}
+          opacity={0.5}
           depthWrite={false}
         />
       </mesh>
 
-      {/* Layer 3 — atmospheric rim glow */}
+      {/* Layer 3 — cool atmospheric glow */}
       <mesh>
         <sphereGeometry args={[GLOBE_R * 1.03, 32, 32]} />
         <meshBasicMaterial
-          color="#1a4fff"
+          color="#60a5fa"
           transparent
-          opacity={0.07}
+          opacity={0.12}
           side={THREE.BackSide}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* Layer 4 — soft cyan aura for a brighter silhouette */}
+      <mesh>
+        <sphereGeometry args={[GLOBE_R * 1.09, 32, 32]} />
+        <meshBasicMaterial
+          color="#38bdf8"
+          transparent
+          opacity={0.05}
+          side={THREE.BackSide}
+          blending={THREE.AdditiveBlending}
           depthWrite={false}
         />
       </mesh>
@@ -309,13 +362,26 @@ export default function GlobeView({
         <Stars
           radius={100}
           depth={60}
-          count={6000}
-          factor={4}
-          saturation={0}
+          count={8000}
+          factor={4.6}
+          saturation={0.18}
           fade
-          speed={0.5}
+          speed={0.65}
         />
-        <ambientLight intensity={0.07} />
+        <ambientLight intensity={0.22} />
+        <hemisphereLight
+          args={['#8edcff', '#050816', 0.5]}
+        />
+        <directionalLight
+          position={[5, 2.5, 6]}
+          intensity={1.15}
+          color="#dbeafe"
+        />
+        <pointLight
+          position={[-6, -3, 4]}
+          intensity={0.7}
+          color="#7c3aed"
+        />
 
         <GlobeGroup
           opportunities={opportunities}

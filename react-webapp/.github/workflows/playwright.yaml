@@ -3,61 +3,61 @@
 # fill forms, navigate pagees, submit actions and confirm UI behavior
 name: Playwright QA
 
-on: #runs on pull and push 
+on:
   pull_request:
     branches: [main, dev]
   push:
     branches: [main, dev]
 
-permissions: #only has permissions to read NOT write
+permissions:
   contents: read
 
-concurrency: #only allows one of these calls at a time and if another is made then it gets canceled and most recent runs
+concurrency:
   group: playwright-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  e2e: #end to end testing
+  e2e:
     name: End-to-End Tests
-    runs-on: ubuntu-latest #runs ubuntu machine
-    timeout-minutes: 20 #kills task if more than 20 minutes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout repository #opens repository on machine
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js #setup node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20 #select node version
-          cache: npm #caches npm so faster to load next time
+          node-version: 20
+          cache: npm
 
-      - name: Install dependencies #installs required dependencies
-        run: npm ci #replaces npm run install replacement for being faster and industry standard
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Install Playwright browsers #installs playwright and dependencies for tests
+      - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
-      - name: Build app #build app
+      - name: Build app
         run: npm run build
 
-      - name: Start app #run app
+      - name: Start app
         run: npm run start &
         env:
-          CI: true #sets app to be in CI environment
+          CI: true
 
-      - name: Wait for app to be ready #waits for app to be live if not tests fail
-        run: npx wait-on http://127.0.0.1:3000
+      - name: Wait for app to be ready
+        run: npx wait-on http://127.0.0.1:3001
 
-      - name: Run Playwright tests #runs tests
+      - name: Run Playwright tests
         run: npx playwright test
 
-      - name: Upload Playwright report #uploads report
-        if: always() #run even if tests fail
+      - name: Upload Playwright report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: |
             playwright-report
             test-results
-          if-no-files-found: ignore #runs even if no files found
+          if-no-files-found: ignore

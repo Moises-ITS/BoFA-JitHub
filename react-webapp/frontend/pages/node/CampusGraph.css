@@ -284,12 +284,13 @@
 
 /* ── Toolbar ── */
 .toolbar {
-  background: rgba(8, 12, 20, 0.86);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.05), 0 8px 32px 0 rgba(0, 0, 0, 0.45);
   padding: 6px 14px;
   display: flex; align-items: center; gap: 8px;
   flex-shrink: 0; flex-wrap: wrap;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(28px) saturate(180%);
 }
 
 .searchWrap {
@@ -374,11 +375,39 @@
   mix-blend-mode: screen;
   will-change: transform, opacity;
 }
-.graphAmbientLayer {
+.graphEnergyField {
   position: absolute;
-  inset: 0;
+  inset: -20%;
   pointer-events: none;
-  will-change: transform, opacity;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  will-change: transform, opacity, filter;
+}
+
+.graphEnergyField--density {
+  background: radial-gradient(circle at 30% 40%, rgba(16, 185, 129, 0.15) 0%, transparent 40%),
+              radial-gradient(circle at 70% 60%, rgba(245, 158, 11, 0.1) 0%, transparent 40%);
+  filter: blur(80px) saturate(1.8);
+}
+
+.graphEnergyField--core {
+  background: radial-gradient(circle at 50% 50%, rgba(192, 57, 43, 0.08) 0%, transparent 60%);
+  filter: blur(120px);
+}
+
+[data-heatmap="true"] .graphEnergyField {
+  opacity: 1;
+}
+
+[data-heatmap="true"] .graphEnergyField--density {
+  animation: heatFlow 20s infinite alternate ease-in-out;
+}
+
+@keyframes heatFlow {
+  0% { transform: scale(1) rotate(0deg) translate(0, 0); }
+  50% { transform: scale(1.1) rotate(5deg) translate(5%, 2%); }
+  100% { transform: scale(1.05) rotate(-3deg) translate(-2%, 5%); }
 }
 .graphAmbientLayer--far {
   opacity: 0.32;
@@ -751,10 +780,13 @@
 .link-depth-background {
   filter: drop-shadow(0 0 1px rgba(112, 157, 206, 0.12));
 }
-.link-t1 { stroke: #60a5fa; }
-.link-t2 { stroke: #3d6080; }
-.link-t3 { stroke: #253448; }
-.link-dashed { stroke-dasharray: 5,4; }
+@keyframes flowParticle {
+  to { stroke-dashoffset: -40; }
+}
+.link-t1 { stroke: #60a5fa; stroke-dasharray: 4 20; animation: flowParticle 2s linear infinite; }
+.link-t2 { stroke: #3d6080; stroke-dasharray: 3 30; animation: flowParticle 3.5s linear infinite; }
+.link-t3 { stroke: #253448; stroke-dasharray: 2 40; animation: flowParticle 5s linear infinite; }
+.link-dashed { stroke-dasharray: 5,4 !important; animation: none; }
 
 /* Student↔student CONNECTED_TO edges — traveling light-ball effect */
 @keyframes flowBall {
@@ -1026,8 +1058,12 @@
 
 /* ── Side Panel ── */
 .panel {
-  width: 280px; background: #0d1017;
-  border-left: 1px solid rgba(255,255,255,0.06); padding: 20px; overflow-y: auto; flex-shrink: 0;
+  width: 280px; 
+  background: rgba(255, 255, 255, 0.03); 
+  backdrop-filter: blur(28px) saturate(180%); 
+  box-shadow: inset 1px 0 0 rgba(255,255,255,0.05), -10px 0 40px rgba(0,0,0,0.5);
+  border-left: 1px solid rgba(255,255,255,0.12); 
+  padding: 20px; overflow-y: auto; flex-shrink: 0;
 }
 .panelHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .panelHeaderLabel { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px; color: #718096; font-weight: 600; }
@@ -1147,8 +1183,13 @@
 /* ── Legend ── */
 .legend {
   position: absolute; bottom: 20px; left: 20px;
-  background: rgba(10,13,22,0.9); border: 1px solid #1a2030; border-radius: 10px;
-  padding: 12px 14px; backdrop-filter: blur(8px); pointer-events: none;
+  background: rgba(255, 255, 255, 0.03); 
+  border: 1px solid rgba(255,255,255,0.12); 
+  border-radius: 12px; 
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 40px rgba(0,0,0,0.5);
+  padding: 12px 14px; 
+  backdrop-filter: blur(28px) saturate(180%); 
+  pointer-events: none;
 }
 .legendTitle { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.5px; color: #718096; margin-bottom: 8px; font-weight: 600; }
 .legendItem  { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 0.78rem; }
@@ -1156,8 +1197,13 @@
 /* ── Top Connected Inline Preview Card ── */
 .tcPreview {
   position: absolute; bottom: 20px; left: 158px;
-  background: rgba(10,13,22,0.9); border: 1px solid #1a2030; border-radius: 12px;
-  padding: 10px 14px; backdrop-filter: blur(8px); pointer-events: all;
+  background: rgba(255, 255, 255, 0.03); 
+  border: 1px solid rgba(255,255,255,0.12); 
+  border-radius: 12px; 
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 40px rgba(0,0,0,0.5);
+  padding: 10px 14px; 
+  backdrop-filter: blur(28px) saturate(180%); 
+  pointer-events: all;
   min-width: 195px; color: #e2e8f0; transition: border-color 0.2s;
 }
 .tcPreview:hover { border-color: rgba(255,215,0,0.25); }
@@ -1451,16 +1497,29 @@
 .hoverCard {
   position: fixed;
   z-index: 200;
-  background: rgba(13, 16, 23, 0.96);
-  border: 1px solid #1e2a42;
-  border-radius: 10px;
+  background: rgba(20, 20, 25, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
   padding: 10px 13px;
   min-width: 160px;
   max-width: 200px;
   pointer-events: none;
-  backdrop-filter: blur(14px);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(34px) saturate(200%) contrast(1.1);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,0.12), inset 0 0 16px rgba(255, 255, 255, 0.05), 0 18px 40px rgba(0, 0, 0, 0.6);
   animation: hoverCardIn 0.14s ease-out;
+  overflow: hidden;
+}
+.hoverCard.holographic::before {
+  content: "";
+  position: absolute;
+  top: 0; left: -100%; width: 200%; height: 100%;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.15) 45%, transparent 60%);
+  pointer-events: none;
+  animation: hologramGlare 3s infinite linear;
+}
+@keyframes hologramGlare {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(50%); }
 }
 @keyframes hoverCardIn {
   from { opacity: 0; transform: translateY(5px); }
@@ -1540,4 +1599,33 @@
   .modeHint--lockedShift {
     left: 50%;
   }
+}
+
+#graph-svg {
+  transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), filter 0.8s ease;
+}
+
+/* ── Neural Echo Interaction ── */
+.neuralEchoShockwave {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+  z-index: 50;
+  will-change: transform, opacity;
+  animation: neuralShock 0.8s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes neuralShock {
+  0% { transform: translate(-50%, -50%) scale(0.1); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(4); opacity: 0; }
+}
+
+.graphHeader, .toolbar {
+  transition: filter 0.2s ease, transform 0.2s cubic-bezier(0.1, 0.8, 0.2, 1);
+}
+
+.uiPulse {
+  filter: blur(2px);
+  transform: translateY(-2px);
 }

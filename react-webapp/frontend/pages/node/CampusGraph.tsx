@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Crosshair, Flame } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import * as d3 from "d3";
 
@@ -40,10 +41,6 @@ const AMBIENT_ORBIT_SPEED = 0.00062;
 const HUB_BUNDLE_DEGREE = 5;
 const MINIMAP_W = 190;
 const MINIMAP_H = 130;
-const FLOW_BURST_MIN = 3;
-const FLOW_BURST_MAX = 8;
-const FLOW_BURST_INTERVAL_MIN_MS = 1700;
-const FLOW_BURST_INTERVAL_MAX_MS = 2800;
 const FLOW_ACTIVE_MIN = 4;
 const FLOW_ACTIVE_MAX = 10;
 const OVERLAY_SAFE_MARGIN = 12;
@@ -307,7 +304,7 @@ const curvePathBetweenNodes = (
   const y1 = sy + uy * sPad;
   const x2 = tx - ux * tPad;
   const y2 = ty - uy * tPad;
-  const lift = Math.min(44, 16 + dist * 0.1);
+  const lift = Math.max(30, dist * 0.28);
   const cx = (x1 + x2) / 2;
   const cy = (y1 + y2) / 2 - lift;
   return `M${x1},${y1} Q${cx},${cy} ${x2},${y2}`;
@@ -397,6 +394,16 @@ export default function CampusGraph() {
   const [hoverCard, setHoverCard] = useState<{ node: GraphNode; x: number; y: number } | null>(null);
   const [d3Ready, setD3Ready] = useState(false);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
+
+  // Fisheye Lens Mode
+  const [lensMode, setLensMode] = useState(false);
+  const lensModeRef = useRef(false);
+  const [heatmapMode, setHeatmapMode] = useState(false);
+  const heatmapModeRef = useRef(false);
+  useEffect(() => { heatmapModeRef.current = heatmapMode; }, [heatmapMode]);
+  const ghostPredictionsRef = useRef<{targetId: string, prob: number}[]>([]);
+  const lensPosRef = useRef<{ x: number, y: number } | null>(null);
+  useEffect(() => { lensModeRef.current = lensMode; }, [lensMode]);
   const [demoMode, setDemoMode] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
   const [demoMessage, setDemoMessage] = useState<string>("");
@@ -461,6 +468,7 @@ export default function CampusGraph() {
   const hiddenTypesRef = useRef<Set<NodeType>>(new Set());
   const visibleLinksRef = useRef<GraphLink[]>([]);
   const simRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null);
+  const searchMatchesRef = useRef<Set<string>>(new Set());
   const dimsRef = useRef({ w: 900, h: 600 });
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const introDoneRef = useRef(false);
@@ -586,6 +594,52 @@ export default function CampusGraph() {
     const h = Math.max(1, svgNode.clientHeight || dimsRef.current.h);
     dimsRef.current = { w, h };
     return dimsRef.current;
+  }, []);
+
+  const triggerNeuralEcho = useCallback((n: GraphNode) => {
+    if (!svgRef.current) return;
+    
+    // 1. Audio Synthesis (Subtle Synapse Tick)
+    try {
+      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+        setTimeout(() => ctx.close(), 200);
+      }
+    } catch(e) { /* ignore audio errors */ }
+
+    // 2. Shockwave Visuals
+    const currentTransform = d3.zoomTransform(svgRef.current);
+    const screenX = (n.x ?? 0) * currentTransform.k + currentTransform.x;
+    const screenY = (n.y ?? 0) * currentTransform.k + currentTransform.y;
+    
+    const wave = document.createElement("div");
+    wave.className = "neuralEchoShockwave";
+    wave.style.left = `${screenX}px`;
+    wave.style.top = `${screenY}px`;
+    rootRef.current?.appendChild(wave);
+    setTimeout(() => wave.remove(), 1000);
+
+    // 3. UI Momentum (Jitter)
+    const header = document.querySelector(".graphHeader");
+    const toolbar = document.querySelector(".toolbar");
+    header?.classList.add("uiPulse");
+    toolbar?.classList.add("uiPulse");
+    setTimeout(() => {
+      header?.classList.remove("uiPulse");
+      toolbar?.classList.remove("uiPulse");
+    }, 200);
   }, []);
 
   // ── Neighbor helper ───────────────────────────────────────────────────────
@@ -959,84 +1013,152 @@ export default function CampusGraph() {
       .attr("stroke-opacity", NODE_FLICKER_BASE);
   }, []);
 
-  // ── Enter Locked Mode ─────────────────────────────────────────────────────
+  // ── Enter Locked Mode (Six-Degrees Gravity Shockwave) ─────────────────────
   const enterLocked = useCallback((d: GraphNode) => {
     const sim = simRef.current;
     const nodeSel = nodeSelRef.current;
     const linkSel = linkSelRef.current;
-    if (!sim || !nodeSel || !linkSel) return;
+    const rippleLayer = rippleLayerRef.current;
+    if (!sim || !nodeSel || !linkSel || !rippleLayer) return;
+
+    const ghostLayer = d3.select<SVGGElement, unknown>(".ghost-prediction-layer");
+    ghostLayer.selectAll("*").remove();
+    ghostPredictionsRef.current = [];
+
+    if (d.type === "student") {
+        const companies = nodesRef.current.filter(n => n.type === "company");
+        const picked = companies.sort(() => 0.5 - Math.random()).slice(0, 2);
+        ghostPredictionsRef.current = picked.map((c) => ({
+           targetId: c.id,
+           prob: 60 + Math.floor(Math.random() * 34)
+        }));
+        
+        ghostPredictionsRef.current.forEach(p => {
+           ghostLayer.append("path")
+               .attr("class", "ghost-path")
+               .attr("stroke", "#38bdf8")
+               .attr("stroke-width", 2.2)
+               .attr("stroke-dasharray", "6,6")
+               .attr("fill", "none")
+               .style("opacity", 0)
+               .transition().delay(800).duration(1000)
+               .style("opacity", 0.7);
+               
+           const t = ghostLayer.append("text")
+               .attr("class", "ghost-label")
+               .attr("fill", "#bae6fd")
+               .style("font-size", "11px")
+               .style("font-weight", "600")
+               .style("text-anchor", "middle")
+               .style("opacity", 0)
+               .text(`AI Prediction: ${p.prob}% Match`);
+           t.transition().delay(1000).duration(1000).style("opacity", 1);
+        });
+    }
+
+    // SHOCKWAVE VISUAL
+    if (d.x != null && d.y != null) {
+      rippleLayer.append("circle")
+        .attr("cx", d.x).attr("cy", d.y)
+        .attr("r", 10)
+        .attr("stroke", "#facc15")
+        .attr("stroke-width", 6)
+        .attr("fill", "none")
+        .transition().duration(1400).ease(d3.easeCubicOut)
+        .attr("r", Math.max(dimsRef.current.w, dimsRef.current.h) * 1.5)
+        .attr("stroke-opacity", 0)
+        .attr("stroke-width", 0)
+        .remove();
+    }
 
     const { w, h } = getGraphViewportDims();
     const cx = w / 2, cy = h / 2;
-    const neighbors = directNeighbors(d);
-    const orbitRadius = lockedOrbitRadiusForConnections(neighbors.length);
-    const neighborSet = new Set(neighbors.map(n => n.id));
-
-    // Freeze all nodes at current positions first
-    nodesRef.current.forEach(n => { n.fx = n.x ?? cx; n.fy = n.y ?? cy; });
-
-    // Move selected to center, neighbors to radial ring
-    d.fx = cx; d.fy = cy;
-    neighbors.forEach((nb, i) => {
-      const angle = (i / neighbors.length) * 2 * Math.PI - Math.PI / 2;
-      nb.fx = cx + orbitRadius * Math.cos(angle);
-      nb.fy = cy + orbitRadius * Math.sin(angle);
+    const degree1 = directNeighbors(d);
+    const d1Set = new Set(degree1.map(n => n.id));
+    
+    // Find degree 2 connections
+    const d2Set = new Set<string>();
+    const degree2: GraphNode[] = [];
+    degree1.forEach(n1 => {
+        const nbrs = directNeighbors(n1);
+        nbrs.forEach(n2 => {
+           if (n2.id !== d.id && !d1Set.has(n2.id) && !d2Set.has(n2.id)) {
+               d2Set.add(n2.id);
+               degree2.push(n2);
+           } 
+        });
     });
 
-    sim.alpha(0.6).restart();
+    const orbitRadius1 = lockedOrbitRadiusForConnections(degree1.length);
+    const orbitRadius2 = Math.min(600, orbitRadius1 * 2.4);
+    const orbitBlast = orbitRadius1 * 8; // Blow unrelated nodes far off-screen
+
+    // Move selected to center
+    d.fx = cx; d.fy = cy;
+    
+    // 1st Degree Inner Orbit
+    degree1.forEach((nb, i) => {
+      const angle = (i / degree1.length) * 2 * Math.PI - Math.PI / 2;
+      nb.fx = cx + orbitRadius1 * Math.cos(angle);
+      nb.fy = cy + orbitRadius1 * Math.sin(angle);
+    });
+
+    // 2nd Degree Outer Orbit
+    degree2.forEach((nb, i) => {
+      const angle = (i / degree2.length) * 2 * Math.PI;
+      nb.fx = cx + orbitRadius2 * Math.cos(angle);
+      nb.fy = cy + orbitRadius2 * Math.sin(angle);
+    });
+
+    // Blast away the rest
+    nodesRef.current.forEach(n => {
+       if (n.id !== d.id && !d1Set.has(n.id) && !d2Set.has(n.id)) {
+           const dx = (n.x ?? cx) - cx;
+           const dy = (n.y ?? cy) - cy;
+           const dist = Math.max(0.1, Math.sqrt(dx*dx + dy*dy));
+           const ux = dx/dist;
+           const uy = dy/dist;
+           n.fx = cx + ux * orbitBlast;
+           n.fy = cy + uy * orbitBlast;
+       } 
+    });
+
+    sim.alpha(0.85).restart();
 
     // Node visibility
-    nodeSel.transition().duration(500)
-      .style("opacity", (n: GraphNode) => n.id === d.id || neighborSet.has(n.id) ? 1 : 0)
-      .style("pointer-events", (n: GraphNode) => n.id === d.id || neighborSet.has(n.id) ? "all" : "none");
+    nodeSel.transition().duration(800).ease(d3.easeElasticOut.amplitude(1.2).period(0.6))
+      .style("opacity", (n: GraphNode) => n.id === d.id || d1Set.has(n.id) ? 1 : d2Set.has(n.id) ? 0.65 : 0.05)
+      .style("pointer-events", (n: GraphNode) => n.id === d.id || d1Set.has(n.id) || d2Set.has(n.id) ? "all" : "none");
+      
     nodeSel
       .classed("node-selected-anchor", (n: GraphNode) => n.id === d.id)
-      .classed("node-selected-neighbor", (n: GraphNode) => neighborSet.has(n.id));
+      .classed("node-selected-neighbor", (n: GraphNode) => d1Set.has(n.id));
 
-    // Glow on selected + neighbors
     nodeSel.select<SVGCircleElement>("circle.main-circle")
-      .attr("filter", (n: GraphNode) =>
-        n.id === d.id ? "url(#glow-selected)" :
-          neighborSet.has(n.id) ? "url(#glow-soft)" : null)
-      .transition().duration(500)
-      .attr("r", (n: GraphNode) => n.id === d.id ? (n.r ?? 12) * 1.5 : (n.r ?? 12));
+      .attr("filter", (n: GraphNode) => n.id === d.id ? "url(#glow-selected)" : (d1Set.has(n.id) || d2Set.has(n.id)) ? "url(#glow-soft)" : null)
+      .transition().duration(800).ease(d3.easeElasticOut.amplitude(1.2).period(0.6))
+      .attr("r", (n: GraphNode) => n.id === d.id ? (n.r ?? 12) * 1.8 : d1Set.has(n.id) ? (n.r ?? 12) * 1.15 : (n.r ?? 12) * 0.9);
 
-    // Labels: show for selected + neighbors only
-    fadeLabels((n: GraphNode) => (n.id === d.id || neighborSet.has(n.id) ? 1 : 0), 500);
+    // Labels
+    fadeLabels((n: GraphNode) => (n.id === d.id ? 1 : d1Set.has(n.id) ? 0.9 : 0), 600);
 
-    // Edges: show only direct connections
-    linkSel.transition().duration(500).attr("stroke-opacity", (l: GraphLink) => {
+    // Edges
+    linkSel.transition().duration(600).attr("stroke-opacity", (l: GraphLink) => {
       const s = getNodeId(l.source), t = getNodeId(l.target);
-      return (s === d.id && neighborSet.has(t)) || (t === d.id && neighborSet.has(s)) ? 0.85 : 0;
+      const isInner = (s === d.id && d1Set.has(t)) || (t === d.id && d1Set.has(s));
+      const isOuter = (d1Set.has(s) && d2Set.has(t)) || (d1Set.has(t) && d2Set.has(s));
+      return isInner ? 0.95 : isOuter ? 0.35 : 0;
     });
 
-    // Emphasize direct edges: color, width boost, glow
     linkSel
       .filter((l: GraphLink) => {
         const s = getNodeId(l.source), t = getNodeId(l.target);
-        return (s === d.id && neighborSet.has(t)) || (t === d.id && neighborSet.has(s));
+        return (s === d.id && d1Set.has(t)) || (t === d.id && d1Set.has(s));
       })
       .transition().duration(600)
-      .attr("stroke", "#93c5fd")   // CONSTANT: emphasized edge color
-      .attr("stroke-width", (l: GraphLink) => edgeWidthFromStrength(edgeStrength(l)) * 1.35)
-      .attr("filter", "url(#glow-soft)");
-
-    // Neighbor opacity gradient: stronger connection = brighter node
-    nodeSel.filter((n: GraphNode) => neighborSet.has(n.id))
-      .transition().duration(500)
-      .style("opacity", (n: GraphNode) => {
-        const sourceLinks = visibleLinksRef.current.length ? visibleLinksRef.current : linksRef.current;
-        const maxW = Math.max(
-          ...sourceLinks
-            .filter(l =>
-              (getNodeId(l.source) === d.id && getNodeId(l.target) === n.id) ||
-              (getNodeId(l.target) === d.id && getNodeId(l.source) === n.id)
-            )
-            .map(l => edgeStrength(l)),
-          0.3  // floor so even weakest neighbors stay visible
-        );
-        return 0.45 + maxW * 0.55;  // CONSTANT: range 0.45–1.0
-      });
+      .attr("stroke", "#facc15")
+      .attr("stroke-width", (l: GraphLink) => edgeWidthFromStrength(edgeStrength(l)) * 1.6)
+      .attr("filter", "url(#glow-selected)");
 
   }, [directNeighbors, getGraphViewportDims]); // eslint-disable-line
 
@@ -1074,6 +1196,8 @@ export default function CampusGraph() {
 
     d3.selectAll(".link.path-pulse").classed("path-pulse", false);
     d3.selectAll(".path-overlay").remove();
+    d3.select(".ghost-prediction-layer").selectAll("*").remove();
+    ghostPredictionsRef.current = [];
   }, []); // eslint-disable-line
 
   // ── Select / Deselect ─────────────────────────────────────────────────────
@@ -1089,6 +1213,7 @@ export default function CampusGraph() {
       }
     }
     playClickActivationBurst(d);
+    triggerNeuralEcho(d);
     const localDegree = (visibleLinksRef.current.length ? visibleLinksRef.current : linksRef.current)
       .reduce((acc, l) => {
         const s = getNodeId(l.source);
@@ -1218,7 +1343,20 @@ export default function CampusGraph() {
     if (loading || error || !svgRef.current || nodes.length === 0) return;
 
     const rootEl = rootRef.current;
-    const svg = d3.select(svgRef.current);
+    const svg = d3.select(svgRef.current)
+      .on("mousemove", (e: MouseEvent) => {
+        if (lensModeRef.current) {
+          const pt = d3.pointer(e, g.node());
+          lensPosRef.current = { x: pt[0], y: pt[1] };
+          if (simRef.current) simRef.current.alpha(Math.max(simRef.current.alpha(), 0.05)).restart();
+        }
+      })
+      .on("mouseleave", () => {
+        if (lensModeRef.current) {
+          lensPosRef.current = null;
+          if (simRef.current) simRef.current.alpha(Math.max(simRef.current.alpha(), 0.05)).restart();
+        }
+      });
     const width = svgRef.current.clientWidth;
     const height = svgRef.current.clientHeight;
     dimsRef.current = { w: width, h: height };
@@ -1252,6 +1390,12 @@ export default function CampusGraph() {
     addBloom("bloom-interest", TYPE_COLOR.interest);
     addBloom("bloom-professor", TYPE_COLOR.professor);
 
+    // ── Gooey Filter for Clusters (Organic Blobs) ──
+    const goo = defs.append("filter").attr("id", "goo-blobs").attr("color-interpolation-filters", "sRGB");
+    goo.append("feGaussianBlur").attr("in", "SourceGraphic").attr("stdDeviation", 22).attr("result", "blur");
+    goo.append("feColorMatrix").attr("in", "blur").attr("mode", "matrix").attr("values", "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 25 -10").attr("result", "goo");
+    goo.append("feComposite").attr("in", "SourceGraphic").attr("in2", "goo").attr("operator", "atop");
+
     // ── Hub suppression ────────────────────────────────────────────────────
     const edgeTier = (l: GraphLink) => edgeTierFromStrength(edgeStrength(l));
 
@@ -1281,12 +1425,8 @@ export default function CampusGraph() {
       degree[t] = (degree[t] || 0) + 1;
     });
     const maxDeg = Math.max(...Object.values(degree), 1);
-    const sortedDegrees = Object.entries(degree).sort((a, b) => b[1] - a[1]);
-    const topGlowCount = Math.max(1, Math.ceil(nodes.length * 0.25));
-    const glowSet = new Set(sortedDegrees.slice(0, topGlowCount).map(([id]) => id));
     const baseNodeFilter = (n: GraphNode) => {
       if (n.id === user?.id) return "url(#glow-selected)";
-      if (!glowSet.has(n.id)) return null;
       return `url(#bloom-${n.type})`;
     };
     baseNodeFilterRef.current = baseNodeFilter;
@@ -1503,10 +1643,10 @@ export default function CampusGraph() {
     svg.call(zoom);
     zoomRef.current = zoom;
 
-    const curvePathForLink = (d: GraphLink, tension = 0) => {
+    // Edge Bundling algorithm: pull long edges into semantic 'highways'
+    const curvePathForLink = (d: GraphLink) => {
       const s = d.source as GraphNode;
       const t = d.target as GraphNode;
-      if (!tension) return curvePathBetweenNodes(s, t);
       const sx = s?.x ?? 0;
       const sy = s?.y ?? 0;
       const tx = t?.x ?? 0;
@@ -1516,16 +1656,30 @@ export default function CampusGraph() {
       const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
       const ux = dx / dist;
       const uy = dy / dist;
+      
       const sPad = Math.max(3, (s?.r ?? 10) * 0.86);
       const tPad = Math.max(3, (t?.r ?? 10) * 0.86);
       const x1 = sx + ux * sPad;
       const y1 = sy + uy * sPad;
       const x2 = tx - ux * tPad;
       const y2 = ty - uy * tPad;
-      const baseLift = Math.min(44, 16 + dist * 0.1);
-      const lift = baseLift * (1 - clamp01(tension) * 0.72);
-      const cx = (x1 + x2) / 2;
-      const cy = (y1 + y2) / 2 - lift;
+      
+      const midX = (x1 + x2) / 2;
+      const midY = (y1 + y2) / 2;
+
+      // Bundling logic: the longer the edge, the harder it is pulled to the graph center
+      const bundleX = dimsRef.current.w / 2;
+      const bundleY = dimsRef.current.h / 2;
+      const bundleStrength = clamp01(Math.pow(dist / 650, 1.8)) * 0.94; // Exponential pull for very long links
+      
+      // Spread offset to give the bundle physical thickness
+      const curveLift = Math.max(10, dist * 0.16);
+      const liftX = -uy * curveLift;
+      const liftY = ux * curveLift;
+
+      const cx = midX + (bundleX - midX) * bundleStrength + liftX;
+      const cy = midY + (bundleY - midY) * bundleStrength + liftY;
+
       return `M${x1},${y1} Q${cx},${cy} ${x2},${y2}`;
     };
 
@@ -1564,9 +1718,10 @@ export default function CampusGraph() {
       .attr("stroke-opacity", (l: GraphLink) => defOp(l));
 
     // ── Pulse layer (between links and nodes) ────────────────────────────
+    g.append("g").attr("class", "ghost-prediction-layer").attr("pointer-events", "none");
     const pulseLayer = g.append("g").attr("class", "edge-pulse-layer").attr("pointer-events", "none");
     const rippleLayer = g.append("g").attr("class", "node-ripple-layer").attr("pointer-events", "none");
-    const clusterAuraLayer = g.append("g").attr("class", "cluster-aura-layer").attr("pointer-events", "none");
+    const clusterAuraLayer = g.append("g").attr("class", "cluster-aura-layer").attr("pointer-events", "none").attr("filter", "url(#goo-blobs)");
     const satelliteLayer = g.append("g").attr("class", "node-satellite-layer").attr("pointer-events", "none");
     const clusterAuraByType = new Map<NodeType, d3.Selection<SVGCircleElement, unknown, null, undefined>>();
     (["student", "club", "company", "interest", "professor"] as NodeType[]).forEach((type) => {
@@ -1747,7 +1902,7 @@ export default function CampusGraph() {
           });
         });
       }
-      const maxAnimatedEdges = Math.min(8, Math.max(3, MOTION_PROFILE[motionTierRef.current].flowMax));
+      const maxAnimatedEdges = Math.max(8, Math.floor(nodes.length / 5));
       const prioritizedSimEdgeSet = new Set<number>();
       const prioritizedFlowEdgeSet = new Set<number>();
       const pathIds = pathNodeIdsRef.current;
@@ -1801,20 +1956,20 @@ export default function CampusGraph() {
       const prioritizedFlowIndices = [...prioritizedFlowEdgeSet];
 
       if (modeRef.current === "free" && !heavyInteraction && flowLinks.length > 0) {
-        const targetMin = lod === 0 ? Math.max(1, profile.flowMin - 1) : profile.flowMin;
-        const targetMax = lod === 0 ? Math.max(2, profile.flowMax - 2) : profile.flowMax;
+        const targetMax = Math.max(4, Math.floor(nodes.length / 5));
+        const targetMin = Math.floor(targetMax * 0.7);
         if (activeParticles.length < targetMin) {
-          const need = Math.min(targetMin - activeParticles.length, targetMax - activeParticles.length);
+          const need = targetMin - activeParticles.length;
           for (let i = 0; i < need; i++) spawnFlowParticle(prioritizedFlowIndices);
         }
         nextFlowBurstAt -= dt;
         if (nextFlowBurstAt <= 0) {
-          const burst = FLOW_BURST_MIN + Math.floor(Math.random() * (FLOW_BURST_MAX - FLOW_BURST_MIN + 1));
+          const burst = Math.max(3, Math.floor(targetMax / 4));
           const room = Math.max(0, targetMax - activeParticles.length);
           const spawnCount = Math.min(burst, room);
           for (let i = 0; i < spawnCount; i++) spawnFlowParticle(prioritizedFlowIndices);
           const burstMul = motionTierRef.current === "performance" ? 1.32 : motionTierRef.current === "balanced" ? 1.15 : 1;
-          nextFlowBurstAt = (FLOW_BURST_INTERVAL_MIN_MS + Math.random() * (FLOW_BURST_INTERVAL_MAX_MS - FLOW_BURST_INTERVAL_MIN_MS)) * burstMul;
+          nextFlowBurstAt = (1000 + Math.random() * 1500) * burstMul;
         }
       } else if (activeParticles.length > 0) {
         activeParticles.forEach(p => p.el.remove());
@@ -2724,6 +2879,33 @@ export default function CampusGraph() {
     };
     sim.force("ambientOrbit", ambientOrbitForce as d3.Force<GraphNode, GraphLink>);
 
+    const quantumCollapseForce = (alpha: number) => {
+      if (!searchActiveRef.current || modeRef.current !== "free") return;
+      const matches = searchMatchesRef.current;
+      if (matches.size === 0) return;
+      
+      const cx = width / 2;
+      const cy = height / 2;
+      
+      nodes.forEach((n: GraphNode) => {
+        if (n.x == null || n.y == null) return;
+        if (matches.has(n.id)) {
+           // Magnetize to center
+           n.vx = (n.vx ?? 0) + (cx - n.x) * alpha * 1.5;
+           n.vy = (n.vy ?? 0) + (cy - n.y) * alpha * 1.5;
+        } else {
+           // Crumble (push outwards chaotically)
+           const dx = n.x - cx;
+           const dy = n.y - cy;
+           const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+           const push = 1800 * alpha; // High outward force
+           n.vx = (n.vx ?? 0) + (dx / dist) * push + (Math.random() - 0.5) * 15 * alpha;
+           n.vy = (n.vy ?? 0) + (dy / dist) * push + (Math.random() - 0.5) * 15 * alpha;
+        }
+      });
+    };
+    sim.force("quantumCollapse", quantumCollapseForce as d3.Force<GraphNode, GraphLink>);
+
     let tick = 0;
     sim.on("tick", () => {
       tick += 1;
@@ -2732,15 +2914,102 @@ export default function CampusGraph() {
       const activeForce = sim.alpha() > 0.045 || draggingNodeIdRef.current != null;
       const runHeavyTick = activeForce || hoveredId != null || modeRef.current === "path" || tick % profile.heavyTickDiv === 0;
       if (runHeavyTick) {
-        linkSel.attr("d", (d: GraphLink) => {
-          if (!hoveredId) return curvePathForLink(d);
-          const s = getNodeId(d.source);
-          const t = getNodeId(d.target);
-          const touchingHovered = s === hoveredId || t === hoveredId;
-          return curvePathForLink(d, touchingHovered ? GRAPH_MOTION.tension.hoverCurveTension : 0);
+        linkSel.attr("d", (d: GraphLink) => curvePathForLink(d));
+        nodeSel.attr("transform", (d: GraphNode) => {
+          let nx = d.x ?? 0;
+          let ny = d.y ?? 0;
+          let scaleMul = 1;
+
+          if (lensModeRef.current && lensPosRef.current && modeRef.current === "free") {
+            const LENS_RADIUS = 280;
+            const dx = nx - lensPosRef.current.x;
+            const dy = ny - lensPosRef.current.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < LENS_RADIUS && dist > 0.01) {
+              const force = 1 - dist / LENS_RADIUS;
+              // Push radius outward and scale up heavily based on proximity
+              const stretch = Math.pow(force, 1.2) * LENS_RADIUS * 1.8;
+              nx += (dx / dist) * stretch;
+              ny += (dy / dist) * stretch;
+              scaleMul = 1 + force * 2.2; 
+            }
+          }
+
+          if (scaleMul !== 1) {
+             return `translate(${nx},${ny}) scale(${scaleMul})`;
+          }
+          return `translate(${nx},${ny})`;
         });
-        nodeSel.attr("transform", (d: GraphNode) => `translate(${d.x ?? 0},${d.y ?? 0})`);
+        nodeSel.attr("class", null);
+
+        // If lens is over a node, reveal labels!
+        if (lensModeRef.current && lensPosRef.current && modeRef.current === "free") {
+          nodeSel.select("text.node-label").style("opacity", (n: GraphNode) => {
+            if (!lensPosRef.current) return 0;
+            const dx = (n.x ?? 0) - lensPosRef.current.x;
+            const dy = (n.y ?? 0) - lensPosRef.current.y;
+            return Math.sqrt(dx * dx + dy * dy) < 280 ? 1 : 0;
+          });
+        }
+
+        // Live Pulse Heatmap (Idea 15)
+        if (heatmapModeRef.current && nodes.length > 0) {
+          let sSumX = 0, sSumY = 0, sCount = 0;
+          let oSumX = 0, oSumY = 0, oCount = 0;
+          
+          nodes.forEach(n => {
+             if (n.x == null || n.y == null) return;
+             if (n.type === 'student' && (degree[n.id] ?? 0) > 3) {
+                sSumX += n.x; sSumY += n.y; sCount++;
+             } else if (n.type === 'company' && (degree[n.id] ?? 0) < 2) {
+                oSumX += n.x; oSumY += n.y; oCount++;
+             }
+          });
+
+          if (energyDensityRef.current && sCount > 0) {
+             const px = (sSumX / sCount) / width * 100;
+             const py = (sSumY / sCount) / height * 100;
+             energyDensityRef.current.style.background = `radial-gradient(circle at ${px}% ${py}%, rgba(16, 185, 129, 0.28) 0%, transparent 65%)`;
+          }
+          if (energyCoreRef.current && oCount > 0) {
+            const px = (oSumX / oCount) / width * 100;
+            const py = (oSumY / oCount) / height * 100;
+            energyCoreRef.current.style.background = `radial-gradient(circle at ${px}% ${py}%, rgba(192, 57, 43, 0.18) 0%, transparent 55%)`;
+          }
+        }
       }
+
+      if (runHeavyTick || tick % 2 === 0) {
+        if (modeRef.current === "locked" && selectedIdRef.current) {
+          const sNode = nodeById.get(selectedIdRef.current);
+          if (sNode && sNode.type === "student") {
+            const ghostPaths = d3.select(svgRef.current).selectAll<SVGPathElement, unknown>("path.ghost-path");
+            const ghostLabels = d3.select(svgRef.current).selectAll<SVGTextElement, unknown>("text.ghost-label");
+            
+            ghostPaths.attr("d", (_, i) => {
+               const pred = ghostPredictionsRef.current[i];
+               const tNode = pred ? nodeById.get(pred.targetId) : null;
+               if (!tNode || sNode.x == null || sNode.y == null || tNode.x == null || tNode.y == null) return "";
+               return curvePathBetweenNodes(sNode, tNode);
+            });
+            ghostLabels
+              .attr("x", (_, i) => {
+                 const pred = ghostPredictionsRef.current[i];
+                 const tNode = pred ? nodeById.get(pred.targetId) : null;
+                 if (!tNode || sNode.x == null || tNode.x == null) return 0;
+                 return (sNode.x + tNode.x) / 2;
+              })
+              .attr("y", (_, i) => {
+                 const pred = ghostPredictionsRef.current[i];
+                 const tNode = pred ? nodeById.get(pred.targetId) : null;
+                 if (!tNode || sNode.y == null || tNode.y == null) return 0;
+                 return (sNode.y + tNode.y) / 2 - 8;
+              });
+          }
+        }
+      }
+
       if (modeRef.current === "path" && svgRef.current) {
         if (runHeavyTick || tick % 2 === 0) {
           d3.select(svgRef.current)
@@ -3118,13 +3387,19 @@ export default function CampusGraph() {
     if (mode !== "free") { searchActiveRef.current = false; return; }
     if (multiSelectedIds.size > 0) return;
     searchActiveRef.current = Boolean(searchQuery.trim());
+    const matches = new Set(searchMatches.map((n) => n.id));
+    const wasActive = searchMatchesRef.current.size > 0;
+    searchMatchesRef.current = matches;
+
     if (!searchQuery.trim()) {
       nodeSelRef.current?.transition().duration(200).style("opacity", 1);
       linkSelRef.current?.transition().duration(180).attr("stroke-opacity", (l: GraphLink) => defOp(l));
       fadeLabels(currentZoomKRef.current > 1.7 ? 1 : LABEL_OPACITY_BASE, 140);
+      if (wasActive) simRef.current?.alpha(0.8).restart(); // Recover from explosion
       return;
     }
-    const matches = new Set(searchMatches.map((n) => n.id));
+    
+    simRef.current?.alpha(1).restart(); // Trigger quantum collapse
     nodeSelRef.current?.transition().duration(200)
       .style("opacity", (d: GraphNode) => matches.has(d.id) ? 1 : 0.07);
     linkSelRef.current?.transition().duration(180)
@@ -3202,6 +3477,49 @@ export default function CampusGraph() {
       .attr("stroke-opacity", (l: GraphLink) => defOp(l));
     fadeLabels(currentZoomKRef.current > 1.7 ? 1 : LABEL_OPACITY_BASE, 120);
   }, [viewMode, mode, fadeLabels]);
+
+  useEffect(() => {
+    const nodeSel = nodeSelRef.current;
+    if (!nodeSel) return;
+    
+    if (heatmapMode) {
+      const degree: Record<string, number> = {};
+      links.forEach((l) => {
+        const s = getNodeId(l.source);
+        const t = getNodeId(l.target);
+        degree[s] = (degree[s] ?? 0) + 1;
+        degree[t] = (degree[t] ?? 0) + 1;
+      });
+      const maxDeg = Math.max(...nodes.map(n => degree[n.id] ?? 1), 1);
+      const thermalColor = (n: GraphNode) => {
+         let score = (degree[n.id] ?? 1) / maxDeg;
+         if (n.type === "company" || n.type === "professor") score = Math.min(1, score + 0.35);
+         if (score < 0.15) return "#020b1e"; // Cold deep space
+         if (score < 0.35) return "#240046"; // Cold purple
+         if (score < 0.55) return "#7b2cbf"; // Warm magenta
+         if (score < 0.75) return "#f72585"; // Hot pink/red
+         if (score < 0.90) return "#ff9e00"; // Hot orange
+         return "#ffff3f"; // White/Yellow core heat
+      };
+      
+      nodeSel.select("circle.main-circle").transition().duration(800)
+        .attr("fill", thermalColor)
+        .attr("stroke", thermalColor);
+      nodeSel.select("circle.node-aura-halo").transition().duration(800)
+        .attr("fill", thermalColor);
+      nodeSel.select("circle.node-aura-ring").transition().duration(800)
+        .attr("stroke", thermalColor);
+      
+    } else {
+      nodeSel.select("circle.main-circle").transition().duration(800)
+        .attr("fill", (d: GraphNode) => d.id === user?.id ? "#facc15" : TYPE_COLOR[d.type])
+        .attr("stroke", (d: GraphNode) => d.id === user?.id ? "#fef3c7" : TYPE_COLOR[d.type]);
+      nodeSel.select("circle.node-aura-halo").transition().duration(800)
+        .attr("fill", (d: GraphNode) => TYPE_COLOR[d.type]);
+      nodeSel.select("circle.node-aura-ring").transition().duration(800)
+        .attr("stroke", (d: GraphNode) => TYPE_COLOR[d.type]);
+    }
+  }, [heatmapMode, nodes, links, user?.id]);
 
   useEffect(() => {
     const walkthrough2DActive = demoMode && viewMode === "2d";
@@ -3770,7 +4088,7 @@ export default function CampusGraph() {
                 setViewMode("3d");
               }}
             >
-              2.5D Spatial
+              3D Globe
             </button>
           </div>
           <button
@@ -3808,6 +4126,24 @@ export default function CampusGraph() {
       <div className="toolbar">
         <SearchBar value={searchQuery} onChange={setSearchQuery} onEnter={handleSearchEnter} />
         <FilterBar hiddenTypes={hiddenTypes} onToggleType={toggleType} />
+        <button
+          className={`btn-ghost ${lensMode ? "active" : ""}`}
+          style={{ padding: "4px 8px", background: lensMode ? "rgba(250, 204, 21, 0.2)" : undefined, color: lensMode ? "#facc15" : undefined, border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}
+          onClick={() => setLensMode(p => !p)}
+          title="Toggle Fisheye Lens"
+        >
+          <Crosshair size={14} />
+          {lensMode ? "Lens Mode: ON" : "Lens Mode"}
+        </button>
+        <button
+          className={`btn-ghost ${heatmapMode ? "active" : ""}`}
+          style={{ padding: "4px 8px", background: heatmapMode ? "rgba(255, 69, 0, 0.2)" : undefined, color: heatmapMode ? "#ff4500" : undefined, border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}
+          onClick={() => setHeatmapMode(p => !p)}
+          title="Toggle Thermal Heatmap"
+        >
+          <Flame size={14} />
+          {heatmapMode ? "Heatmap: ON" : "Heatmap"}
+        </button>
         {multiSelectedIds.size > 0 && (
           <button type="button" className="graphClearBtn" onClick={() => setMultiSelectedIds(new Set())}>
             Clear Multi-Select ({multiSelectedIds.size})
@@ -3857,7 +4193,7 @@ export default function CampusGraph() {
       </div>
 
       {/* Main */}
-      <div className="main">
+      <div className="main" data-heatmap={heatmapMode}>
         <div ref={ambientFxRef} className={`graphAmbientFx${viewMode === "3d" ? " graphAmbientFx--hidden" : ""}`} aria-hidden="true">
           <div className="graphAmbientLayer graphAmbientLayer--far" ref={ambientFarRef}>
             {ambientSpecks.far.map((speck) => (
@@ -4043,4 +4379,3 @@ export default function CampusGraph() {
     </div>
   );
 }
-

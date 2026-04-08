@@ -5,37 +5,72 @@ name: CI
 on:
   pull_request:
     branches: [main, dev]
+  push:
+    branches: [main, dev]
 
+permissions: #Only read, no other permissions for that because of Least Privillege
+  contents: read
+
+concurrency: #Prevents wasting time runner: Ex. You make X commit and 30 seconds later you make Y commit
+#These end up running concurrently and you waste logs and burn minutes
+#Solution: With this old run is canceled and new run continues: Better for cost, clarity and speed 
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+  
 jobs:
-  check:
+  validate:
+    name: Lint, Typecheck, Test, Build
     runs-on: ubuntu-latest
-
+    timeout-minutes: 15
+  
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repo
+        uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: npm #Installs cache dependency downloads
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies #Why not npm install? Because its faster in CI
+        run: npm ci
 
       - name: Type check shared
         run: npm run type-check -w shared
-
+#---------------------------------------------------
+#Very important in Typescript projects; Catches wrong props, bad return types, nullable mistakes, broken interfaces, import mismatches
       - name: Type check frontend
         run: npm run type-check -w frontend
 
       - name: Type check backend
         run: npm run type-check -w backend
-
+#----------------------------------------------------
+#Linting caches style and some logic problems early, unused variables, bad imports, dangerous patterns, formatting
       - name: Lint frontend
         run: npm run lint -w frontend
 
       - name: Lint backend
         run: npm run lint -w backend
-
-      - name: Build
+#-----------------------------------------------------
+      - name: Unit Tests #fast logic-validation layer; Verify functions do what they should, helpers return the right values
+      #components behave correctly, edge cases are handled
+        run: npm test -- --runInBand --passWithNoTests
+        #runInBand is helpful for CI stability because tests run serially instead of aggresive parallel
+        #passWithNoTests avoids failing the while workflow if you have not built out test coverage yet.
+        
+      - name: Build application #Can the app be assembled into a deployable artifact? Looks for:
+      #unresolved imports, SSR issues, missing env assumptions, bundling errors, TypeScript compile
+      #failures that lint missed
         run: npm run build
+
+      - name: Upload Build Artifact #Stores build output from CI run; useful for debugging.
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-build
+          path: |
+            .next
+            dist
+            build
+          if-no-files-found: ignore

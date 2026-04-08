@@ -20,6 +20,10 @@
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+.navLogoText {
+  font-weight: 800;
+  text-shadow: 0 0 20px rgba(255,107,53,0.3);
+}
 .navTagline {
   font-size: 0.68rem; color: var(--text-subtle); font-weight: 400;
   -webkit-text-fill-color: var(--text-subtle);
@@ -28,7 +32,17 @@
 .navRight {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 0;
+}
+.navStats {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 14px;
+  border-left: 1px solid rgba(255,255,255,0.08);
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+.navActions {
+  display: flex; align-items: center; gap: 8px;
+  padding-left: 14px;
 }
 
 /* Mode badge */
@@ -58,6 +72,7 @@
   padding: 6px 14px; border-radius: 999px; font-size: 0.78rem; font-weight: 500; color: var(--text-muted);
   white-space: nowrap;
 }
+.navChip:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
 
 .profileAvatarBtn {
   width: 32px; height: 32px; border-radius: 50%;

@@ -1,19 +1,36 @@
 import { useEffect } from "react"
 import { SignIn, useAuth as useClerkAuth, useClerk } from "@clerk/clerk-react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
 import "./auth.css"
 
 export default function LoginPage() {
   const { isSignedIn, isLoaded } = useClerkAuth()
   const { signOut } = useClerk()
-  const { user, loading } = useAuth()
+  const { user, loading, needsProfileSetup, authError } = useAuth()
+  const navigate = useNavigate()
 
   useEffect(() => {
-    if (isLoaded && isSignedIn && !loading && !user) {
-      void signOut()
+    if (!isLoaded || loading) return
+
+    // Already fully authenticated → go straight to app
+    if (isSignedIn && user) {
+      navigate("/home", { replace: true })
+      return
     }
-  }, [isLoaded, isSignedIn, loading, signOut, user])
+
+    // Needs to finish profile setup
+    if (isSignedIn && needsProfileSetup) {
+      navigate("/setup", { replace: true })
+      return
+    }
+
+    // Stale Clerk session with no DB profile (and backend is reachable) → sign out
+    // Don't sign out if it's just a backend connection error
+    if (isSignedIn && !user && !authError) {
+      void signOut({ redirectUrl: "/login" })
+    }
+  }, [isLoaded, isSignedIn, loading, user, needsProfileSetup, authError, signOut, navigate])
 
   return (
     <div className="auth-page">

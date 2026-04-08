@@ -137,6 +137,7 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
       return
     }
 
+    // Brand-new user
     const id = uuidv4()
     const majorValue = typeof major === "string" ? major.trim() : ""
     const gpaValue = toNullableNumber(gpa)

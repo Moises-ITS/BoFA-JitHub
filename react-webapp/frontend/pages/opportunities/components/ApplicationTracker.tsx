@@ -3,11 +3,11 @@ import type { TrackedApplication, ApplicationStatus } from '../types/opportuniti
 const STATUSES: ApplicationStatus[] = ['saved', 'applied', 'interview', 'offer', 'rejected'];
 
 const STATUS_COLOR: Record<ApplicationStatus, string> = {
-  saved:     '#8a97b0',
-  applied:   '#60a5fa',
+  saved: '#8a97b0',
+  applied: '#60a5fa',
   interview: '#f59e0b',
-  offer:     '#4ade80',
-  rejected:  '#f87171',
+  offer: '#4ade80',
+  rejected: '#f87171',
 };
 
 interface Props {
@@ -19,8 +19,8 @@ interface Props {
 export default function ApplicationTracker({ tracked, getOpportunityTitle, onStatusChange }: Props) {
   if (tracked.length === 0) {
     return (
-      <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '32px 16px', fontSize: '0.8rem' }}>
-        <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>📋</div>
+      <div className="opportunities-tracker-empty">
+        <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>...</div>
         No applications tracked yet.<br />
         Click "Apply / Save" on any opportunity to track it here.
       </div>
@@ -28,19 +28,26 @@ export default function ApplicationTracker({ tracked, getOpportunityTitle, onSta
   }
 
   return (
-    <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {tracked.map(t => (
-        <div key={t.opportunityId} style={{
-          background: 'var(--surface2)',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          padding: '10px 12px',
-        }}>
-          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>
+    <div className="opportunities-tracker-list">
+      {tracked.map((t) => (
+        <div key={t.opportunityId} className="opportunities-tracker-card">
+          <div className="opportunities-tracker-title">
             {getOpportunityTitle(t.opportunityId)}
           </div>
+          <div className="opportunities-tracker-progress">
+            {STATUSES.map((status) => (
+              <div
+                key={status}
+                className={`opportunities-tracker-node ${t.status === status ? 'active' : ''}`}
+                style={{
+                  borderColor: STATUS_COLOR[status],
+                  background: t.status === status ? `${STATUS_COLOR[status]}26` : 'transparent',
+                }}
+              />
+            ))}
+          </div>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {STATUSES.map(s => (
+            {STATUSES.map((s) => (
               <button
                 key={s}
                 onClick={() => onStatusChange(t.opportunityId, s)}
@@ -63,7 +70,7 @@ export default function ApplicationTracker({ tracked, getOpportunityTitle, onSta
             ))}
           </div>
           {t.appliedDate && (
-            <div style={{ fontSize: '0.65rem', color: 'var(--muted)', marginTop: 4 }}>
+            <div className="opportunities-tracker-date">
               Tracked {new Date(t.appliedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </div>
           )}

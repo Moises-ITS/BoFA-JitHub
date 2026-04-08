@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
 import { Target, Award, Edit2, Calendar, Briefcase, Users } from "lucide-react";
 import { mockOpportunities } from "../home/mock-data";
@@ -45,6 +45,7 @@ function formatEventDate(date: string | null, startTime: string | null) {
 export default function Profile() {
   const { user } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
+  const savedEvents = mockEvents.slice(0, 3);
   const [yourEvents, setYourEvents] = useState<ProfileEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const savedOpportunities = mockOpportunities.slice(0, 2);

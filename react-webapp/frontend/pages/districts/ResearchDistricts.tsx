@@ -3,53 +3,104 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, OrbitControls, RoundedBox } from "@react-three/drei";
 import { motion, AnimatePresence } from "motion/react";
 import * as THREE from "three";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 type Opportunity = { id: string; title: string; description: string; tags: string[]; requirement: string };
 type Building = { id: string; name: string; professor: string; position: [number, number, number]; size: [number, number, number]; opportunities: Opportunity[] };
 type District = { id: string; name: string; shortStat: string; color: string; position: [number, number, number]; ringScale: number; buildings: Building[] };
+type CameraControls = { target: THREE.Vector3; update: () => void };
 
 const mkOpp = (id: string, title: string): Opportunity => ({ id, title, description: "Explore this research opportunity.", tags: ["Research"], requirement: "Interest and consistency." });
 
 const DISTRICTS: District[] = [
-  { id: "ai", name: "AI & Machine Learning", shortStat: "3 departments", color: "#3B82F6", position: [-8.08, 0, -2.63], ringScale: 2.55, buildings: [
-    { id: "cs", name: "Computer Science", professor: "Department Hub", position: [-1.5, 0.95, -0.35], size: [1.05, 1.9, 1.05], opportunities: [mkOpp("cs-1", "Systems + AI Research Assistant")] },
-    { id: "info", name: "Informatics", professor: "Department Hub", position: [0.15, 0.75, 0.75], size: [0.9, 1.45, 0.9], opportunities: [mkOpp("info-1", "Human-Centered Data Research")] },
-    { id: "ds", name: "Data Science", professor: "Department Hub", position: [1.55, 1.2, -0.65], size: [1.0, 2.35, 1.0], opportunities: [mkOpp("ds-1", "Predictive Modeling Research")] },
-  ]},
-  { id: "science", name: "Physical & Life Sciences", shortStat: "5 departments", color: "#8B5CF6", position: [0, 0, -8.5], ringScale: 2.7, buildings: [
-    { id: "physics", name: "Physics", professor: "Department Hub", position: [-1.75, 0.85, 0.45], size: [0.9, 1.7, 0.9], opportunities: [mkOpp("phys-1", "Applied Physics Research")] },
-    { id: "math", name: "Mathematics", professor: "Department Hub", position: [-0.45, 1.1, -0.65], size: [1.0, 2.2, 1.0], opportunities: [mkOpp("math-1", "Mathematical Modeling Assistant")] },
-    { id: "chem", name: "Chemistry", professor: "Department Hub", position: [0.95, 0.72, 0.95], size: [0.82, 1.4, 0.82], opportunities: [mkOpp("chem-1", "Environmental Chemistry Research")] },
-    { id: "bio", name: "Biological Sciences", professor: "Department Hub", position: [2.15, 0.7, -0.15], size: [0.82, 1.35, 0.82], opportunities: [mkOpp("bio-1", "Molecular Systems Research")] },
-    { id: "bio2", name: "Biomedical Engineering", professor: "Anchor", position: [0.45, 1.35, 1.85], size: [0.96, 2.55, 0.96], opportunities: [mkOpp("bio2-1", "Cross-Disciplinary Bioengineering")] },
-  ]},
-  { id: "engineering", name: "Engineering Systems", shortStat: "5 departments", color: "#EF4444", position: [8.08, 0, -2.63], ringScale: 2.75, buildings: [
-    { id: "ece", name: "Electrical and Computer Engineering", professor: "Department Hub", position: [-1.75, 1.1, 0.25], size: [1.0, 2.1, 1.0], opportunities: [mkOpp("ece-1", "Embedded + Intelligent Systems")] },
-    { id: "cme", name: "Chemical and Materials Engineering", professor: "Department Hub", position: [-0.15, 0.8, -0.9], size: [0.9, 1.55, 0.9], opportunities: [mkOpp("cme-1", "Advanced Materials Research")] },
-    { id: "cee", name: "Civil and Environmental Engineering", professor: "Department Hub", position: [1.1, 0.7, 0.95], size: [0.85, 1.35, 0.85], opportunities: [mkOpp("cee-1", "Infrastructure + Sustainability")] },
-    { id: "mie", name: "Mechanical and Industrial Engineering", professor: "Department Hub", position: [2.05, 1.25, -0.25], size: [1.05, 2.45, 1.05], opportunities: [mkOpp("mie-1", "Optimization + Manufacturing")] },
-    { id: "bme", name: "Biomedical Engineering", professor: "Department Hub", position: [0.4, 1.35, 1.8], size: [0.95, 2.65, 0.95], opportunities: [mkOpp("bme-1", "Biomedical Devices + Health Tech")] },
-  ]},
-  { id: "design-humanities", name: "Design, Society & Culture", shortStat: "3 departments", color: "#14B8A6", position: [-4.99, 0, 6.88], ringScale: 2.45, buildings: [
-    { id: "arch", name: "Architecture and Design", professor: "Department Hub", position: [-1.1, 0.85, -0.35], size: [0.95, 1.7, 0.95], opportunities: [mkOpp("arch-1", "Spatial Systems + Design Research")] },
-    { id: "hss", name: "Humanities and Social Sciences", professor: "Department Hub", position: [0.45, 1.15, 0.65], size: [1.0, 2.25, 1.0], opportunities: [mkOpp("hss-1", "Society + Policy Research")] },
-    { id: "math2", name: "Mathematics", professor: "Analytical Anchor", position: [1.75, 0.7, -0.1], size: [0.8, 1.35, 0.8], opportunities: [mkOpp("math2-1", "Quantitative Humanities")] },
-  ]},
-  { id: "management", name: "Management & Applied Technology", shortStat: "2 departments", color: "#F59E0B", position: [4.99, 0, 6.88], ringScale: 2.2, buildings: [
-    { id: "mgmt", name: "Management", professor: "Department Hub", position: [-0.95, 0.85, 0.2], size: [0.92, 1.65, 0.92], opportunities: [mkOpp("mgmt-1", "Innovation + Decision Systems")] },
-    { id: "maet", name: "Applied Engineering and Technology", professor: "Department Hub", position: [0.75, 1.2, -0.7], size: [1.0, 2.35, 1.0], opportunities: [mkOpp("maet-1", "Applied Technology Systems")] },
-  ]},
+  {
+    id: "ai", name: "AI & Machine Learning", shortStat: "3 departments", color: "#3B82F6", position: [-8.08, 0, -2.63], ringScale: 2.55, buildings: [
+      { id: "cs", name: "Computer Science", professor: "Department Hub", position: [-1.5, 0.95, -0.35], size: [1.05, 1.9, 1.05], opportunities: [mkOpp("cs-1", "Systems + AI Research Assistant")] },
+      { id: "info", name: "Informatics", professor: "Department Hub", position: [0.15, 0.75, 0.75], size: [0.9, 1.45, 0.9], opportunities: [mkOpp("info-1", "Human-Centered Data Research")] },
+      { id: "ds", name: "Data Science", professor: "Department Hub", position: [1.55, 1.2, -0.65], size: [1.0, 2.35, 1.0], opportunities: [mkOpp("ds-1", "Predictive Modeling Research")] },
+    ]
+  },
+  {
+    id: "science", name: "Physical & Life Sciences", shortStat: "5 departments", color: "#8B5CF6", position: [0, 0, -8.5], ringScale: 2.7, buildings: [
+      { id: "physics", name: "Physics", professor: "Department Hub", position: [-1.75, 0.85, 0.45], size: [0.9, 1.7, 0.9], opportunities: [mkOpp("phys-1", "Applied Physics Research")] },
+      { id: "math", name: "Mathematics", professor: "Department Hub", position: [-0.45, 1.1, -0.65], size: [1.0, 2.2, 1.0], opportunities: [mkOpp("math-1", "Mathematical Modeling Assistant")] },
+      { id: "chem", name: "Chemistry", professor: "Department Hub", position: [0.95, 0.72, 0.95], size: [0.82, 1.4, 0.82], opportunities: [mkOpp("chem-1", "Environmental Chemistry Research")] },
+      { id: "bio", name: "Biological Sciences", professor: "Department Hub", position: [2.15, 0.7, -0.15], size: [0.82, 1.35, 0.82], opportunities: [mkOpp("bio-1", "Molecular Systems Research")] },
+      { id: "bio2", name: "Biomedical Engineering", professor: "Anchor", position: [0.45, 1.35, 1.85], size: [0.96, 2.55, 0.96], opportunities: [mkOpp("bio2-1", "Cross-Disciplinary Bioengineering")] },
+    ]
+  },
+  {
+    id: "engineering", name: "Engineering Systems", shortStat: "5 departments", color: "#EF4444", position: [8.08, 0, -2.63], ringScale: 2.75, buildings: [
+      { id: "ece", name: "Electrical and Computer Engineering", professor: "Department Hub", position: [-1.75, 1.1, 0.25], size: [1.0, 2.1, 1.0], opportunities: [mkOpp("ece-1", "Embedded + Intelligent Systems")] },
+      { id: "cme", name: "Chemical and Materials Engineering", professor: "Department Hub", position: [-0.15, 0.8, -0.9], size: [0.9, 1.55, 0.9], opportunities: [mkOpp("cme-1", "Advanced Materials Research")] },
+      { id: "cee", name: "Civil and Environmental Engineering", professor: "Department Hub", position: [1.1, 0.7, 0.95], size: [0.85, 1.35, 0.85], opportunities: [mkOpp("cee-1", "Infrastructure + Sustainability")] },
+      { id: "mie", name: "Mechanical and Industrial Engineering", professor: "Department Hub", position: [2.05, 1.25, -0.25], size: [1.05, 2.45, 1.05], opportunities: [mkOpp("mie-1", "Optimization + Manufacturing")] },
+      { id: "bme", name: "Biomedical Engineering", professor: "Department Hub", position: [0.4, 1.35, 1.8], size: [0.95, 2.65, 0.95], opportunities: [mkOpp("bme-1", "Biomedical Devices + Health Tech")] },
+    ]
+  },
+  {
+    id: "design-humanities", name: "Design, Society & Culture", shortStat: "3 departments", color: "#14B8A6", position: [-4.99, 0, 6.88], ringScale: 2.45, buildings: [
+      { id: "arch", name: "Architecture and Design", professor: "Department Hub", position: [-1.1, 0.85, -0.35], size: [0.95, 1.7, 0.95], opportunities: [mkOpp("arch-1", "Spatial Systems + Design Research")] },
+      { id: "hss", name: "Humanities and Social Sciences", professor: "Department Hub", position: [0.45, 1.15, 0.65], size: [1.0, 2.25, 1.0], opportunities: [mkOpp("hss-1", "Society + Policy Research")] },
+      { id: "math2", name: "Mathematics", professor: "Analytical Anchor", position: [1.75, 0.7, -0.1], size: [0.8, 1.35, 0.8], opportunities: [mkOpp("math2-1", "Quantitative Humanities")] },
+    ]
+  },
+  {
+    id: "management", name: "Management & Applied Technology", shortStat: "2 departments", color: "#F59E0B", position: [4.99, 0, 6.88], ringScale: 2.2, buildings: [
+      { id: "mgmt", name: "Management", professor: "Department Hub", position: [-0.95, 0.85, 0.2], size: [0.92, 1.65, 0.92], opportunities: [mkOpp("mgmt-1", "Innovation + Decision Systems")] },
+      { id: "maet", name: "Applied Engineering and Technology", professor: "Department Hub", position: [0.75, 1.2, -0.7], size: [1.0, 2.35, 1.0], opportunities: [mkOpp("maet-1", "Applied Technology Systems")] },
+    ]
+  },
 ];
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const shade = (hex: string, k: number) => `#${new THREE.Color(hex).multiplyScalar(k).getHexString()}`;
 const randSeed = (s: string) => { let h = 1779033703; for (let i = 0; i < s.length; i++) { h = Math.imul(h ^ s.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); } return () => { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return (h >>> 0) / 4294967295; }; };
 
-function CameraRig({ focusedDistrict, controlsRef }: { focusedDistrict: District | null; controlsRef: React.RefObject<any> }) {
+function GalaxyBackdrop() {
+  const starPositions = useMemo(() => {
+    const r = randSeed("galaxy-stars");
+    const positions = new Float32Array(1200 * 3);
+    for (let i = 0; i < 1200; i++) {
+      const radius = 18 + r() * 20;
+      const angle = r() * Math.PI * 2;
+      const height = 4 + r() * 15;
+      positions[i * 3] = Math.cos(angle) * radius;
+      positions[i * 3 + 1] = height;
+      positions[i * 3 + 2] = Math.sin(angle) * radius;
+    }
+    return positions;
+  }, []);
+
+  return (
+    <group>
+      <points position={[0, 0, 0]}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" count={starPositions.length / 3} array={starPositions} itemSize={3} />
+        </bufferGeometry>
+        <pointsMaterial color="#f8fbff" size={0.18} sizeAttenuation transparent opacity={0.9} depthWrite={false} />
+      </points>
+
+      <mesh position={[-8, 8, -16]} rotation={[0.4, 0.2, -0.1]}>
+        <planeGeometry args={[18, 12]} />
+        <meshBasicMaterial color="#5b7cff" transparent opacity={0.11} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </mesh>
+      <mesh position={[10, 7, -18]} rotation={[-0.2, -0.35, 0.12]}>
+        <planeGeometry args={[14, 10]} />
+        <meshBasicMaterial color="#ff4d9d" transparent opacity={0.08} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </mesh>
+      <mesh position={[0, 10, -22]} rotation={[0.12, 0, 0]}>
+        <sphereGeometry args={[3.4, 24, 24]} />
+        <meshBasicMaterial color="#d5e4ff" transparent opacity={0.08} />
+      </mesh>
+    </group>
+  );
+}
+
+function CameraRig({ focusedDistrict, controlsRef }: { focusedDistrict: District | null; controlsRef: React.RefObject<CameraControls | null> }) {
   const desiredTarget = useMemo(() => new THREE.Vector3(), []);
   const currentOffset = useMemo(() => new THREE.Vector3(), []);
-  const spherical = useMemo(() => new THREE.Spherical(), []);
+  const sphericalRef = useRef(new THREE.Spherical());
 
   useFrame((state) => {
     const controls = controlsRef.current;
@@ -63,6 +114,7 @@ function CameraRig({ focusedDistrict, controlsRef }: { focusedDistrict: District
 
     currentOffset.copy(state.camera.position).sub(controls.target);
     if (currentOffset.lengthSq() < 0.0001) currentOffset.set(0, 7.2, desiredRadius);
+    const spherical = sphericalRef.current;
     spherical.setFromVector3(currentOffset);
 
     spherical.radius = lerp(spherical.radius, desiredRadius, 0.08);
@@ -287,23 +339,148 @@ function MiniCity({ district }: { district: District }) {
   );
 }
 
+function BuildingWindows({
+  width,
+  height,
+  depth,
+  seed,
+}: {
+  width: number;
+  height: number;
+  depth: number;
+  seed: string;
+}) {
+  const windows = useMemo(() => {
+    const r = randSeed(seed);
+    const cols = Math.max(2, Math.floor(width / 0.2));
+    const rows = Math.max(3, Math.floor(height / 0.26));
+    const items: Array<{ position: [number, number, number]; scale: [number, number, number]; lit: boolean }> = [];
+    const xStep = width / cols;
+    const yStep = height / rows;
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const x = -width / 2 + xStep * (col + 0.5);
+        const y = -height / 2 + yStep * (row + 0.5);
+        items.push({
+          position: [x, y, depth / 2 + 0.012],
+          scale: [xStep * 0.52, yStep * 0.42, 0.02],
+          lit: r() > 0.42,
+        });
+      }
+    }
+
+    return items;
+  }, [depth, height, seed, width]);
+
+  return (
+    <group>
+      {windows.map((windowDef, index) => (
+        <mesh key={index} position={windowDef.position} scale={windowDef.scale}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial
+            color={windowDef.lit ? "#e8f4ff" : "#24344c"}
+            emissive={windowDef.lit ? "#9ed6ff" : "#0b1020"}
+            emissiveIntensity={windowDef.lit ? 0.85 : 0.12}
+            roughness={0.18}
+            metalness={0.08}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function StructuredBuilding({
+  district,
+  building,
+  selected,
+  dimmed,
+  hovered,
+}: {
+  district: District;
+  building: Building;
+  selected: boolean;
+  dimmed: boolean;
+  hovered: boolean;
+}) {
+  const palette = useMemo(() => ({
+    base: shade(district.color, 0.25),
+    mid: shade(district.color, 0.38),
+    top: shade(district.color, 0.55),
+    glow: shade(district.color, 0.9),
+  }), [district.color]);
+  const [width, height, depth] = building.size;
+  const podiumHeight = Math.max(0.16, height * 0.12);
+  const shaftHeight = Math.max(0.58, height - podiumHeight - 0.18);
+  const shaftScale = district.id === "engineering" ? 0.78 : district.id === "science" ? 0.74 : 0.72;
+  const crownHeight = Math.max(0.14, height * 0.12);
+  const glassOpacity = dimmed ? 0.24 : 0.96;
+  const emissiveIntensity = selected ? 0.68 : hovered ? 0.44 : 0.22;
+
+  return (
+    <group>
+      <mesh position={[0, -height / 2 - 0.05, 0]}>
+        <boxGeometry args={[width * 1.12, 0.08, depth * 1.12]} />
+        <meshStandardMaterial color="#374151" roughness={0.82} metalness={0.18} />
+      </mesh>
+
+      <RoundedBox args={[width, podiumHeight, depth]} radius={0.05} smoothness={4} position={[0, -height / 2 + podiumHeight / 2, 0]}>
+        <meshStandardMaterial color={palette.base} roughness={0.42} metalness={0.7} emissive={palette.mid} emissiveIntensity={emissiveIntensity * 0.65} transparent opacity={glassOpacity} />
+      </RoundedBox>
+
+      <RoundedBox args={[width * shaftScale, shaftHeight, depth * shaftScale]} radius={0.05} smoothness={4} position={[0, -height / 2 + podiumHeight + shaftHeight / 2, 0]}>
+        <meshStandardMaterial color="#102235" roughness={0.2} metalness={0.88} emissive={palette.glow} emissiveIntensity={emissiveIntensity} transparent opacity={glassOpacity} />
+      </RoundedBox>
+
+      <BuildingWindows width={width * shaftScale * 0.9} height={shaftHeight * 0.88} depth={depth * shaftScale} seed={`${district.id}-${building.id}-front`} />
+      <group rotation={[0, Math.PI, 0]}>
+        <BuildingWindows width={width * shaftScale * 0.9} height={shaftHeight * 0.88} depth={depth * shaftScale} seed={`${district.id}-${building.id}-back`} />
+      </group>
+
+      <RoundedBox args={[width * shaftScale * 1.05, crownHeight, depth * shaftScale * 1.05]} radius={0.04} smoothness={4} position={[0, height / 2 - crownHeight / 2, 0]}>
+        <meshStandardMaterial color={palette.top} roughness={0.26} metalness={0.76} emissive={palette.glow} emissiveIntensity={emissiveIntensity * 1.2} transparent opacity={glassOpacity} />
+      </RoundedBox>
+
+      <mesh position={[0, height / 2 + crownHeight * 0.22, 0]}>
+        <boxGeometry args={[width * 0.14, crownHeight * 0.8, depth * 0.14]} />
+        <meshStandardMaterial color="#dbeafe" emissive={palette.glow} emissiveIntensity={selected || hovered ? 1.2 : 0.5} roughness={0.18} metalness={0.85} transparent opacity={glassOpacity} />
+      </mesh>
+
+      <mesh position={[0, -height / 2 + podiumHeight + 0.02, depth * shaftScale * 0.51]} rotation={[-0.14, 0, 0]}>
+        <planeGeometry args={[width * shaftScale * 0.9, Math.max(0.14, shaftHeight * 0.16)]} />
+        <meshBasicMaterial color="#bfe7ff" transparent opacity={dimmed ? 0.08 : 0.18} />
+      </mesh>
+    </group>
+  );
+}
+
 function BuildingNode({ district, building, selected, dimmed, onSelect }: { district: District; building: Building; selected: boolean; dimmed: boolean; onSelect: (b: Building) => void }) {
   const [hovered, setHovered] = useState(false); const g = useRef<THREE.Group>(null);
   useFrame((state) => { if (!g.current) return; g.current.position.y = lerp(g.current.position.y, hovered || selected ? 0.12 : 0, 0.12); g.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.5 + building.position[0]) * 0.03; });
   return <group ref={g} position={[district.position[0] + building.position[0], building.position[1], district.position[2] + building.position[2]]} onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} onClick={() => onSelect(building)}>
-    <RoundedBox args={building.size} radius={0.08} smoothness={4}><meshStandardMaterial color="#0f172a" roughness={0.28} metalness={0.85} emissive={district.color} emissiveIntensity={selected ? 1.4 : hovered ? 0.95 : 0.35} transparent opacity={dimmed ? 0.22 : 1} /></RoundedBox>
+    <StructuredBuilding district={district} building={building} selected={selected} dimmed={dimmed} hovered={hovered} />
     {(hovered || selected) && <Html position={[0, building.size[1] / 2 + 0.45, 0]} center distanceFactor={12}><div className="rounded-xl border border-white/15 bg-slate-950/85 px-3 py-2 text-center"><div className="text-xs font-semibold text-white">{building.name}</div><div className="mt-1 text-[11px] text-slate-300">{building.professor}</div></div></Html>}
   </group>;
 }
 
 function Scene({ focusedDistrict, setFocusedDistrict, selectedBuilding, setSelectedBuilding }: { focusedDistrict: District | null; setFocusedDistrict: (d: District | null) => void; selectedBuilding: Building | null; setSelectedBuilding: (b: Building | null) => void }) {
-  const controlsRef = useRef<any>(null);
+  const controlsRef = useRef<CameraControls | null>(null);
 
   return <>
-    <color attach="background" args={["#030712"]} /><fog attach="fog" args={["#030712", 16, 30]} />
-    <ambientLight intensity={0.9} /><directionalLight position={[10, 12, 6]} intensity={1.2} color="#93c5fd" /><pointLight position={[-8, 6, -4]} intensity={2.1} color="#60a5fa" /><pointLight position={[8, 5, 8]} intensity={1.6} color="#ef4444" />
+    <color attach="background" args={["#02030a"]} /><fog attach="fog" args={["#02030a", 18, 34]} />
+    <ambientLight intensity={0.7} />
+    <directionalLight position={[10, 12, 6]} intensity={1.1} color="#c9dcff" />
+    <pointLight position={[-8, 7, -6]} intensity={2.3} color="#5da4ff" />
+    <pointLight position={[8, 6, 10]} intensity={1.7} color="#ff5ca8" />
+    <pointLight position={[0, 10, -12]} intensity={1.4} color="#8b5cf6" />
     <CameraRig focusedDistrict={focusedDistrict} controlsRef={controlsRef} />
+    <GalaxyBackdrop />
     <mesh rotation-x={-Math.PI / 2} position={[0, -0.02, 0]}><circleGeometry args={[22, 64]} /><meshStandardMaterial color="#050816" roughness={1} metalness={0} /></mesh>
+    <mesh rotation-x={-Math.PI / 2} position={[0, -0.01, 0]}>
+      <circleGeometry args={[18.5, 64]} />
+      <meshStandardMaterial color="#081120" roughness={0.92} metalness={0.08} emissive="#10203d" emissiveIntensity={0.08} />
+    </mesh>
     <DistrictNetwork />
     {DISTRICTS.map((d) => <React.Fragment key={d.id}><MiniCity district={d} /><DistrictNode district={d} active={focusedDistrict?.id === d.id} dimmed={!!focusedDistrict && focusedDistrict.id !== d.id} onSelect={(x) => { setFocusedDistrict(x); setSelectedBuilding(null); }} /></React.Fragment>)}
     {focusedDistrict?.buildings.map((b) => <BuildingNode key={b.id} district={focusedDistrict} building={b} selected={selectedBuilding?.id === b.id} dimmed={!!selectedBuilding && selectedBuilding.id !== b.id} onSelect={setSelectedBuilding} />)}
@@ -324,10 +501,65 @@ export default function ResearchDistrictsScene() {
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
   const reset = () => { setFocusedDistrict(null); setSelectedBuilding(null); };
   useEffect(() => { const onEsc = (e: KeyboardEvent) => e.key === "Escape" && reset(); window.addEventListener("keydown", onEsc); return () => window.removeEventListener("keydown", onEsc); }, []);
-  return <div className="relative h-screen w-full overflow-hidden bg-[#030712] text-white">
-    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.12),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(239,68,68,0.10),transparent_22%),radial-gradient(circle_at_50%_100%,rgba(139,92,246,0.10),transparent_30%)]" />
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between p-6"><motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="pointer-events-auto max-w-xl rounded-3xl border border-white/10 bg-slate-950/60 p-5 backdrop-blur-xl"><div className="text-[11px] uppercase tracking-[0.28em] text-sky-300">JitHub Research Explorer</div><h1 className="mt-2 text-3xl font-semibold text-white">Research Districts</h1></motion.div><div className="pointer-events-auto flex items-center gap-3"><motion.button type="button" onClick={() => { if (focusedDistrict) { reset(); } else { reset(); navigate("/home"); } }} whileHover={{ scale: 1.04, y: -1 }} whileTap={{ scale: 0.97 }} className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-slate-100 backdrop-blur-md">{focusedDistrict ? "Back to Research Districts" : "Go to JitHub Home"}</motion.button></div></div>
+  return <div className="relative h-screen w-full overflow-hidden bg-[#02030a] text-white">
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(76,115,255,0.24),transparent_24%),radial-gradient(circle_at_82%_20%,rgba(255,92,168,0.18),transparent_20%),radial-gradient(circle_at_50%_0%,rgba(144,89,255,0.16),transparent_28%),radial-gradient(circle_at_50%_100%,rgba(45,85,160,0.22),transparent_34%),linear-gradient(180deg,#02030a_0%,#050814_44%,#09111d_100%)]" />
+    <div className="absolute inset-0 opacity-70" style={{ backgroundImage: "radial-gradient(1px 1px at 12% 20%, rgba(255,255,255,0.95), transparent 60%), radial-gradient(1.2px 1.2px at 24% 72%, rgba(180,210,255,0.9), transparent 60%), radial-gradient(1px 1px at 38% 28%, rgba(255,255,255,0.82), transparent 60%), radial-gradient(1.4px 1.4px at 52% 16%, rgba(161,196,255,0.95), transparent 60%), radial-gradient(1px 1px at 63% 60%, rgba(255,255,255,0.9), transparent 60%), radial-gradient(1.3px 1.3px at 74% 26%, rgba(255,209,240,0.8), transparent 60%), radial-gradient(1px 1px at 88% 68%, rgba(255,255,255,0.85), transparent 60%)" }} />
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-4 p-4 md:flex-row md:items-start md:justify-between md:p-6">
+      <AnimatePresence>
+        {!focusedDistrict && (
+          <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} className="pointer-events-auto max-w-2xl rounded-[28px] border border-white/10 bg-slate-950/56 p-5 shadow-[0_25px_90px_rgba(2,6,23,0.5)] backdrop-blur-xl md:p-6">
+            <div className="text-[11px] uppercase tracking-[0.32em] text-sky-300">JitHub Research Explorer</div>
+            <h1 className="mt-3 text-3xl font-semibold text-white md:text-4xl">Research Districts</h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">
+              Explore each district like a skyline. Zoom into a research cluster, inspect buildings, and move through the campus map without losing context.
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div className="pointer-events-auto relative z-50 flex items-center gap-3 self-start transition-all duration-300 md:ml-auto">
+        <AnimatePresence>
+          {!focusedDistrict && (
+            <motion.a
+              href="/home"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              key="to-home"
+              style={{ pointerEvents: 'all', cursor: 'pointer', zIndex: 9999 }}
+              onPointerDown={(e) => e.stopPropagation()}
+              whileHover={{ scale: 1.04, y: -1 }}
+              whileTap={{ scale: 0.97 }}
+              className="inline-block rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.15)] backdrop-blur-md transition-colors hover:bg-white/10"
+            >
+              Return to Home Page
+            </motion.a>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
     <Canvas camera={{ position: [0, 10, 16], fov: 48 }} dpr={[1, 1.75]} onPointerMissed={() => (selectedBuilding ? setSelectedBuilding(null) : focusedDistrict ? setFocusedDistrict(null) : null)}><Suspense fallback={null}><Scene focusedDistrict={focusedDistrict} setFocusedDistrict={setFocusedDistrict} selectedBuilding={selectedBuilding} setSelectedBuilding={setSelectedBuilding} /></Suspense></Canvas>
-    <AnimatePresence>{focusedDistrict && selectedBuilding && <motion.aside initial={{ x: 420, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 420, opacity: 0 }} className="absolute right-0 top-0 z-30 h-full w-full max-w-md border-l border-white/10 bg-slate-950/88 p-6"><h2 className="text-xl font-semibold text-white">{selectedBuilding.name}</h2><div className="mt-2 text-sm text-slate-300">{selectedBuilding.professor}</div><button onClick={() => setSelectedBuilding(null)} className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200">Close</button></motion.aside>}</AnimatePresence>
+    <AnimatePresence>{focusedDistrict && selectedBuilding && <motion.aside initial={{ x: 420, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 420, opacity: 0 }} className="absolute right-0 top-0 z-30 flex h-full w-full max-w-md flex-col border-l border-white/10 bg-slate-950/88 p-6 shadow-[-24px_0_80px_rgba(2,6,23,0.55)] backdrop-blur-xl">
+      <div className="text-[11px] uppercase tracking-[0.28em] text-sky-300">{focusedDistrict.name}</div>
+      <h2 className="mt-3 text-2xl font-semibold text-white">{selectedBuilding.name}</h2>
+      <div className="mt-2 text-sm text-slate-300">{selectedBuilding.professor}</div>
+      <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-slate-200">
+        <div className="text-xs uppercase tracking-[0.22em] text-slate-400">Overview</div>
+        <p className="mt-3">
+          This building represents a structured research hub inside the {focusedDistrict.name} district. Select different towers to compare areas and keep the larger district layout in view while you browse.
+        </p>
+      </div>
+      <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="text-xs uppercase tracking-[0.22em] text-slate-400">Open Roles</div>
+        <div className="mt-3 space-y-3">
+          {selectedBuilding.opportunities.map((opportunity) => (
+            <div key={opportunity.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+              <div className="text-sm font-medium text-white">{opportunity.title}</div>
+              <div className="mt-1 text-xs text-slate-400">{opportunity.requirement}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <button onClick={() => setSelectedBuilding(null)} className="mt-auto rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-slate-200">Close</button>
+    </motion.aside>}</AnimatePresence>
   </div>;
 }

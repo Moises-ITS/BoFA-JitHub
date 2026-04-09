@@ -416,7 +416,6 @@ export default function CampusGraph() {
   const [overlaySafeRight, setOverlaySafeRight] = useState(20);
   const [overlayNoFlyRect, setOverlayNoFlyRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [introFocusReady, setIntroFocusReady] = useState(false);
-  const currentUserNode = useMemo(() => resolveCurrentUserNode(nodes, user), [nodes, user]);
   const currentUserNode = useMemo(
     () => resolveCurrentUserNode(nodes, user),
     [nodes, user]
@@ -4254,9 +4253,6 @@ export default function CampusGraph() {
           <div className="graphAmbientSpecks" />
           <div className="graphScanSweep" ref={scanSweepRef} />
         </div>
-      <div className="main">
-        <div className="bgGlow" />
-        <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} />
         <div className="bgGlow" ref={bgGlowRef} />
         <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} className={viewMode === "3d" ? "graph2DHidden" : "graph2DVisible"} />
         <div className={`graph3DWrap${viewMode === "3d" ? " graph3DWrap--active" : ""}`}>
@@ -4298,13 +4294,6 @@ export default function CampusGraph() {
           nodes={nodes}
           links={links}
           onClose={deselectAll}
-          onSelectNode={id => { const n = nodes.find(x => x.id === id); if (n) selectNodeFn(n); }}
-        />
-        <Legend />
-        <TopConnected
-          nodes={nodes}
-          links={links}
-          currentUserId={user?.id ?? ""}
           onSelectNode={id => { const n = nodes.find(x => x.id === id); if (n) selectNodeFn(n); }}
         />
         {!walkthroughLayout2D && (
@@ -4350,7 +4339,6 @@ export default function CampusGraph() {
             </div>
           </div>
         )}
-
       </div>
 
       {/* Locked Mode overlay hint */}

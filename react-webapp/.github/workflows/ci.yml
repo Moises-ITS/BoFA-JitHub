@@ -1,5 +1,4 @@
 # .github/workflows/ci.yml
-
 name: CI
 
 on:
@@ -8,21 +7,29 @@ on:
   push:
     branches: [main, dev]
 
-permissions: #Only read, no other permissions for that because of Least Privillege
+permissions:
+  # Least Privilege: only read access needed for CI checks
   contents: read
 
-concurrency: #Prevents wasting time runner: Ex. You make X commit and 30 seconds later you make Y commit
-#These end up running concurrently and you waste logs and burn minutes
-#Solution: With this old run is canceled and new run continues: Better for cost, clarity and speed 
+concurrency:
+  # Cancel any in-progress run for the same branch/PR so we don't waste
+  # runner minutes when multiple commits are pushed in quick succession.
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-  
+
+defaults:
+  run:
+    # All run steps execute inside react-webapp/frontend because that is
+    # where package.json, src/, and tests live. Without this, every
+    # command would run from the repo root and fail to find scripts.
+    working-directory: react-webapp/frontend
+
 jobs:
   validate:
     name: Lint, Typecheck, Test, Build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-  
+
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -31,46 +38,44 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm #Installs cache dependency downloads
+          cache: npm
+          # Point to the lockfile inside the actual project directory,
+          # not the repo root, so the cache key is computed correctly.
+          cache-dependency-path: react-webapp/frontend/package-lock.json
 
-      - name: Install dependencies #Why not npm install? Because its faster in CI
+      - name: Install dependencies
+        # npm ci is preferred over npm install in CI: faster,
+        # reproducible, and fails if the lockfile is out of sync.
         run: npm ci
 
-      - name: Type check shared
-        run: npm run type-check -w shared
-#---------------------------------------------------
-#Very important in Typescript projects; Catches wrong props, bad return types, nullable mistakes, broken interfaces, import mismatches
-      - name: Type check frontend
-        run: npm run type-check -w frontend
+      - name: Type check
+        # Catches wrong props, bad return types, nullable mistakes,
+        # broken interfaces, and import mismatches before runtime.
+        run: npx tsc --noEmit
 
-      - name: Type check backend
-        run: npm run type-check -w backend
-#----------------------------------------------------
-#Linting caches style and some logic problems early, unused variables, bad imports, dangerous patterns, formatting
-      - name: Lint frontend
-        run: npm run lint -w frontend
+      - name: Lint
+        # Catches style issues, unused variables, bad imports, and
+        # dangerous patterns early in the pipeline.
+        run: npm run lint
 
-      - name: Lint backend
-        run: npm run lint -w backend
-#-----------------------------------------------------
-      - name: Unit Tests #fast logic-validation layer; Verify functions do what they should, helpers return the right values
-      #components behave correctly, edge cases are handled
-        run: npm test -- --runInBand --passWithNoTests
-        #runInBand is helpful for CI stability because tests run serially instead of aggresive parallel
-        #passWithNoTests avoids failing the while workflow if you have not built out test coverage yet.
-        
-      - name: Build application #Can the app be assembled into a deployable artifact? Looks for:
-      #unresolved imports, SSR issues, missing env assumptions, bundling errors, TypeScript compile
-      #failures that lint missed
+      - name: Unit Tests
+        # Vitest is the test runner (confirmed in frontend/package.json).
+        # --run executes tests once (non-watch mode), correct for CI.
+        # --passWithNoTests prevents failing the workflow when test
+        # coverage has not been built out yet.
+        run: npx vitest run --passWithNoTests
+
+      - name: Build application
+        # Verifies the app can be assembled into a deployable artifact.
+        # Catches unresolved imports, bundling errors, and TypeScript
+        # compile failures that linting may have missed.
         run: npm run build
 
-      - name: Upload Build Artifact #Stores build output from CI run; useful for debugging.
-        if: success()
+      - name: Upload Build Artifact
+        # Stores the Vite build output (dist/) for debugging.
+        # Vite outputs to dist/ by default.
         uses: actions/upload-artifact@v4
         with:
           name: app-build
-          path: |
-            .next
-            dist
-            build
+          path: react-webapp/frontend/dist
           if-no-files-found: ignore

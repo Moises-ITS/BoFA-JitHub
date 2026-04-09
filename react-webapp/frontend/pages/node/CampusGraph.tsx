@@ -4230,6 +4230,64 @@ export default function CampusGraph() {
       </div>
 
       {/* Main */}
+<<<<<<< HEAD
+      <div className="main" data-heatmap={heatmapMode}>
+        <div ref={ambientFxRef} className={`graphAmbientFx${viewMode === "3d" ? " graphAmbientFx--hidden" : ""}`} aria-hidden="true">
+          <div className="graphAmbientLayer graphAmbientLayer--far" ref={ambientFarRef}>
+            {ambientSpecks.far.map((speck) => (
+              <span
+                key={speck.id}
+                className={`graphSpeck${speck.twinkle ? " graphSpeck--twinkle" : ""}`}
+                style={{
+                  left: `${speck.x}%`,
+                  top: `${speck.y}%`,
+                  width: `${speck.size}px`,
+                  height: `${speck.size}px`,
+                  opacity: speck.opacity,
+                }}
+              />
+            ))}
+          </div>
+          <div className="graphAmbientLayer graphAmbientLayer--mid" ref={ambientMidRef}>
+            {ambientSpecks.mid.map((speck) => (
+              <span
+                key={speck.id}
+                className={`graphSpeck graphSpeck--mid${speck.twinkle ? " graphSpeck--twinkle" : ""}`}
+                style={{
+                  left: `${speck.x}%`,
+                  top: `${speck.y}%`,
+                  width: `${speck.size}px`,
+                  height: `${speck.size}px`,
+                  opacity: speck.opacity,
+                }}
+              />
+            ))}
+          </div>
+          <div className="graphAmbientLayer graphAmbientLayer--near" ref={ambientNearRef}>
+            {ambientSpecks.near.map((speck) => (
+              <span
+                key={speck.id}
+                className={`graphSpeck graphSpeck--near${speck.twinkle ? " graphSpeck--twinkle" : ""}`}
+                style={{
+                  left: `${speck.x}%`,
+                  top: `${speck.y}%`,
+                  width: `${speck.size}px`,
+                  height: `${speck.size}px`,
+                  opacity: speck.opacity,
+                }}
+              />
+            ))}
+          </div>
+          <div className="graphAmbientGrain" ref={ambientGrainRef} />
+          <div className="graphEnergyField graphEnergyField--density" ref={energyDensityRef} />
+          <div className="graphEnergyField graphEnergyField--core" ref={energyCoreRef} />
+          <div className="graphAmbientFog graphAmbientFog--core" />
+          <div className="graphAmbientFog graphAmbientFog--secondary" />
+          <div className="graphAmbientSpecks" />
+          <div className="graphScanSweep" ref={scanSweepRef} />
+        </div>
+=======
+>>>>>>> 1e5da63178efcf6630c2e48d02ab94375f0c6020
       <div className="main">
         <div className="bgGlow" />
         <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} />

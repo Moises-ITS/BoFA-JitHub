@@ -1224,9 +1224,8 @@
 }
 .bgGlow {
   position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background:
-    radial-gradient(ellipse at 46% 47%, rgba(88, 138, 235, 0.22) 0%, rgba(79, 111, 196, 0.12) 36%, transparent 68%),
-    radial-gradient(ellipse at 62% 58%, rgba(139, 92, 246, 0.12) 0%, transparent 62%);
+  background: radial-gradient(ellipse at 50% 45%, rgba(124,58,237,0.07) 0%, transparent 60%);
+  animation: depthPulse 9s ease-in-out infinite;
   transition: transform 0.22s ease-out;
   animation: depthPulse 8.4s ease-in-out infinite;
 }

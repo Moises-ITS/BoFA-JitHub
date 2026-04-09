@@ -1,6 +1,8 @@
 ﻿/// <reference types="vite/client" />
 // 
 // components/SidePanel.tsx
+// Shows node details and connection status (view-only on own node)
+// ─────────────────────────────────────────────────────────────────────────────
 // Shows node details, Add Connection button, and Recommended Connections
 // 
 
@@ -11,16 +13,6 @@ import { getNodeId } from "../utils/getNodeId";
 import { useAuth } from "../../../context/AuthContext";
 
 const API = import.meta.env.VITE_API_URL ?? "";
-
-interface Recommendation {
-  id:              string;
-  name:            string;
-  major:           string;
-  sharedClubs:     number;
-  sharedInterests: number;
-  sameMajor:       boolean;
-  score:           number;
-}
 
 type ConnStatus = "none" | "pending-sent" | "pending-received" | "connected";
 
@@ -48,6 +40,10 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
   const { user, token } = useAuth();
   const isOwnNode = node?.id === user?.id;
 
+  // ── Connection status state ───────────────────────────────────────────────
+  const [connStatus,    setConnStatus]    = useState<ConnStatus>("none");
+  const [connLoading,   setConnLoading]   = useState(false);
+  const [connExpanded,  setConnExpanded]  = useState(false);
   //  Connection status state 
   const [connStatus,  setConnStatus]  = useState<ConnStatus>("none");
   const [connLoading, setConnLoading] = useState(false);
@@ -72,6 +68,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       .catch(() => setConnStatus("none"));
   }, [node?.id, user, isOwnNode]); // eslint-disable-line
 
+  // ── Connection actions ────────────────────────────────────────────────────
   // Fetch recommendations when viewing own node
   useEffect(() => {
     if (!isOwnNode || !user) { setRecs([]); return; }
@@ -96,6 +93,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     setConnLoading(false);
   };
 
+  // ── Early return ──────────────────────────────────────────────────────────
   const acceptRequest = async () => {
     if (!node || !user) return;
     setConnLoading(true);
@@ -194,13 +192,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
             <span className="connectChip connectChip--pending">Request Sent</span>
           )}
           {connStatus === "pending-received" && (
-            <div className="connectIncoming">
-              <span className="connectChip connectChip--incoming">Wants to connect</span>
-              <div className="connectActions">
-                <button className="connectBtn connectBtn--accept"   onClick={acceptRequest} disabled={connLoading}>Accept</button>
-                <button className="connectBtn connectBtn--decline"  onClick={rejectRequest} disabled={connLoading}>Decline</button>
-              </div>
-            </div>
+            <span className="connectChip connectChip--incoming">Wants to connect with you</span>
           )}
           {connStatus === "connected" && (
             <div className="connectIncoming">
@@ -212,7 +204,19 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
               </div>
             </div>
           )}
+          {node.details?.linkedinUrl && (
+            <a href={node.details.linkedinUrl as string} target="_blank" rel="noopener noreferrer" className="panelLinkedin">
+              LinkedIn ↗
+            </a>
+          )}
         </div>
+      )}
+
+      {/* LinkedIn for own node or non-student nodes */}
+      {(isOwnNode || node.type !== "student") && node.details?.linkedinUrl && (
+        <a href={node.details.linkedinUrl as string} target="_blank" rel="noopener noreferrer" className="panelLinkedin" style={{ margin: "6px 16px 0" }}>
+          LinkedIn ↗
+        </a>
       )}
 
       {/* Details */}
@@ -234,7 +238,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       {/* Connections */}
       <div className="section">
         <h4 className="sectionTitle">Connections ({connLinks.length})</h4>
-        {connLinks.map((l, i) => {
+        {(connExpanded ? connLinks : connLinks.slice(0, 5)).map((l, i) => {
           const otherId = getNodeId(l.source) === node.id ? getNodeId(l.target) : getNodeId(l.source);
           const other   = nodes.find(n => n.id === otherId);
           if (!other) return null;
@@ -248,6 +252,14 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
             </div>
           );
         })}
+        {connLinks.length > 5 && (
+          <button
+            className="connExpandBtn"
+            onClick={() => setConnExpanded(e => !e)}
+          >
+            {connExpanded ? "← Show less" : `Show ${connLinks.length - 5} more →`}
+          </button>
+        )}
       </div>
 
       {/*  Recommended Connections (own profile only)  */}

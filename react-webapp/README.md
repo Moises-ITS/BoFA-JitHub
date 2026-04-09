@@ -9,6 +9,7 @@ Full-stack web app: React + Vite frontend, Express + TypeScript backend, Postgre
 - Node.js 18+
 - npm 9+
 - Access to the Railway PostgreSQL database
+- Access to a Redis instance (Railway Redis or equivalent)
 - Access to the Neo4j AuraDB instance
 - Access to the Clerk dashboard (ask project owner for keys)
 
@@ -53,6 +54,12 @@ CLERK_SECRET_KEY=sk_test_...          # From Clerk Dashboard > API Keys
 CLERK_JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
 <paste PEM key here, keep the quotes and line breaks>
 -----END PUBLIC KEY-----"
+
+# Redis cache config (optional but recommended)
+# Must be redis:// or rediss:// (NOT postgresql://)
+REDIS_URL=rediss://default:<password>@<host>:<port>
+# Optional: comma-separated Redis URLs for smoke testing
+# REDIS_URLS=rediss://... , rediss://...
 ```
 
 > **CLERK_JWT_PUBLIC_KEY** — get this from Clerk Dashboard > API Keys > "JWT Public Key".
@@ -89,6 +96,19 @@ npm run dev:all
 
 Frontend: http://localhost:5173
 Backend: http://localhost:3001
+
+### Redis smoke test
+
+From `react-webapp/backend`:
+
+```bash
+npm run redis:smoke
+```
+
+Notes:
+- The test validates connect + set/get/delete.
+- Railway private hosts like `*.railway.internal` only work inside Railway network.
+- For local/CI, use a public `redis://` or `rediss://` endpoint.
 
 ---
 
@@ -143,6 +163,25 @@ Migrations run automatically when the backend starts. They are idempotent (safe 
 | Auth | Clerk (accounts + session tokens) |
 | Primary DB | PostgreSQL via Railway |
 | Graph DB | Neo4j AuraDB |
+| Cache | Redis (optional; tested via smoke script) |
 | Routing | React Router v7 |
 | Animations | Motion (Framer Motion v12) |
 | Graph viz | D3.js v7 |
+
+---
+
+## CI workflow
+
+Workflow file: `react-webapp/.github/workflows/ci.yml`
+
+- Uses explicit `working-directory` per package (no npm workspace `-w` dependency)
+- Installs dependencies for:
+  - `react-webapp/`
+  - `react-webapp/frontend/`
+  - `react-webapp/backend/`
+- Runs frontend type-check + lint
+- Runs frontend and backend builds separately
+- Uploads artifacts from:
+  - `react-webapp/frontend/dist`
+  - `react-webapp/backend/dist`
+- Runs Redis smoke test when Redis vars/secrets are configured in GitHub

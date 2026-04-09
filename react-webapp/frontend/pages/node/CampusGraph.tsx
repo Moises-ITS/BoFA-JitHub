@@ -4230,6 +4230,7 @@ export default function CampusGraph() {
       </div>
 
       {/* Main */}
+<<<<<<< HEAD
       <div className="main" data-heatmap={heatmapMode}>
         <div ref={ambientFxRef} className={`graphAmbientFx${viewMode === "3d" ? " graphAmbientFx--hidden" : ""}`} aria-hidden="true">
           <div className="graphAmbientLayer graphAmbientLayer--far" ref={ambientFarRef}>
@@ -4285,6 +4286,8 @@ export default function CampusGraph() {
           <div className="graphAmbientSpecks" />
           <div className="graphScanSweep" ref={scanSweepRef} />
         </div>
+=======
+>>>>>>> 1e5da63178efcf6630c2e48d02ab94375f0c6020
       <div className="main">
         <div className="bgGlow" />
         <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} />

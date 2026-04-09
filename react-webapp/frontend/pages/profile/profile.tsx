@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
 import { Target, Award, Edit2, Calendar, Briefcase, Users } from "lucide-react";
 import { mockOpportunities } from "../home/mock-data";

@@ -1,0 +1,14 @@
+# Source-local secret/config artifacts
+*.local
+*.secret
+*.key
+*.pem
+*.crt
+
+# Prevent accidental check-in of ad-hoc API credential files in src
+**/api-keys.*
+**/secrets.*
+**/*token*.local.*
+
+# Keep examples/templates
+!*.example

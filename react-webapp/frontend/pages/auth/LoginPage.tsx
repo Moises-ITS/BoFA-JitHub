@@ -18,20 +18,7 @@ export default function LoginPage() {
       navigate("/home", { replace: true })
       return
     }
-
-    // Needs to finish profile setup
-    if (isSignedIn && needsProfileSetup) {
-      navigate("/setup", { replace: true })
-      return
-    }
-
-    // Stale Clerk session with no DB profile (and backend is reachable) → sign out
-    // Don't sign out if it's just a backend connection error
-    if (isSignedIn && !user && !authError) {
-      void signOut({ redirectUrl: "/login" })
-    }
-  }, [isLoaded, isSignedIn, loading, user, needsProfileSetup, authError, signOut, navigate])
-
+  }, [isLoaded, isSignedIn, loading, user, signOut])
   return (
     <div className="auth-page">
       <div className="auth-card auth-card--clerk">

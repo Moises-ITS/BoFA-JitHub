@@ -15,26 +15,26 @@ const AUTH_API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 // ─── Category filters ────────────────────────────────────────────────────────
 const FILTERS = [
-  { label: "Fundraising",          value: "fundraiser" },
-  { label: "Exposure",             value: "exposure" },
-  { label: "Volunteering",         value: "volunteering" },
-  { label: "Workshop",             value: "workshop" },
+  { label: "Fundraising", value: "fundraiser" },
+  { label: "Exposure", value: "exposure" },
+  { label: "Volunteering", value: "volunteering" },
+  { label: "Workshop", value: "workshop" },
   { label: "Panel / Info Session", value: "info session" },
-  { label: "Site Tour",            value: "site tour" },
-  { label: "Recruiting",           value: "recruiting" },
-  { label: "GBM",                  value: "general meeting" },
-  { label: "Social",               value: "social" },
-  { label: "Conference",           value: "conference" },
-  { label: "Study Support",        value: "study support" },
-  { label: "Hackathon",            value: "hackathon" },
+  { label: "Site Tour", value: "site tour" },
+  { label: "Recruiting", value: "recruiting" },
+  { label: "GBM", value: "general meeting" },
+  { label: "Social", value: "social" },
+  { label: "Conference", value: "conference" },
+  { label: "Study Support", value: "study support" },
+  { label: "Hackathon", value: "hackathon" },
 ];
 
 function MatchSignal({ score }: { score: number }) {
   if (score < 0) return null;
   const [color, title] =
     score >= 70 ? ["var(--status-success)", "Strong match"] :
-    score >= 40 ? ["var(--status-warning)", "Moderate match"] :
-                  ["var(--status-error)", "Weak match"];
+      score >= 40 ? ["var(--status-warning)", "Moderate match"] :
+        ["var(--status-error)", "Weak match"];
   return (
     <span
       title={title}
@@ -316,7 +316,7 @@ export default function EventsPage() {
     fetch(`${API}/rsvp/${selectedEvent.event_id}/attendees`)
       .then(r => r.json())
       .then(setModalAttendees)
-      .catch(() => {});
+      .catch(() => { });
   }, [selectedEvent]);
 
   useEffect(() => {
@@ -324,7 +324,7 @@ export default function EventsPage() {
     fetch(`${AUTH_API}/api/connections`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then((data: { id: string }[]) => setConnectionIds(new Set(data.map(c => c.id))))
-      .catch(() => {});
+      .catch(() => { });
   }, [user?.id]);
 
   const displayEvents = useMemo(() => {
@@ -350,7 +350,7 @@ export default function EventsPage() {
           if (data.count > 0)
             setAttendeeMap(prev => ({ ...prev, [event.event_id]: data }));
         })
-        .catch(() => {});
+        .catch(() => { });
     });
   }, [displayEvents]);
 
@@ -368,7 +368,7 @@ export default function EventsPage() {
           ...Object.fromEntries(Object.entries(data).map(([k, v]) => [Number(k), v])),
         }))
       )
-      .catch(() => {});
+      .catch(() => { });
   }, [displayEvents, user?.id]);
 
   async function handleRsvpToggle(eventId: number) {
@@ -401,7 +401,7 @@ export default function EventsPage() {
         setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
         if (selectedEvent?.event_id === eventId) setModalAttendees(data);
       })
-      .catch(() => {});
+      .catch(() => { });
   }
 
   async function handleCreateEvent(payload: CommunityEventInput) {
@@ -430,155 +430,154 @@ export default function EventsPage() {
   }
 
   const VIEW_TABS = [
-    { key: "upcoming",  label: "Upcoming" },
-    { key: "trending",  label: "Trending" },
+    { key: "upcoming", label: "Upcoming" },
+    { key: "trending", label: "Trending" },
     { key: "top-match", label: "Top Match" },
   ] as const;
 
   return (
     <>
-    <div className="max-w-7xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold mb-1">
-          <span className="bg-clip-text text-transparent" style={{ backgroundImage: "var(--brand-gradient)" }}>Events</span>
-        </h1>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4">
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1" style={{ width: "fit-content", border: "1px solid var(--border-default)" }}>
-              {VIEW_TABS.map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => setView(key)}
-                  className={`text-sm px-4 py-1.5 rounded-md font-medium transition-all ${
-                    view === key
-                      ? "text-white"
-                      : "hover:text-white"
-                  }`}
-                  style={view === key ? { backgroundColor: "var(--brand-primary)" } : { color: "var(--text-muted)" }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-              {view === "upcoming" && (
-                <select
-                  value={activeFilter ?? ""}
-                  onChange={(e) => setActiveFilter(e.target.value || null)}
-                  className="text-sm text-white rounded-lg px-3 py-2 focus:outline-none cursor-pointer"
-                  style={{ colorScheme: "dark", backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
-                >
-                  <option value="">All categories</option>
-                  {FILTERS.map((f) => (
-                    <option key={f.value} value={f.value}>{f.label}</option>
-                  ))}
-                </select>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setSubmitOpen(true)}
-                className="rounded-lg px-3 py-2 text-xs font-semibold transition-transform hover:-translate-y-0.5 whitespace-nowrap"
-                style={{
-                  border: "1px solid rgba(204, 0, 0, 0.24)",
-                  background: "linear-gradient(135deg, rgba(215, 25, 32, 0.16), rgba(215, 25, 32, 0.08))",
-                  color: "#f7d7d9",
-                }}
-              >
-                Submit Event
-              </button>
-            </div>
-          </div>
-
-          {loading && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>}
-          {!loading && displayEvents.length === 0 && (
-            <div className="text-center py-16" style={{ color: "var(--text-muted)" }}>
-              <p className="text-4xl mb-3">📅</p>
-              <p className="font-medium text-white">
-                {view === "top-match" ? "Set up your profile to see matches" : "No events found"}
-              </p>
-              <p className="text-sm mt-1">
-                {view === "top-match" ? "Add your major, interests, and clubs in your profile." : activeFilter ? "Try a different category." : "Check back soon."}
-              </p>
-            </div>
-          )}
-          {displayEvents.map((event, i) => (
-            <EventCard
-              key={event.event_id}
-              event={event}
-              index={i}
-              profile={profile}
-              rsvpStatus={rsvpMap[event.event_id] ?? null}
-              attendees={attendeeMap[event.event_id]}
-              onRsvpToggle={user ? handleRsvpToggle : undefined}
-              connectionIds={connectionIds}
-              onSelect={(e) => { setSelectedEvent(e); setSelectedEventCanRsvp(true); }}
-            />
-          ))}
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-3xl font-semibold mb-1">
+            <span className="bg-clip-text text-transparent" style={{ backgroundImage: "var(--brand-gradient)" }}>Events</span>
+          </h1>
         </div>
 
-        {/* Sidebar */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "40px" }}>
-          <HeatmapCalendar />
-          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
-            <div className="flex items-center gap-2" style={{ marginBottom: "12px" }}>
-              <TrendingUp className="w-4 h-4" style={{ color: "var(--brand-primary)" }} />
-              <h3 className="font-semibold text-white text-sm">Trending This Semester</h3>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1" style={{ width: "fit-content", border: "1px solid var(--border-default)" }}>
+                {VIEW_TABS.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setView(key)}
+                    className={`text-sm px-4 py-1.5 rounded-md font-medium transition-all ${view === key
+                        ? "text-white"
+                        : "hover:text-white"
+                      }`}
+                    style={view === key ? { backgroundColor: "var(--brand-primary)" } : { color: "var(--text-muted)" }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                {view === "upcoming" && (
+                  <select
+                    value={activeFilter ?? ""}
+                    onChange={(e) => setActiveFilter(e.target.value || null)}
+                    className="text-sm text-white rounded-lg px-3 py-2 focus:outline-none cursor-pointer"
+                    style={{ colorScheme: "dark", backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
+                  >
+                    <option value="">All categories</option>
+                    {FILTERS.map((f) => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setSubmitOpen(true)}
+                  className="rounded-lg px-3 py-2 text-xs font-semibold transition-transform hover:-translate-y-0.5 whitespace-nowrap"
+                  style={{
+                    border: "1px solid rgba(204, 0, 0, 0.24)",
+                    background: "linear-gradient(135deg, rgba(215, 25, 32, 0.16), rgba(215, 25, 32, 0.08))",
+                    color: "#f7d7d9",
+                  }}
+                >
+                  Submit Event
+                </button>
+              </div>
             </div>
-            <TrendingPodium clubs={sidebarTrending} />
-            {sidebarTrending.length > 3 && (
-              <div style={{ marginTop: "18px", borderTop: "1px solid var(--border-default)", paddingTop: "14px" }}>
-                {sidebarTrending.slice(3).map((c, i) => <SidebarClubRow key={c.club_name} club={c} index={i + 3} />)}
+
+            {loading && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>}
+            {!loading && displayEvents.length === 0 && (
+              <div className="text-center py-16" style={{ color: "var(--text-muted)" }}>
+                <p className="text-4xl mb-3">📅</p>
+                <p className="font-medium text-white">
+                  {view === "top-match" ? "Set up your profile to see matches" : "No events found"}
+                </p>
+                <p className="text-sm mt-1">
+                  {view === "top-match" ? "Add your major, interests, and clubs in your profile." : activeFilter ? "Try a different category." : "Check back soon."}
+                </p>
               </div>
             )}
+            {displayEvents.map((event, i) => (
+              <EventCard
+                key={event.event_id}
+                event={event}
+                index={i}
+                profile={profile}
+                rsvpStatus={rsvpMap[event.event_id] ?? null}
+                attendees={attendeeMap[event.event_id]}
+                onRsvpToggle={user ? handleRsvpToggle : undefined}
+                connectionIds={connectionIds}
+                onSelect={(e) => { setSelectedEvent(e); setSelectedEventCanRsvp(true); }}
+              />
+            ))}
           </div>
-          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
-            <div className="flex items-center gap-2" style={{ marginBottom: "16px" }}>
-              <Zap className="w-4 h-4" style={{ color: "var(--accent-events)" }} />
-              <h3 className="font-semibold text-white text-sm">Top Risers This Semester</h3>
+
+          {/* Sidebar */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "40px" }}>
+            <HeatmapCalendar />
+            <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
+              <div className="flex items-center gap-2" style={{ marginBottom: "12px" }}>
+                <TrendingUp className="w-4 h-4" style={{ color: "var(--brand-primary)" }} />
+                <h3 className="font-semibold text-white text-sm">Trending This Semester</h3>
+              </div>
+              <TrendingPodium clubs={sidebarTrending} />
+              {sidebarTrending.length > 3 && (
+                <div style={{ marginTop: "18px", borderTop: "1px solid var(--border-default)", paddingTop: "14px" }}>
+                  {sidebarTrending.slice(3).map((c, i) => <SidebarClubRow key={c.club_name} club={c} index={i + 3} />)}
+                </div>
+              )}
             </div>
-            {topRisers.map((c, i) => <SidebarClubRow key={c.club_name} club={c} index={i} showScore />)}
-          </div>
-          <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
-            <div className="flex items-center gap-2" style={{ marginBottom: "4px" }}>
-              <Flame className="w-4 h-4" style={{ color: "var(--status-error)" }} />
-              <h3 className="font-semibold text-white text-sm">Top Events of the Semester</h3>
+            <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
+              <div className="flex items-center gap-2" style={{ marginBottom: "16px" }}>
+                <Zap className="w-4 h-4" style={{ color: "var(--accent-events)" }} />
+                <h3 className="font-semibold text-white text-sm">Top Risers This Semester</h3>
+              </div>
+              {topRisers.map((c, i) => <SidebarClubRow key={c.club_name} club={c} index={i} showScore />)}
             </div>
-            <div>
-              {topEvents.map((event, i) => (
-                <TopEventRow key={event.event_id} event={event} index={i} onSelect={(e) => { setSelectedEvent(e); setSelectedEventCanRsvp(false); }} />
-              ))}
+            <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
+              <div className="flex items-center gap-2" style={{ marginBottom: "4px" }}>
+                <Flame className="w-4 h-4" style={{ color: "var(--status-error)" }} />
+                <h3 className="font-semibold text-white text-sm">Top Events of the Semester</h3>
+              </div>
+              <div>
+                {topEvents.map((event, i) => (
+                  <TopEventRow key={event.event_id} event={event} index={i} onSelect={(e) => { setSelectedEvent(e); setSelectedEventCanRsvp(false); }} />
+                ))}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    {selectedEvent && (
-      <EventDetailModal
-        event={selectedEvent}
-        attendees={modalAttendees}
-        connectionIds={connectionIds}
-        rsvpStatus={rsvpMap[selectedEvent.event_id] ?? null}
-        onRsvpToggle={user && selectedEventCanRsvp ? handleRsvpToggle : undefined}
-        profile={profile}
-        onClose={() => setSelectedEvent(null)}
-        forceReadOnly={!selectedEventCanRsvp}
+      {selectedEvent && (
+        <EventDetailModal
+          event={selectedEvent}
+          attendees={modalAttendees}
+          connectionIds={connectionIds}
+          rsvpStatus={rsvpMap[selectedEvent.event_id] ?? null}
+          onRsvpToggle={user && selectedEventCanRsvp ? handleRsvpToggle : undefined}
+          profile={profile}
+          onClose={() => setSelectedEvent(null)}
+          forceReadOnly={!selectedEventCanRsvp}
+        />
+      )}
+
+      <SubmitEventModal
+        open={submitOpen}
+        submitting={submitLoading}
+        categories={FILTERS}
+        onClose={() => setSubmitOpen(false)}
+        onSubmit={handleCreateEvent}
       />
-    )}
-
-    <SubmitEventModal
-      open={submitOpen}
-      submitting={submitLoading}
-      categories={FILTERS}
-      onClose={() => setSubmitOpen(false)}
-      onSubmit={handleCreateEvent}
-    />
     </>
   );
 }

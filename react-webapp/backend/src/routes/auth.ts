@@ -73,6 +73,7 @@ function toNullableInt(value: unknown): number | null {
   return Number.isNaN(parsed) ? null : parsed
 }
 
+
 const router = Router()
 
 router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
@@ -135,6 +136,13 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
     if (!name) {
       res.status(400).json({ error: "name is required" })
       return
+    }
+
+    // Legacy user reclaim handled above
+
+    // Brand-new user — name is required; major/year can be filled in later
+    if (!name) {
+      res.status(400).json({ error: "name is required" }); return
     }
 
     // Brand-new user

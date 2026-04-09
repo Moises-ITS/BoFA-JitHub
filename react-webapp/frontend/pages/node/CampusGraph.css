@@ -35,6 +35,51 @@
     radial-gradient(circle at 74% 76%, rgba(236, 72, 153, 0.06), transparent 38%);
   animation: ambientDrift 26s ease-in-out infinite alternate;
 }
+/* Motion-tier guardrails: keep premium feel while reducing repaint cost under load */
+.root.perf-balanced .graphEnergyField--density { filter: blur(20px) saturate(1.08); }
+.root.perf-balanced .graphEnergyField--core { filter: blur(16px) saturate(1.12); }
+.root.perf-balanced .graphAmbientGrain { opacity: 0.08; }
+.root.perf-balanced .graphAmbientLayer--far { opacity: 0.22; }
+.root.perf-balanced .graphAmbientLayer--mid { opacity: 0.3; }
+.root.perf-balanced .graphAmbientLayer--near { opacity: 0.36; }
+.root.perf-balanced .graphAmbientSpecks { opacity: 0.4; }
+.root.perf-balanced .link-hover-energized { animation-duration: 1.3s; }
+.root.perf-balanced .flow-particle { filter: drop-shadow(0 0 5px rgba(168, 219, 255, 0.78)); }
+
+.root.perf-performance .graphEnergyField--density { filter: blur(14px) saturate(1.02); }
+.root.perf-performance .graphEnergyField--core { filter: blur(12px) saturate(1.05); }
+.root.perf-performance .graphAmbientFog { opacity: 0.12; }
+.root.perf-performance .graphAmbientGrain { opacity: 0.05; }
+.root.perf-performance .graphAmbientLayer--far { opacity: 0.16; }
+.root.perf-performance .graphAmbientLayer--mid { opacity: 0.21; }
+.root.perf-performance .graphAmbientLayer--near { opacity: 0.26; }
+.root.perf-performance .graphAmbientSpecks { opacity: 0.3; animation-duration: 34s; }
+.root.perf-performance .graphSpeck--twinkle { animation-duration: 8.2s; }
+.root.perf-performance .cluster-aura-layer .cluster-aura { opacity: 0.7; }
+.root.perf-performance .node-aura-halo { filter: blur(3px); }
+.root.perf-performance .link-hover-energized { animation-duration: 1.5s; filter: drop-shadow(0 0 5px rgba(156, 214, 255, 0.52)); }
+.root.perf-performance .flow-particle { filter: drop-shadow(0 0 4px rgba(168, 219, 255, 0.62)); }
+.root.perf-performance .graphHeader,
+.root.perf-performance .toolbar,
+.root.perf-performance .modeHint { backdrop-filter: blur(7px); }
+
+.root.perf-interacting .graphAmbientLayer,
+.root.perf-interacting .graphAmbientSpecks,
+.root.perf-interacting .graphAmbientFog,
+.root.perf-interacting .graphAmbientGrain {
+  opacity: 0.12 !important;
+  animation-play-state: paused;
+}
+.root.perf-interacting .graphEnergyField {
+  transition-duration: 0.2s;
+}
+.root.perf-interacting .flow-particle,
+.root.perf-interacting .link-hover-energized {
+  filter: none !important;
+}
+.root.perf-interacting .node text {
+  transition-duration: 0.1s;
+}
 @keyframes ambientDrift {
   0%   { transform: translate(-1.2%, -0.9%) scale(1); opacity: 0.9; }
   50%  { transform: translate(1.1%, 1.3%) scale(1.02); opacity: 1; }
@@ -239,12 +284,13 @@
 
 /* ── Toolbar ── */
 .toolbar {
-  background: rgba(8, 12, 20, 0.86);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.05), 0 8px 32px 0 rgba(0, 0, 0, 0.45);
   padding: 6px 14px;
   display: flex; align-items: center; gap: 8px;
   flex-shrink: 0; flex-wrap: wrap;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(28px) saturate(180%);
 }
 
 .searchWrap {
@@ -320,6 +366,186 @@
 
 /* ── Main ── */
 .main { flex: 1; min-height: 0; display: flex; overflow: hidden; position: relative; }
+.graphAmbientFx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transition: opacity 0.36s ease;
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+}
+.graphEnergyField {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  will-change: transform, opacity, filter;
+}
+
+.graphEnergyField--density {
+  background: radial-gradient(circle at 30% 40%, rgba(16, 185, 129, 0.15) 0%, transparent 40%),
+              radial-gradient(circle at 70% 60%, rgba(245, 158, 11, 0.1) 0%, transparent 40%);
+  filter: blur(80px) saturate(1.8);
+}
+
+.graphEnergyField--core {
+  background: radial-gradient(circle at 50% 50%, rgba(192, 57, 43, 0.08) 0%, transparent 60%);
+  filter: blur(120px);
+}
+
+[data-heatmap="true"] .graphEnergyField {
+  opacity: 1;
+}
+
+[data-heatmap="true"] .graphEnergyField--density {
+  animation: heatFlow 20s infinite alternate ease-in-out;
+}
+
+@keyframes heatFlow {
+  0% { transform: scale(1) rotate(0deg) translate(0, 0); }
+  50% { transform: scale(1.1) rotate(5deg) translate(5%, 2%); }
+  100% { transform: scale(1.05) rotate(-3deg) translate(-2%, 5%); }
+}
+.graphAmbientLayer--far {
+  opacity: 0.32;
+}
+.graphAmbientLayer--mid {
+  opacity: 0.4;
+}
+.graphAmbientLayer--near {
+  opacity: 0.5;
+}
+.graphSpeck {
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(177, 220, 255, 0.88);
+  filter: drop-shadow(0 0 4px rgba(145, 214, 255, 0.55));
+  transform: translate(-50%, -50%);
+}
+.graphSpeck--mid {
+  background: rgba(157, 203, 255, 0.95);
+  filter: drop-shadow(0 0 5px rgba(129, 202, 255, 0.62));
+}
+.graphSpeck--near {
+  background: rgba(201, 231, 255, 0.98);
+  filter: drop-shadow(0 0 6px rgba(161, 221, 255, 0.74));
+}
+.graphSpeck--twinkle {
+  animation: graphSpeckTwinkle 4.8s ease-in-out infinite;
+}
+@keyframes graphSpeckTwinkle {
+  0%, 100% { opacity: 0.42; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.92; transform: translate(-50%, -50%) scale(1.25); }
+}
+.graphAmbientFx--systemPulse {
+  animation: ambientSystemPulse 0.72s ease-out;
+}
+@keyframes ambientSystemPulse {
+  0% { opacity: 0.9; filter: saturate(1.1); }
+  45% { opacity: 1; filter: saturate(1.28); }
+  100% { opacity: 0.94; filter: saturate(1); }
+}
+.graphAmbientFx--hidden {
+  opacity: 0;
+}
+.graphAmbientSpecks {
+  position: absolute;
+  inset: 0;
+  opacity: 0.52;
+  background-image:
+    radial-gradient(circle at 16% 22%, rgba(186, 219, 255, 0.46) 0, transparent 1.2px),
+    radial-gradient(circle at 73% 34%, rgba(156, 194, 245, 0.35) 0, transparent 1.1px),
+    radial-gradient(circle at 42% 68%, rgba(178, 231, 255, 0.24) 0, transparent 1px),
+    radial-gradient(circle at 84% 79%, rgba(171, 182, 255, 0.18) 0, transparent 1px);
+  background-size: 280px 230px, 320px 270px, 240px 220px, 360px 330px;
+  animation: speckDrift 24s linear infinite;
+}
+.graphAmbientFog {
+  position: absolute;
+  inset: -8%;
+  pointer-events: none;
+  opacity: 0.2;
+  mix-blend-mode: screen;
+}
+.graphAmbientFog--core {
+  background:
+    radial-gradient(ellipse at 48% 46%, rgba(86, 150, 255, 0.22) 0%, rgba(41, 97, 186, 0.16) 26%, rgba(14, 31, 61, 0) 63%);
+  animation: graphFogDriftA 19s ease-in-out infinite alternate;
+}
+.graphAmbientFog--secondary {
+  background:
+    radial-gradient(ellipse at 66% 58%, rgba(109, 205, 255, 0.12) 0%, rgba(45, 124, 179, 0.08) 30%, rgba(13, 33, 56, 0) 66%);
+  opacity: 0.16;
+  animation: graphFogDriftB 24s ease-in-out infinite alternate;
+}
+.graphAmbientGrain {
+  position: absolute;
+  inset: -20%;
+  opacity: 0.11;
+  mix-blend-mode: soft-light;
+  background-image:
+    radial-gradient(circle at 30% 40%, rgba(255, 255, 255, 0.13) 0, transparent 1px),
+    radial-gradient(circle at 70% 62%, rgba(255, 255, 255, 0.09) 0, transparent 1px),
+    radial-gradient(circle at 55% 23%, rgba(255, 255, 255, 0.08) 0, transparent 1px);
+  background-size: 3px 3px, 4px 4px, 5px 5px;
+  animation: graphGrainDrift 15s linear infinite;
+}
+.graphEnergyField {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.45s ease, transform 0.5s ease;
+}
+.graphEnergyField--density {
+  filter: blur(26px) saturate(1.16);
+  will-change: transform, opacity;
+}
+.graphEnergyField--core {
+  filter: blur(22px) saturate(1.22);
+  will-change: transform, opacity;
+}
+@keyframes speckDrift {
+  0% { transform: translate3d(0, 0, 0); opacity: 0.18; }
+  50% { transform: translate3d(-6px, 4px, 0); opacity: 0.34; }
+  100% { transform: translate3d(0, 0, 0); opacity: 0.2; }
+}
+@keyframes graphFogDriftA {
+  0% { transform: translate3d(-4px, -2px, 0) scale(1); opacity: 0.16; }
+  100% { transform: translate3d(6px, 5px, 0) scale(1.04); opacity: 0.24; }
+}
+@keyframes graphFogDriftB {
+  0% { transform: translate3d(5px, -5px, 0) scale(1); opacity: 0.11; }
+  100% { transform: translate3d(-6px, 4px, 0) scale(1.05); opacity: 0.19; }
+}
+@keyframes graphGrainDrift {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-12px, 10px, 0); }
+}
+.graphScanSweep {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(
+    108deg,
+    transparent 36%,
+    rgba(121, 168, 228, 0.03) 49%,
+    rgba(162, 212, 255, 0.06) 51%,
+    transparent 64%
+  );
+  transform: translateX(-115%);
+}
+.graphScanSweep--active {
+  animation: graphScanSweep 3.2s ease-out;
+}
+@keyframes graphScanSweep {
+  0% { opacity: 0; transform: translateX(-115%); }
+  12% { opacity: 0.32; }
+  56% { opacity: 0.18; }
+  100% { opacity: 0; transform: translateX(120%); }
+}
 
 /* ── Graph SVG ── */
 #graph-svg {
@@ -543,12 +769,24 @@
 .link {
   fill: none;
   stroke-linecap: round;
-  transition: stroke-opacity 0.22s ease, stroke-width 0.2s ease;
+  transition: stroke-opacity 0.22s ease, stroke-width 0.2s ease, filter 0.28s ease;
 }
-.link-t1 { stroke: #60a5fa; }
-.link-t2 { stroke: #3d6080; }
-.link-t3 { stroke: #253448; }
-.link-dashed { stroke-dasharray: 5,4; }
+.link-depth-foreground {
+  filter: drop-shadow(0 0 4px rgba(145, 205, 255, 0.32));
+}
+.link-depth-mid {
+  filter: drop-shadow(0 0 2px rgba(133, 188, 242, 0.18));
+}
+.link-depth-background {
+  filter: drop-shadow(0 0 1px rgba(112, 157, 206, 0.12));
+}
+@keyframes flowParticle {
+  to { stroke-dashoffset: -40; }
+}
+.link-t1 { stroke: #60a5fa; stroke-dasharray: 4 20; animation: flowParticle 2s linear infinite; }
+.link-t2 { stroke: #3d6080; stroke-dasharray: 3 30; animation: flowParticle 3.5s linear infinite; }
+.link-t3 { stroke: #253448; stroke-dasharray: 2 40; animation: flowParticle 5s linear infinite; }
+.link-dashed { stroke-dasharray: 5,4 !important; animation: none; }
 
 /* Student↔student CONNECTED_TO edges — traveling light-ball effect */
 @keyframes flowBall {
@@ -597,12 +835,34 @@
 }
 .flow-particle {
   pointer-events: none;
-  filter: drop-shadow(0 0 4px rgba(147, 197, 253, 0.9));
+  filter: drop-shadow(0 0 7px rgba(168, 219, 255, 0.96));
+}
+.link-hover-energized {
+  stroke-dasharray: 8 7;
+  animation: hoverEdgeCurrent 1.08s linear infinite;
+  filter: drop-shadow(0 0 8px rgba(156, 214, 255, 0.72));
+}
+@keyframes hoverEdgeCurrent {
+  to { stroke-dashoffset: -22; }
 }
 .node-ripple-layer .node-ripple {
   stroke: rgba(167, 139, 250, 0.75);
   stroke-width: 1.5px;
   fill: rgba(167, 139, 250, 0.18);
+}
+.node-ripple-layer .system-pulse-ring {
+  stroke: rgba(152, 211, 255, 0.74);
+  stroke-width: 1.4px;
+  fill: rgba(128, 190, 255, 0.12);
+}
+.node-ripple-layer .opportunity-burst-ring {
+  stroke: rgba(245, 158, 11, 0.9);
+  stroke-width: 1.6px;
+  fill: rgba(245, 158, 11, 0.22);
+}
+.node-ripple-layer .node-ripple--burst {
+  stroke: rgba(184, 226, 255, 0.95);
+  fill: rgba(147, 197, 253, 0.2);
 }
 .node-ripple-layer .node-hover-ring {
   stroke: rgba(147, 197, 253, 0.7);
@@ -614,7 +874,42 @@
 .node circle:hover { filter: brightness(1.25); }
 .node.dimmed circle { opacity: 0.07; }
 .node.dimmed text   { opacity: 0.04; }
-.node text { transition: opacity 0.18s ease; will-change: opacity; }
+.node text { transition: opacity 0.22s ease; will-change: opacity; }
+.node-depth-foreground circle.main-circle {
+  transform-origin: center;
+  filter: drop-shadow(0 0 12px rgba(173, 228, 255, 0.46));
+}
+.node-depth-mid circle.main-circle {
+  filter: drop-shadow(0 0 8px rgba(140, 193, 244, 0.2));
+}
+.node-depth-background circle.main-circle {
+  opacity: 0.86;
+  filter: drop-shadow(0 0 4px rgba(123, 173, 221, 0.16));
+}
+.node-depth-background circle.node-aura-halo {
+  opacity: 0.78;
+}
+.node-important circle.main-circle {
+  filter: drop-shadow(0 0 10px rgba(157, 214, 255, 0.28));
+}
+.node-aura-ring,
+.node-aura-halo {
+  pointer-events: none;
+  transition: opacity 0.18s ease, r 0.18s ease;
+}
+.node-aura-halo {
+  filter: blur(5px);
+}
+.node-aura-halo--company {
+  filter: blur(4px);
+}
+.node-selected-anchor circle.main-circle {
+  stroke: #f8fbff;
+  filter: drop-shadow(0 0 14px rgba(188, 225, 255, 0.86));
+}
+.node-selected-neighbor circle.main-circle {
+  filter: drop-shadow(0 0 9px rgba(147, 197, 253, 0.5));
+}
 .node-multi-selected circle.main-circle {
   stroke: #dbeafe;
   stroke-width: 3.2px;
@@ -670,6 +965,29 @@
 }
 
 .company-ring { pointer-events: none; }
+.cluster-aura-layer .cluster-aura {
+  mix-blend-mode: screen;
+  transition: opacity 0.45s ease;
+}
+.cluster-aura--student {
+  fill: rgba(102, 168, 255, 0.14);
+}
+.cluster-aura--company {
+  fill: rgba(147, 197, 253, 0.18);
+}
+.cluster-aura--club {
+  fill: rgba(251, 191, 36, 0.13);
+}
+.cluster-aura--interest {
+  fill: rgba(167, 139, 250, 0.12);
+}
+.cluster-aura--professor {
+  fill: rgba(110, 231, 183, 0.1);
+}
+.node-satellite-layer .node-satellite {
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px rgba(191, 232, 255, 0.85));
+}
 
 /* ── Mode Hint overlay ── */
 .modeHint {
@@ -740,8 +1058,12 @@
 
 /* ── Side Panel ── */
 .panel {
-  width: 280px; background: #0d1017;
-  border-left: 1px solid rgba(255,255,255,0.06); padding: 20px; overflow-y: auto; flex-shrink: 0;
+  width: 280px; 
+  background: rgba(255, 255, 255, 0.03); 
+  backdrop-filter: blur(28px) saturate(180%); 
+  box-shadow: inset 1px 0 0 rgba(255,255,255,0.05), -10px 0 40px rgba(0,0,0,0.5);
+  border-left: 1px solid rgba(255,255,255,0.12); 
+  padding: 20px; overflow-y: auto; flex-shrink: 0;
 }
 .panelHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .panelHeaderLabel { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px; color: #718096; font-weight: 600; }
@@ -861,8 +1183,13 @@
 /* ── Legend ── */
 .legend {
   position: absolute; bottom: 20px; left: 20px;
-  background: rgba(10,13,22,0.9); border: 1px solid #1a2030; border-radius: 10px;
-  padding: 12px 14px; backdrop-filter: blur(8px); pointer-events: none;
+  background: rgba(255, 255, 255, 0.03); 
+  border: 1px solid rgba(255,255,255,0.12); 
+  border-radius: 12px; 
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 40px rgba(0,0,0,0.5);
+  padding: 12px 14px; 
+  backdrop-filter: blur(28px) saturate(180%); 
+  pointer-events: none;
 }
 .legendTitle { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.5px; color: #718096; margin-bottom: 8px; font-weight: 600; }
 .legendItem  { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 0.78rem; }
@@ -870,8 +1197,13 @@
 /* ── Top Connected Inline Preview Card ── */
 .tcPreview {
   position: absolute; bottom: 20px; left: 158px;
-  background: rgba(10,13,22,0.9); border: 1px solid #1a2030; border-radius: 12px;
-  padding: 10px 14px; backdrop-filter: blur(8px); pointer-events: all;
+  background: rgba(255, 255, 255, 0.03); 
+  border: 1px solid rgba(255,255,255,0.12); 
+  border-radius: 12px; 
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 40px rgba(0,0,0,0.5);
+  padding: 10px 14px; 
+  backdrop-filter: blur(28px) saturate(180%); 
+  pointer-events: all;
   min-width: 195px; color: #e2e8f0; transition: border-color 0.2s;
 }
 .tcPreview:hover { border-color: rgba(255,215,0,0.25); }
@@ -895,7 +1227,7 @@
   background: radial-gradient(ellipse at 50% 45%, rgba(124,58,237,0.07) 0%, transparent 60%);
   animation: depthPulse 9s ease-in-out infinite;
   transition: transform 0.22s ease-out;
-  animation: depthPulse 10s ease-in-out infinite;
+  animation: depthPulse 8.4s ease-in-out infinite;
 }
 
 .minimap {
@@ -1164,16 +1496,29 @@
 .hoverCard {
   position: fixed;
   z-index: 200;
-  background: rgba(13, 16, 23, 0.96);
-  border: 1px solid #1e2a42;
-  border-radius: 10px;
+  background: rgba(20, 20, 25, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
   padding: 10px 13px;
   min-width: 160px;
   max-width: 200px;
   pointer-events: none;
-  backdrop-filter: blur(14px);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(34px) saturate(200%) contrast(1.1);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,0.12), inset 0 0 16px rgba(255, 255, 255, 0.05), 0 18px 40px rgba(0, 0, 0, 0.6);
   animation: hoverCardIn 0.14s ease-out;
+  overflow: hidden;
+}
+.hoverCard.holographic::before {
+  content: "";
+  position: absolute;
+  top: 0; left: -100%; width: 200%; height: 100%;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.15) 45%, transparent 60%);
+  pointer-events: none;
+  animation: hologramGlare 3s infinite linear;
+}
+@keyframes hologramGlare {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(50%); }
 }
 @keyframes hoverCardIn {
   from { opacity: 0; transform: translateY(5px); }
@@ -1253,4 +1598,33 @@
   .modeHint--lockedShift {
     left: 50%;
   }
+}
+
+#graph-svg {
+  transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), filter 0.8s ease;
+}
+
+/* ── Neural Echo Interaction ── */
+.neuralEchoShockwave {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+  z-index: 50;
+  will-change: transform, opacity;
+  animation: neuralShock 0.8s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes neuralShock {
+  0% { transform: translate(-50%, -50%) scale(0.1); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(4); opacity: 0; }
+}
+
+.graphHeader, .toolbar {
+  transition: filter 0.2s ease, transform 0.2s cubic-bezier(0.1, 0.8, 0.2, 1);
+}
+
+.uiPulse {
+  filter: blur(2px);
+  transform: translateY(-2px);
 }

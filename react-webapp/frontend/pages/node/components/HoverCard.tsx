@@ -1,7 +1,7 @@
 // components/HoverCard.tsx
 // Lightweight tooltip card that fades in on node hover in free mode
 
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
 import type { GraphNode } from "../types/graphNodes";
 import { TYPE_COLOR, TYPE_EMOJI } from "../constants/maps";
 
@@ -12,6 +12,27 @@ interface HoverCardProps {
 }
 
 const HoverCard = memo(function HoverCard({ node, x, y }: HoverCardProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const handleMove = (e: MouseEvent) => {
+      if (!cardRef.current) return;
+      const rect = cardRef.current.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
+      
+      const rx = Math.max(-25, Math.min(25, -(dy / 50) * 8));
+      const ry = Math.max(-25, Math.min(25, (dx / 50) * 8));
+      
+      cardRef.current.style.transform = `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) scale3d(1.05, 1.05, 1.05)`;
+    };
+    
+    // We bind to window because the card moves around and might be pointer-events none
+    window.addEventListener("mousemove", handleMove);
+    return () => window.removeEventListener("mousemove", handleMove);
+  }, []);
   const { details, type, label } = node;
 
   // Offset from cursor; flip left if near the right edge.
@@ -43,15 +64,19 @@ const HoverCard = memo(function HoverCard({ node, x, y }: HoverCardProps) {
   }
 
   return (
-    <div className="hoverCard" style={{ left: safeLeft, top: safeTop }}>
-      <div className="hoverCardHeader">
+    <div 
+      className="hoverCard holographic" 
+      ref={cardRef}
+      style={{ left: safeLeft, top: safeTop, transition: 'transform 0.1s ease-out', willChange: 'transform', transformStyle: 'preserve-3d' }}
+    >
+      <div className="hoverCardHeader" style={{ transform: 'translateZ(15px)' }}>
         <span className="hoverCardEmoji" style={{ color: TYPE_COLOR[type] }}>
           {TYPE_EMOJI[type]}
         </span>
         <span className="hoverCardName">{label}</span>
       </div>
       {lines.map((line, index) => (
-        <div key={index} className="hoverCardLine">
+        <div key={index} className="hoverCardLine" style={{ transform: `translateZ(${10 + index*2}px)` }}>
           <span className="hoverCardIcon">{line.icon}</span>
           <span className="hoverCardText">{line.text}</span>
         </div>

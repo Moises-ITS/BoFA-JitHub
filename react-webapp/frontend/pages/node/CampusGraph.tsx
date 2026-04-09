@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Crosshair, Flame } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import * as d3 from "d3";
 
@@ -37,20 +38,222 @@ const FIT_PADDING = 96;
 const FIT_MIN_SCALE = 0.42;
 const FIT_MAX_SCALE = 2.35;
 const DEMO_TOTAL_STEPS = 4;
-const AMBIENT_ORBIT_SPEED = 0.00045;
+const AMBIENT_ORBIT_SPEED = 0.00062;
 const HUB_BUNDLE_DEGREE = 5;
 const MINIMAP_W = 190;
 const MINIMAP_H = 130;
-const FLOW_BURST_MIN = 3;
-const FLOW_BURST_MAX = 8;
-const FLOW_BURST_INTERVAL_MIN_MS = 1700;
-const FLOW_BURST_INTERVAL_MAX_MS = 2800;
-const FLOW_ACTIVE_MAX = 46;
+const FLOW_ACTIVE_MIN = 4;
+const FLOW_ACTIVE_MAX = 10;
 const OVERLAY_SAFE_MARGIN = 12;
-const LOCKED_VIEWPORT_COVERAGE = 0.66;
-const LOCKED_FIT_MIN_SCALE = 0.18;
+const LOCKED_VIEWPORT_COVERAGE = 0.86;
+const LOCKED_FIT_MIN_SCALE = 0.24;
+const GRAPH_MOTION = {
+  nodePulse: {
+    scaleMin: 0.01,
+    scaleMax: 0.052,
+    glowSwing: 0.2,
+    periodMsMin: 2600,
+    periodMsMax: 5200,
+  },
+  nodeTypeProfile: {
+    student: { scaleMul: 1.02, speedMul: 1.02, glowMul: 1, flicker: 0.026 },
+    company: { scaleMul: 0.78, speedMul: 0.88, glowMul: 1.2, flicker: 0.012 },
+    club: { scaleMul: 1.12, speedMul: 1.05, glowMul: 1.02, flicker: 0.032 },
+    interest: { scaleMul: 1.2, speedMul: 1.2, glowMul: 0.96, flicker: 0.06 },
+    professor: { scaleMul: 0.9, speedMul: 0.94, glowMul: 1.02, flicker: 0.02 },
+  },
+  core: {
+    pulseScale: 0.14,
+    glowLift: 0.32,
+    waveSpeed: 0.00145,
+    neighborRadiusPx: 290,
+    neighborScale: 0.042,
+    neighborGlow: 0.16,
+  },
+  field: {
+    coreOpacityBase: 0.22,
+    coreOpacitySwing: 0.24,
+    densityOpacity: 0.32,
+    driftPx: 16,
+    updateLerp: 0.08,
+  },
+  satellites: {
+    maxPerNode: 3,
+    radiusMin: 12,
+    radiusMax: 22,
+    speedMin: 0.00045,
+    speedMax: 0.00078,
+    opacity: 0.62,
+  },
+  hover: {
+    nodeScale: 0.11,
+    neighborScale: 0.03,
+    unrelatedOpacity: 0.18,
+    edgeOpacity: 0.96,
+    neighborEdgeOpacity: 0.1,
+    edgeWidthMul: 1.28,
+  },
+  magnetic: {
+    radius: 190,
+    maxOffsetPx: 2.8,
+    auraOffsetMul: 1.22,
+  },
+  tension: {
+    hoverCurveTension: 0.62,
+  },
+  snap: {
+    settleOvershoot: 1.032,
+    settleInMs: 520,
+    settleSnapMs: 140,
+    settleBackMs: 180,
+  },
+  parallax: {
+    ambientLayerMul: 0.008,
+    farMul: 0.15,
+    midMul: 0.3,
+    nearMul: 0.5,
+  },
+  clickBurst: {
+    nodeSpikeScale: 0.16,
+    edgeRiseOpacity: 0.92,
+    edgeStaggerMs: 58,
+    neighborStaggerMs: 42,
+    settleMs: 520,
+  },
+  premium: {
+    hoverMs: 150,
+    localWakeMs: 220,
+    selectCompressMs: 96,
+    selectReleaseMs: 320,
+    panelDelayMs: 140,
+  },
+  selected: {
+    pulseScale: 0.048,
+    pulseSpeedMul: 1.34,
+    glowLift: 0.2,
+    neighborGlowLift: 0.08,
+  },
+  ambientEdge: {
+    strengthThreshold: 0.24,
+    driftAmplitude: 0.24,
+    driftSpeedMin: 0.0002,
+    driftSpeedMax: 0.0004,
+    activeRatio: 0.74,
+  },
+  cohorts: {
+    nodeCount: 4,
+    edgeCount: 3,
+  },
+  depth: {
+    foregroundScale: 1.12,
+    foregroundGlow: 0.18,
+    backgroundScale: 0.9,
+    backgroundDim: 0.16,
+    edgeForegroundLift: 0.16,
+    edgeBackgroundDrop: 0.1,
+  },
+  edgeFlow: {
+    visibleMin: FLOW_ACTIVE_MIN,
+    visibleMax: FLOW_ACTIVE_MAX,
+  },
+  microActivation: {
+    minIntervalMs: 1900,
+    maxIntervalMs: 4300,
+    nodeCountMin: 1,
+    nodeCountMax: 3,
+    durationMs: 1100,
+    intensity: 0.24,
+  },
+  idle: {
+    timeoutMsMin: 4200,
+    timeoutMsMax: 6200,
+    hintDurationMs: 1700,
+    hintCooldownMsMin: 4600,
+    hintCooldownMsMax: 7800,
+    opportunityDurationMs: 1100,
+    opportunityIntervalMsMin: 9200,
+    opportunityIntervalMsMax: 14800,
+    scanIntervalMsMin: 23000,
+    scanIntervalMsMax: 36000,
+    cascadeIntervalMinMs: 5000,
+    cascadeIntervalMaxMs: 9000,
+    cascadeNodeMin: 3,
+    cascadeNodeMax: 5,
+    cascadeEdgeMin: 2,
+    cascadeEdgeMax: 4,
+    cascadeStepMs: 140,
+  },
+  cluster: {
+    baseOpacity: 0.1,
+    breathOpacitySwing: 0.12,
+    radiusBase: 124,
+    radiusSpreadFactor: 0.18,
+  },
+  labels: {
+    fadeMs: 180,
+  },
+  signature: {
+    ignitionStepMs: 120,
+    ignitionNodeLift: 0.26,
+    ignitionEdgeLift: 0.22,
+    fullPulseMs: 520,
+    fullPulseNodeOpacity: 1,
+    fullPulseEdgeOpacity: 0.74,
+  },
+};
 
 type GraphMode = "free" | "locked" | "path";
+type MotionTier = "full" | "balanced" | "performance";
+
+const getInitialMotionTier = (nodeCount: number, linkCount: number, reducedMotion: boolean): MotionTier => {
+  if (reducedMotion) return "performance";
+  const complexity = nodeCount + linkCount * 0.65;
+  if (complexity > 520) return "performance";
+  if (complexity > 260) return "balanced";
+  return "full";
+};
+
+const MOTION_PROFILE: Record<MotionTier, {
+  flowMin: number;
+  flowMax: number;
+  activeNodeCohorts: number;
+  activeEdgeCohorts: number;
+  heavyTickDiv: number;
+  pointerThrottleMs: number;
+  magneticRadiusMul: number;
+  ambientDampenOnInteraction: number;
+}> = {
+  full: {
+    flowMin: FLOW_ACTIVE_MIN,
+    flowMax: 8,
+    activeNodeCohorts: 4,
+    activeEdgeCohorts: 3,
+    heavyTickDiv: 1,
+    pointerThrottleMs: 16,
+    magneticRadiusMul: 1,
+    ambientDampenOnInteraction: 0.55,
+  },
+  balanced: {
+    flowMin: 3,
+    flowMax: 6,
+    activeNodeCohorts: 3,
+    activeEdgeCohorts: 2,
+    heavyTickDiv: 2,
+    pointerThrottleMs: 24,
+    magneticRadiusMul: 0.88,
+    ambientDampenOnInteraction: 0.38,
+  },
+  performance: {
+    flowMin: 3,
+    flowMax: 4,
+    activeNodeCohorts: 2,
+    activeEdgeCohorts: 1,
+    heavyTickDiv: 3,
+    pointerThrottleMs: 34,
+    magneticRadiusMul: 0.72,
+    ambientDampenOnInteraction: 0.26,
+  },
+};
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const easeInOut = (t: number) => t * t * (3 - 2 * t);
@@ -77,10 +280,10 @@ const edgeWidthForLink = (l: GraphLink) => {
 
 const lockedOrbitRadiusForConnections = (count: number) => {
   const clamped = Math.max(0, count);
-  if (clamped <= 0) return 118;
-  const minRadius = 132;
-  const grown = minRadius + Math.sqrt(clamped) * 26;
-  return Math.min(360, grown);
+  if (clamped <= 0) return 104;
+  const minRadius = 118;
+  const grown = minRadius + Math.sqrt(clamped) * 20;
+  return Math.min(300, grown);
 };
 
 const curvePathBetweenNodes = (
@@ -102,7 +305,7 @@ const curvePathBetweenNodes = (
   const y1 = sy + uy * sPad;
   const x2 = tx - ux * tPad;
   const y2 = ty - uy * tPad;
-  const lift = Math.min(44, 16 + dist * 0.1);
+  const lift = Math.max(30, dist * 0.28);
   const cx = (x1 + x2) / 2;
   const cy = (y1 + y2) / 2 - lift;
   return `M${x1},${y1} Q${cx},${cy} ${x2},${y2}`;
@@ -193,21 +396,66 @@ export default function CampusGraph() {
   const [hoverCard, setHoverCard] = useState<{ node: GraphNode; x: number; y: number } | null>(null);
   const [d3Ready, setD3Ready] = useState(false);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
+
+  // Fisheye Lens Mode
+  const [lensMode, setLensMode] = useState(false);
+  const lensModeRef = useRef(false);
+  const [heatmapMode, setHeatmapMode] = useState(false);
+  const heatmapModeRef = useRef(false);
+  useEffect(() => { heatmapModeRef.current = heatmapMode; }, [heatmapMode]);
+  const ghostPredictionsRef = useRef<{targetId: string, prob: number}[]>([]);
+  const lensPosRef = useRef<{ x: number, y: number } | null>(null);
+  useEffect(() => { lensModeRef.current = lensMode; }, [lensMode]);
   const [demoMode, setDemoMode] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
   const [demoMessage, setDemoMessage] = useState<string>("");
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+  const [motionTier, setMotionTier] = useState<MotionTier>("balanced");
   const [spatialFocusNodeIds, setSpatialFocusNodeIds] = useState<string[]>([]);
   const [edgeExplain, setEdgeExplain] = useState<{ link: GraphLink; reasons: string[]; x: number; y: number } | null>(null);
   const [overlaySafeRight, setOverlaySafeRight] = useState(20);
   const [overlayNoFlyRect, setOverlayNoFlyRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [introFocusReady, setIntroFocusReady] = useState(false);
   const currentUserNode = useMemo(() => resolveCurrentUserNode(nodes, user), [nodes, user]);
+  const currentUserNode = useMemo(
+    () => resolveCurrentUserNode(nodes, user),
+    [nodes, user]
+  );
+  const perfTierOverride = useMemo(() => {
+    const raw = (searchParams.get("perf") ?? "").toLowerCase();
+    if (raw === "full" || raw === "balanced" || raw === "performance") return raw as MotionTier;
+    return null;
+  }, [searchParams]);
+  const perfDebug = useMemo(() => searchParams.get("perfDebug") === "1", [searchParams]);
+  const ambientSpecks = useMemo(() => {
+    type Speck = { id: string; x: number; y: number; size: number; opacity: number; twinkle: boolean };
+    const makeLayer = (prefix: string, count: number, minSize: number, maxSize: number, minOpacity: number, maxOpacity: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        id: `${prefix}-${i}`,
+        x: Math.random() * 100,
+        y: Math.random() * 100,
+        size: minSize + Math.random() * (maxSize - minSize),
+        opacity: minOpacity + Math.random() * (maxOpacity - minOpacity),
+        twinkle: Math.random() < 0.22,
+      })) as Speck[];
+    return {
+      far: makeLayer("far", 20, 0.8, 1.35, 0.18, 0.34),
+      mid: makeLayer("mid", 18, 1, 1.7, 0.22, 0.42),
+      near: makeLayer("near", 16, 1.1, 2.1, 0.26, 0.5),
+    };
+  }, []);
 
   // ── D3 Refs ───────────────────────────────────────────────────────────────
   const rootRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const bgGlowRef = useRef<HTMLDivElement>(null);
+  const ambientFxRef = useRef<HTMLDivElement>(null);
+  const ambientFarRef = useRef<HTMLDivElement>(null);
+  const ambientMidRef = useRef<HTMLDivElement>(null);
+  const ambientNearRef = useRef<HTMLDivElement>(null);
+  const ambientGrainRef = useRef<HTMLDivElement>(null);
+  const energyCoreRef = useRef<HTMLDivElement>(null);
+  const energyDensityRef = useRef<HTMLDivElement>(null);
   const nodeSelRef = useRef<d3.Selection<SVGGElement, GraphNode, SVGGElement, unknown> | null>(null);
   const linkSelRef = useRef<d3.Selection<SVGPathElement, GraphLink, SVGGElement, unknown> | null>(null);
   const labelSelRef = useRef<d3.Selection<SVGTextElement, GraphNode, SVGGElement, unknown> | null>(null);
@@ -218,6 +466,7 @@ export default function CampusGraph() {
   const hiddenTypesRef = useRef<Set<NodeType>>(new Set());
   const visibleLinksRef = useRef<GraphLink[]>([]);
   const simRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null);
+  const searchMatchesRef = useRef<Set<string>>(new Set());
   const dimsRef = useRef({ w: 900, h: 600 });
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const introDoneRef = useRef(false);
@@ -230,12 +479,31 @@ export default function CampusGraph() {
   const lastZoomXRef = useRef<number | null>(null);
   const lastZoomYRef = useRef<number | null>(null);
   const demoTimerRef = useRef<number | null>(null);
+  const selectionCommitTimerRef = useRef<number | null>(null);
   const demoAppliedStepRef = useRef<number>(-1);
   const draggingNodeIdRef = useRef<string | null>(null);
   const dragNeighborhoodRef = useRef<Set<string>>(new Set());
   const particleRafRef = useRef<number | null>(null);
   const updateMiniViewportRef = useRef<(() => void) | null>(null);
   const focusRafRef = useRef<number | null>(null);
+  const scanSweepRef = useRef<HTMLDivElement>(null);
+  const viewModeRef = useRef<"2d" | "3d">("2d");
+  const demoModeRef = useRef(false);
+  const multiSelectedCountRef = useRef(0);
+  const lastInteractionAtRef = useRef(0);
+  const idleTimeoutAtRef = useRef(0);
+  const heavyInteractionUntilRef = useRef(0);
+  const motionTierRef = useRef<MotionTier>("balanced");
+  const pointerAwareRafRef = useRef<number | null>(null);
+  const pointerAwareLastTsRef = useRef(0);
+  const pointerAwarePendingRef = useRef<{ x: number; y: number } | null>(null);
+  const motionDebugTsRef = useRef(0);
+  const parallaxPanRef = useRef({
+    densityX: 0,
+    densityY: 0,
+    coreX: 0,
+    coreY: 0,
+  });
 
   // ── Clear hover card when leaving free mode ───────────────────────────────
   useEffect(() => { if (mode !== "free") setHoverCard(null); }, [mode]);
@@ -247,13 +515,27 @@ export default function CampusGraph() {
   const nodesRef = useRef(nodes);
   const linksRef = useRef(links);
   const hoveredNodeIdRef = useRef<string | null>(null);
+  const pathNodeIdsRef = useRef<string[]>([]);
   const searchActiveRef = useRef(false);
   const currentZoomKRef = useRef(1);
   const flickerTimeRef = useRef(0);
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { linksRef.current = links; }, [links]);
+  useEffect(() => { pathNodeIdsRef.current = pathNodeIds; }, [pathNodeIds]);
   useEffect(() => { hiddenTypesRef.current = hiddenTypes; }, [hiddenTypes]);
+  useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
+  useEffect(() => { demoModeRef.current = demoMode; }, [demoMode]);
+  useEffect(() => { multiSelectedCountRef.current = multiSelectedIds.size; }, [multiSelectedIds.size]);
+  useEffect(() => { motionTierRef.current = motionTier; }, [motionTier]);
+
+  useEffect(() => {
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+    const autoTier = getInitialMotionTier(nodes.length, links.length, reducedMotion);
+    const next = perfTierOverride ?? (autoTier === "full" ? "balanced" : autoTier);
+    setMotionTier(next);
+    motionTierRef.current = next;
+  }, [nodes.length, links.length, perfTierOverride]);
   useEffect(() => {
     introLandingFixRef.current = false;
     introDebugRef.current = { waitingForNodeLogged: false, introStartedLogged: false };
@@ -275,6 +557,31 @@ export default function CampusGraph() {
     });
   }, [currentUserNode, nodes.length, user]);
 
+  const noteInteraction = useCallback(() => {
+    const now = performance.now();
+    lastInteractionAtRef.current = now;
+    idleTimeoutAtRef.current = now + GRAPH_MOTION.idle.timeoutMsMin + Math.random() * (GRAPH_MOTION.idle.timeoutMsMax - GRAPH_MOTION.idle.timeoutMsMin);
+  }, []);
+  const markHeavyInteraction = useCallback((ms = 420) => {
+    const now = performance.now();
+    heavyInteractionUntilRef.current = Math.max(heavyInteractionUntilRef.current, now + ms);
+    noteInteraction();
+  }, [noteInteraction]);
+  useEffect(() => {
+    noteInteraction();
+  }, [noteInteraction]);
+
+  useEffect(() => {
+    if (!introComplete) return;
+    markHeavyInteraction(560);
+  }, [searchQuery, companyQuery, introComplete, markHeavyInteraction]);
+
+  useEffect(() => {
+    const onKey = () => noteInteraction();
+    window.addEventListener("keydown", onKey, { passive: true });
+    return () => window.removeEventListener("keydown", onKey);
+  }, [noteInteraction]);
+
   // ── Opacity helper ────────────────────────────────────────────────────────
   const defOp = (l: GraphLink) => edgeOpacityFromStrength(edgeStrength(l));
 
@@ -285,6 +592,52 @@ export default function CampusGraph() {
     const h = Math.max(1, svgNode.clientHeight || dimsRef.current.h);
     dimsRef.current = { w, h };
     return dimsRef.current;
+  }, []);
+
+  const triggerNeuralEcho = useCallback((n: GraphNode) => {
+    if (!svgRef.current) return;
+    
+    // 1. Audio Synthesis (Subtle Synapse Tick)
+    try {
+      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+        setTimeout(() => ctx.close(), 200);
+      }
+    } catch(e) { /* ignore audio errors */ }
+
+    // 2. Shockwave Visuals
+    const currentTransform = d3.zoomTransform(svgRef.current);
+    const screenX = (n.x ?? 0) * currentTransform.k + currentTransform.x;
+    const screenY = (n.y ?? 0) * currentTransform.k + currentTransform.y;
+    
+    const wave = document.createElement("div");
+    wave.className = "neuralEchoShockwave";
+    wave.style.left = `${screenX}px`;
+    wave.style.top = `${screenY}px`;
+    rootRef.current?.appendChild(wave);
+    setTimeout(() => wave.remove(), 1000);
+
+    // 3. UI Momentum (Jitter)
+    const header = document.querySelector(".graphHeader");
+    const toolbar = document.querySelector(".toolbar");
+    header?.classList.add("uiPulse");
+    toolbar?.classList.add("uiPulse");
+    setTimeout(() => {
+      header?.classList.remove("uiPulse");
+      toolbar?.classList.remove("uiPulse");
+    }, 200);
   }, []);
 
   // ── Neighbor helper ───────────────────────────────────────────────────────
@@ -356,7 +709,7 @@ export default function CampusGraph() {
     const sy = h / 2;
     const neighborCount = Math.max(0, neighborIds.length);
     const orbitRadius = lockedOrbitRadiusForConnections(neighborCount);
-    const radialPad = neighborCount > 0 ? 56 : 44;
+    const radialPad = neighborCount > 0 ? 24 : 20;
     const effectiveRadius = orbitRadius + radialPad;
 
     const padX = FIT_PADDING + 26;
@@ -376,12 +729,24 @@ export default function CampusGraph() {
     const transform = d3.zoomIdentity
       .translate(w / 2 - scale * sx, h / 2 - scale * sy)
       .scale(scale);
+    const snapScale = Math.min(FIT_MAX_SCALE, scale * GRAPH_MOTION.snap.settleOvershoot);
+    const snapTransform = d3.zoomIdentity
+      .translate(w / 2 - snapScale * sx, h / 2 - snapScale * sy)
+      .scale(snapScale);
 
     const zoom = zoomRef.current;
     d3.select(svgRef.current)
       .interrupt()
       .transition()
-      .duration(duration)
+      .duration(GRAPH_MOTION.snap.settleInMs || duration)
+      .ease(d3.easeCubicInOut)
+      .call(zoom.transform, transform)
+      .transition()
+      .duration(GRAPH_MOTION.snap.settleSnapMs)
+      .ease(d3.easeCubicOut)
+      .call(zoom.transform, snapTransform)
+      .transition()
+      .duration(GRAPH_MOTION.snap.settleBackMs)
       .ease(d3.easeCubicInOut)
       .call(zoom.transform, transform);
   }, [getGraphViewportDims]);
@@ -426,7 +791,7 @@ export default function CampusGraph() {
     return reasons.slice(0, 3);
   }, []);
 
-  const fadeLabels = useCallback((opacityGetter: number | ((n: GraphNode) => number), duration = LABEL_FADE_MS) => {
+  const fadeLabels = useCallback((opacityGetter: number | ((n: GraphNode) => number), duration = GRAPH_MOTION.labels.fadeMs ?? LABEL_FADE_MS) => {
     const labels = labelSelRef.current;
     if (!labels) return;
     const getOpacity = typeof opacityGetter === "function" ? opacityGetter : () => opacityGetter;
@@ -472,81 +837,326 @@ export default function CampusGraph() {
     }
   }, []);
 
-  // ── Enter Locked Mode ─────────────────────────────────────────────────────
+  const triggerScanSweep = useCallback(() => {
+    const el = scanSweepRef.current;
+    if (!el) return;
+    el.classList.remove("graphScanSweep--active");
+    // force reflow to restart CSS animation
+    void el.offsetWidth;
+    el.classList.add("graphScanSweep--active");
+  }, []);
+
+  const triggerFullSystemPulse = useCallback((centerId?: string | null) => {
+    const nodeSel = nodeSelRef.current;
+    const linkSel = linkSelRef.current;
+    const rippleLayer = rippleLayerRef.current;
+    if (!nodeSel || !linkSel) return;
+    const centerNode = centerId ? nodesRef.current.find((n) => n.id === centerId) : null;
+    const cx = centerNode?.x ?? dimsRef.current.w / 2;
+    const cy = centerNode?.y ?? dimsRef.current.h / 2;
+    const el = ambientFxRef.current;
+    if (el) {
+      el.classList.remove("graphAmbientFx--systemPulse");
+      void el.offsetWidth;
+      el.classList.add("graphAmbientFx--systemPulse");
+    }
+    if (rippleLayer) {
+      rippleLayer.append("circle")
+        .attr("class", "system-pulse-ring")
+        .attr("cx", cx)
+        .attr("cy", cy)
+        .attr("r", 18)
+        .attr("stroke-opacity", 0.62)
+        .attr("fill-opacity", 0.13)
+        .transition()
+        .duration(880)
+        .ease(d3.easeCubicOut)
+        .attr("r", Math.max(dimsRef.current.w, dimsRef.current.h) * 0.78)
+        .attr("stroke-opacity", 0)
+        .attr("fill-opacity", 0)
+        .remove();
+    }
+    nodeSel.select<SVGCircleElement>("circle.main-circle")
+      .interrupt("sig-pulse")
+      .transition("sig-pulse")
+      .duration(GRAPH_MOTION.signature.fullPulseMs)
+      .attr("fill-opacity", (d: GraphNode) => d.id === centerId ? 1 : 0.95)
+      .transition("sig-pulse")
+      .duration(360)
+      .attr("fill-opacity", (d: GraphNode) => d.id === user?.id ? 1 : 0.9);
+    linkSel
+      .interrupt("sig-pulse")
+      .transition("sig-pulse")
+      .duration(GRAPH_MOTION.signature.fullPulseMs)
+      .attr("stroke-opacity", (l: GraphLink) => Math.max(edgeOpacityFromStrength(edgeStrength(l)), GRAPH_MOTION.signature.fullPulseEdgeOpacity))
+      .transition("sig-pulse")
+      .duration(380)
+      .attr("stroke-opacity", (l: GraphLink) => edgeOpacityFromStrength(edgeStrength(l)));
+  }, [user?.id]);
+
+  const triggerOpportunityExplosion = useCallback((pathIds: string[]) => {
+    if (!pathIds.length) return;
+    const centerId = pathIds[pathIds.length - 1];
+    triggerFullSystemPulse(centerId);
+    const nodeSel = nodeSelRef.current;
+    const rippleLayer = rippleLayerRef.current;
+    const center = nodesRef.current.find((n) => n.id === centerId);
+    if (nodeSel && center) {
+      nodeSel
+        .filter((n: GraphNode) => pathIds.includes(n.id))
+        .select<SVGCircleElement>("circle.main-circle")
+        .interrupt("opp-burst")
+        .transition("opp-burst")
+        .delay((n: GraphNode) => pathIds.indexOf(n.id) * 52)
+        .duration(210)
+        .attr("stroke-opacity", 1)
+        .attr("fill-opacity", 1)
+        .transition("opp-burst")
+        .duration(460)
+        .attr("fill-opacity", (n: GraphNode) => n.id === user?.id ? 1 : 0.9);
+    }
+    if (rippleLayer && center?.x != null && center?.y != null) {
+      rippleLayer.append("circle")
+        .attr("class", "opportunity-burst-ring")
+        .attr("cx", center.x)
+        .attr("cy", center.y)
+        .attr("r", Math.max(10, (center.r ?? 12) * 0.7))
+        .attr("stroke-opacity", 0.86)
+        .attr("fill-opacity", 0.24)
+        .transition()
+        .duration(760)
+        .ease(d3.easeCubicOut)
+        .attr("r", (center.r ?? 12) + 96)
+        .attr("stroke-opacity", 0)
+        .attr("fill-opacity", 0)
+        .remove();
+    }
+  }, [triggerFullSystemPulse, user?.id]);
+
+  const playClickActivationBurst = useCallback((d: GraphNode) => {
+    const nodeSel = nodeSelRef.current;
+    const linkSel = linkSelRef.current;
+    const layer = rippleLayerRef.current;
+    if (!nodeSel || !linkSel) return;
+    const connectedIds = new Set<string>();
+    const connectedLinks = (visibleLinksRef.current.length ? visibleLinksRef.current : linksRef.current)
+      .filter((l) => {
+        const s = getNodeId(l.source);
+        const t = getNodeId(l.target);
+        if (s === d.id) connectedIds.add(t);
+        if (t === d.id) connectedIds.add(s);
+        return s === d.id || t === d.id;
+      })
+      .sort((a, b) => edgeStrength(b) - edgeStrength(a))
+      .slice(0, 14);
+
+    const main = nodeSel
+      .filter((n: GraphNode) => n.id === d.id)
+      .select<SVGCircleElement>("circle.main-circle");
+    main.interrupt()
+      .transition()
+      .duration(GRAPH_MOTION.premium.selectCompressMs)
+      .ease(d3.easeCubicOut)
+      .attr("r", (n: GraphNode) => (n.r ?? 12) * 0.96)
+      .transition()
+      .duration(Math.max(120, GRAPH_MOTION.premium.selectReleaseMs - 120))
+      .ease(d3.easeCubicOut)
+      .attr("r", (n: GraphNode) => (n.r ?? 12) * (1 + GRAPH_MOTION.clickBurst.nodeSpikeScale * 0.78))
+      .attr("filter", "url(#glow-selected)")
+      .transition()
+      .duration(GRAPH_MOTION.premium.selectReleaseMs)
+      .ease(d3.easeCubicInOut)
+      .attr("r", (n: GraphNode) => n.r ?? 12);
+
+    if (layer && d.x != null && d.y != null) {
+      layer.append("circle")
+        .attr("class", "node-ripple node-ripple--burst")
+        .attr("cx", d.x)
+        .attr("cy", d.y)
+        .attr("r", Math.max(8, (d.r ?? 12) * 0.9))
+        .attr("stroke-opacity", 0.74)
+        .attr("fill-opacity", 0.2)
+        .transition()
+        .duration(760)
+        .ease(d3.easeCubicOut)
+        .attr("r", (d.r ?? 12) + 76)
+        .attr("stroke-opacity", 0)
+        .attr("fill-opacity", 0)
+        .remove();
+    }
+
+    linkSel
+      .filter((l: GraphLink) => connectedLinks.includes(l))
+      .interrupt()
+      .transition()
+      .delay((l: GraphLink) => connectedLinks.indexOf(l) * GRAPH_MOTION.clickBurst.edgeStaggerMs)
+      .duration(250)
+      .attr("stroke-opacity", (l: GraphLink) => Math.max(GRAPH_MOTION.clickBurst.edgeRiseOpacity, edgeOpacityFromStrength(edgeStrength(l))))
+      .transition()
+      .duration(430)
+      .attr("stroke-opacity", (l: GraphLink) => edgeOpacityFromStrength(edgeStrength(l)));
+
+    nodeSel
+      .filter((n: GraphNode) => connectedIds.has(n.id))
+      .select<SVGCircleElement>("circle.main-circle")
+      .interrupt()
+      .transition()
+      .delay((n: GraphNode, i: number) => i * GRAPH_MOTION.clickBurst.neighborStaggerMs)
+      .duration(GRAPH_MOTION.premium.localWakeMs)
+      .attr("fill-opacity", 0.98)
+      .attr("stroke-opacity", 1)
+      .transition()
+      .duration(360)
+      .attr("fill-opacity", 0.9)
+      .attr("stroke-opacity", NODE_FLICKER_BASE);
+  }, []);
+
+  // ── Enter Locked Mode (Six-Degrees Gravity Shockwave) ─────────────────────
   const enterLocked = useCallback((d: GraphNode) => {
     const sim = simRef.current;
     const nodeSel = nodeSelRef.current;
     const linkSel = linkSelRef.current;
-    if (!sim || !nodeSel || !linkSel) return;
+    const rippleLayer = rippleLayerRef.current;
+    if (!sim || !nodeSel || !linkSel || !rippleLayer) return;
+
+    const ghostLayer = d3.select<SVGGElement, unknown>(".ghost-prediction-layer");
+    ghostLayer.selectAll("*").remove();
+    ghostPredictionsRef.current = [];
+
+    if (d.type === "student") {
+        const companies = nodesRef.current.filter(n => n.type === "company");
+        const picked = companies.sort(() => 0.5 - Math.random()).slice(0, 2);
+        ghostPredictionsRef.current = picked.map((c) => ({
+           targetId: c.id,
+           prob: 60 + Math.floor(Math.random() * 34)
+        }));
+        
+        ghostPredictionsRef.current.forEach(p => {
+           ghostLayer.append("path")
+               .attr("class", "ghost-path")
+               .attr("stroke", "#38bdf8")
+               .attr("stroke-width", 2.2)
+               .attr("stroke-dasharray", "6,6")
+               .attr("fill", "none")
+               .style("opacity", 0)
+               .transition().delay(800).duration(1000)
+               .style("opacity", 0.7);
+               
+           const t = ghostLayer.append("text")
+               .attr("class", "ghost-label")
+               .attr("fill", "#bae6fd")
+               .style("font-size", "11px")
+               .style("font-weight", "600")
+               .style("text-anchor", "middle")
+               .style("opacity", 0)
+               .text(`AI Prediction: ${p.prob}% Match`);
+           t.transition().delay(1000).duration(1000).style("opacity", 1);
+        });
+    }
+
+    // SHOCKWAVE VISUAL
+    if (d.x != null && d.y != null) {
+      rippleLayer.append("circle")
+        .attr("cx", d.x).attr("cy", d.y)
+        .attr("r", 10)
+        .attr("stroke", "#facc15")
+        .attr("stroke-width", 6)
+        .attr("fill", "none")
+        .transition().duration(1400).ease(d3.easeCubicOut)
+        .attr("r", Math.max(dimsRef.current.w, dimsRef.current.h) * 1.5)
+        .attr("stroke-opacity", 0)
+        .attr("stroke-width", 0)
+        .remove();
+    }
 
     const { w, h } = getGraphViewportDims();
     const cx = w / 2, cy = h / 2;
-    const neighbors = directNeighbors(d);
-    const orbitRadius = lockedOrbitRadiusForConnections(neighbors.length);
-    const neighborSet = new Set(neighbors.map(n => n.id));
-
-    // Freeze all nodes at current positions first
-    nodesRef.current.forEach(n => { n.fx = n.x ?? cx; n.fy = n.y ?? cy; });
-
-    // Move selected to center, neighbors to radial ring
-    d.fx = cx; d.fy = cy;
-    neighbors.forEach((nb, i) => {
-      const angle = (i / neighbors.length) * 2 * Math.PI - Math.PI / 2;
-      nb.fx = cx + orbitRadius * Math.cos(angle);
-      nb.fy = cy + orbitRadius * Math.sin(angle);
+    const degree1 = directNeighbors(d);
+    const d1Set = new Set(degree1.map(n => n.id));
+    
+    // Find degree 2 connections
+    const d2Set = new Set<string>();
+    const degree2: GraphNode[] = [];
+    degree1.forEach(n1 => {
+        const nbrs = directNeighbors(n1);
+        nbrs.forEach(n2 => {
+           if (n2.id !== d.id && !d1Set.has(n2.id) && !d2Set.has(n2.id)) {
+               d2Set.add(n2.id);
+               degree2.push(n2);
+           } 
+        });
     });
 
-    sim.alpha(0.6).restart();
+    const orbitRadius1 = lockedOrbitRadiusForConnections(degree1.length);
+    const orbitRadius2 = Math.min(600, orbitRadius1 * 2.4);
+    const orbitBlast = orbitRadius1 * 8; // Blow unrelated nodes far off-screen
+
+    // Move selected to center
+    d.fx = cx; d.fy = cy;
+    
+    // 1st Degree Inner Orbit
+    degree1.forEach((nb, i) => {
+      const angle = (i / degree1.length) * 2 * Math.PI - Math.PI / 2;
+      nb.fx = cx + orbitRadius1 * Math.cos(angle);
+      nb.fy = cy + orbitRadius1 * Math.sin(angle);
+    });
+
+    // 2nd Degree Outer Orbit
+    degree2.forEach((nb, i) => {
+      const angle = (i / degree2.length) * 2 * Math.PI;
+      nb.fx = cx + orbitRadius2 * Math.cos(angle);
+      nb.fy = cy + orbitRadius2 * Math.sin(angle);
+    });
+
+    // Blast away the rest
+    nodesRef.current.forEach(n => {
+       if (n.id !== d.id && !d1Set.has(n.id) && !d2Set.has(n.id)) {
+           const dx = (n.x ?? cx) - cx;
+           const dy = (n.y ?? cy) - cy;
+           const dist = Math.max(0.1, Math.sqrt(dx*dx + dy*dy));
+           const ux = dx/dist;
+           const uy = dy/dist;
+           n.fx = cx + ux * orbitBlast;
+           n.fy = cy + uy * orbitBlast;
+       } 
+    });
+
+    sim.alpha(0.85).restart();
 
     // Node visibility
-    nodeSel.transition().duration(500)
-      .style("opacity", (n: GraphNode) => n.id === d.id || neighborSet.has(n.id) ? 1 : 0)
-      .style("pointer-events", (n: GraphNode) => n.id === d.id || neighborSet.has(n.id) ? "all" : "none");
+    nodeSel.transition().duration(800).ease(d3.easeElasticOut.amplitude(1.2).period(0.6))
+      .style("opacity", (n: GraphNode) => n.id === d.id || d1Set.has(n.id) ? 1 : d2Set.has(n.id) ? 0.65 : 0.05)
+      .style("pointer-events", (n: GraphNode) => n.id === d.id || d1Set.has(n.id) || d2Set.has(n.id) ? "all" : "none");
+      
+    nodeSel
+      .classed("node-selected-anchor", (n: GraphNode) => n.id === d.id)
+      .classed("node-selected-neighbor", (n: GraphNode) => d1Set.has(n.id));
 
-    // Glow on selected + neighbors
     nodeSel.select<SVGCircleElement>("circle.main-circle")
-      .attr("filter", (n: GraphNode) =>
-        n.id === d.id ? "url(#glow-selected)" :
-          neighborSet.has(n.id) ? "url(#glow-soft)" : null)
-      .transition().duration(500)
-      .attr("r", (n: GraphNode) => n.id === d.id ? (n.r ?? 12) * 1.5 : (n.r ?? 12));
+      .attr("filter", (n: GraphNode) => n.id === d.id ? "url(#glow-selected)" : (d1Set.has(n.id) || d2Set.has(n.id)) ? "url(#glow-soft)" : null)
+      .transition().duration(800).ease(d3.easeElasticOut.amplitude(1.2).period(0.6))
+      .attr("r", (n: GraphNode) => n.id === d.id ? (n.r ?? 12) * 1.8 : d1Set.has(n.id) ? (n.r ?? 12) * 1.15 : (n.r ?? 12) * 0.9);
 
-    // Labels: show for selected + neighbors only
-    fadeLabels((n: GraphNode) => (n.id === d.id || neighborSet.has(n.id) ? 1 : 0), 500);
+    // Labels
+    fadeLabels((n: GraphNode) => (n.id === d.id ? 1 : d1Set.has(n.id) ? 0.9 : 0), 600);
 
-    // Edges: show only direct connections
-    linkSel.transition().duration(500).attr("stroke-opacity", (l: GraphLink) => {
+    // Edges
+    linkSel.transition().duration(600).attr("stroke-opacity", (l: GraphLink) => {
       const s = getNodeId(l.source), t = getNodeId(l.target);
-      return (s === d.id && neighborSet.has(t)) || (t === d.id && neighborSet.has(s)) ? 0.85 : 0;
+      const isInner = (s === d.id && d1Set.has(t)) || (t === d.id && d1Set.has(s));
+      const isOuter = (d1Set.has(s) && d2Set.has(t)) || (d1Set.has(t) && d2Set.has(s));
+      return isInner ? 0.95 : isOuter ? 0.35 : 0;
     });
 
-    // Emphasize direct edges: color, width boost, glow
     linkSel
       .filter((l: GraphLink) => {
         const s = getNodeId(l.source), t = getNodeId(l.target);
-        return (s === d.id && neighborSet.has(t)) || (t === d.id && neighborSet.has(s));
+        return (s === d.id && d1Set.has(t)) || (t === d.id && d1Set.has(s));
       })
       .transition().duration(600)
-      .attr("stroke", "#93c5fd")   // CONSTANT: emphasized edge color
-      .attr("stroke-width", (l: GraphLink) => edgeWidthFromStrength(edgeStrength(l)) * 1.35)
-      .attr("filter", "url(#glow-soft)");
-
-    // Neighbor opacity gradient: stronger connection = brighter node
-    nodeSel.filter((n: GraphNode) => neighborSet.has(n.id))
-      .transition().duration(500)
-      .style("opacity", (n: GraphNode) => {
-        const sourceLinks = visibleLinksRef.current.length ? visibleLinksRef.current : linksRef.current;
-        const maxW = Math.max(
-          ...sourceLinks
-            .filter(l =>
-              (getNodeId(l.source) === d.id && getNodeId(l.target) === n.id) ||
-              (getNodeId(l.target) === d.id && getNodeId(l.source) === n.id)
-            )
-            .map(l => edgeStrength(l)),
-          0.3  // floor so even weakest neighbors stay visible
-        );
-        return 0.45 + maxW * 0.55;  // CONSTANT: range 0.45–1.0
-      });
+      .attr("stroke", "#facc15")
+      .attr("stroke-width", (l: GraphLink) => edgeWidthFromStrength(edgeStrength(l)) * 1.6)
+      .attr("filter", "url(#glow-selected)");
 
   }, [directNeighbors, getGraphViewportDims]); // eslint-disable-line
 
@@ -564,6 +1174,7 @@ export default function CampusGraph() {
     nodeSel.transition().duration(400)
       .style("opacity", 1)
       .style("pointer-events", "all");
+    nodeSel.classed("node-selected-anchor", false).classed("node-selected-neighbor", false);
 
     nodeSel.select<SVGCircleElement>("circle.main-circle")
       .attr("filter", (n: GraphNode) => baseNodeFilterRef.current(n))
@@ -579,13 +1190,17 @@ export default function CampusGraph() {
       .attr("filter", null)
       .attr("stroke-dasharray", (l: GraphLink) => edgeDashForLink(l))
       .attr("stroke-dashoffset", null);
+    linkSel.classed("link-hover-energized", false);
 
     d3.selectAll(".link.path-pulse").classed("path-pulse", false);
     d3.selectAll(".path-overlay").remove();
+    d3.select(".ghost-prediction-layer").selectAll("*").remove();
+    ghostPredictionsRef.current = [];
   }, []); // eslint-disable-line
 
   // ── Select / Deselect ─────────────────────────────────────────────────────
   const selectNodeFn = useCallback((d: GraphNode, fromDemo = false) => {
+    noteInteraction();
     if (!fromDemo) {
       setDemoMode(false);
       setDemoStep(0);
@@ -595,17 +1210,35 @@ export default function CampusGraph() {
         demoTimerRef.current = null;
       }
     }
+    playClickActivationBurst(d);
+    triggerNeuralEcho(d);
+    const localDegree = (visibleLinksRef.current.length ? visibleLinksRef.current : linksRef.current)
+      .reduce((acc, l) => {
+        const s = getNodeId(l.source);
+        const t = getNodeId(l.target);
+        return acc + ((s === d.id || t === d.id) ? 1 : 0);
+      }, 0);
+    if (localDegree >= 5 || d.type === "company" || fromDemo) {
+      triggerFullSystemPulse(d.id);
+    }
     spawnNodeRipple(d);
     setMultiSelectedIds(new Set());
     selectedIdRef.current = d.id;
-    setSelectedNode(d);
+    if (selectionCommitTimerRef.current) {
+      window.clearTimeout(selectionCommitTimerRef.current);
+      selectionCommitTimerRef.current = null;
+    }
+    selectionCommitTimerRef.current = window.setTimeout(() => {
+      setSelectedNode(d);
+      selectionCommitTimerRef.current = null;
+    }, fromDemo ? 70 : GRAPH_MOTION.premium.panelDelayMs);
     setMode("locked");
     setPathNodeIds([]);
     setPathStatus("idle");
     setCompanyQuery("");
     d3.selectAll(".link.path-pulse").classed("path-pulse", false);
     d3.selectAll(".path-overlay").remove();
-  }, [spawnNodeRipple]);
+  }, [noteInteraction, playClickActivationBurst, spawnNodeRipple, triggerFullSystemPulse]);
 
   useEffect(() => {
     if (viewMode !== "2d" || mode !== "locked" || !selectedNode) return;
@@ -626,6 +1259,7 @@ export default function CampusGraph() {
   }, [viewMode, mode, selectedNode, directNeighbors, enterLocked, focusSelectedNeighborhood]);
 
   const deselectAll = useCallback(() => {
+    noteInteraction();
     selectedIdRef.current = null;
     setSelectedNode(null);
     setMultiSelectedIds(new Set());
@@ -639,8 +1273,12 @@ export default function CampusGraph() {
       window.clearTimeout(demoTimerRef.current);
       demoTimerRef.current = null;
     }
+    if (selectionCommitTimerRef.current) {
+      window.clearTimeout(selectionCommitTimerRef.current);
+      selectionCommitTimerRef.current = null;
+    }
     exitToFree();
-  }, [exitToFree]);
+  }, [exitToFree, noteInteraction]);
 
   // ── Auto-select node from ?select= URL param ──────────────────────────────
   useEffect(() => {
@@ -667,6 +1305,7 @@ export default function CampusGraph() {
 
   // ── Company path search ───────────────────────────────────────────────────
   const findPath = useCallback(async (overrideLabel?: string) => {
+    noteInteraction();
     const fromId = selectedIdRef.current ?? user?.id;
     const queryLabel = overrideLabel ?? companyQuery;
     if (!fromId || !queryLabel.trim()) return;
@@ -687,7 +1326,7 @@ export default function CampusGraph() {
     } catch {
       setPathStatus("notfound");
     }
-  }, [companyQuery, user]);
+  }, [companyQuery, noteInteraction, user]);
 
   const toggleType = useCallback((type: NodeType) =>
     setHiddenTypes(prev => {
@@ -701,7 +1340,21 @@ export default function CampusGraph() {
   useEffect(() => {
     if (loading || error || !svgRef.current || nodes.length === 0) return;
 
-    const svg = d3.select(svgRef.current);
+    const rootEl = rootRef.current;
+    const svg = d3.select(svgRef.current)
+      .on("mousemove", (e: MouseEvent) => {
+        if (lensModeRef.current) {
+          const pt = d3.pointer(e, g.node());
+          lensPosRef.current = { x: pt[0], y: pt[1] };
+          if (simRef.current) simRef.current.alpha(Math.max(simRef.current.alpha(), 0.05)).restart();
+        }
+      })
+      .on("mouseleave", () => {
+        if (lensModeRef.current) {
+          lensPosRef.current = null;
+          if (simRef.current) simRef.current.alpha(Math.max(simRef.current.alpha(), 0.05)).restart();
+        }
+      });
     const width = svgRef.current.clientWidth;
     const height = svgRef.current.clientHeight;
     dimsRef.current = { w: width, h: height };
@@ -735,6 +1388,12 @@ export default function CampusGraph() {
     addBloom("bloom-interest", TYPE_COLOR.interest);
     addBloom("bloom-professor", TYPE_COLOR.professor);
 
+    // ── Gooey Filter for Clusters (Organic Blobs) ──
+    const goo = defs.append("filter").attr("id", "goo-blobs").attr("color-interpolation-filters", "sRGB");
+    goo.append("feGaussianBlur").attr("in", "SourceGraphic").attr("stdDeviation", 22).attr("result", "blur");
+    goo.append("feColorMatrix").attr("in", "blur").attr("mode", "matrix").attr("values", "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 25 -10").attr("result", "goo");
+    goo.append("feComposite").attr("in", "SourceGraphic").attr("in2", "goo").attr("operator", "atop");
+
     // ── Hub suppression ────────────────────────────────────────────────────
     const edgeTier = (l: GraphLink) => edgeTierFromStrength(edgeStrength(l));
 
@@ -764,12 +1423,8 @@ export default function CampusGraph() {
       degree[t] = (degree[t] || 0) + 1;
     });
     const maxDeg = Math.max(...Object.values(degree), 1);
-    const sortedDegrees = Object.entries(degree).sort((a, b) => b[1] - a[1]);
-    const topGlowCount = Math.max(1, Math.ceil(nodes.length * 0.25));
-    const glowSet = new Set(sortedDegrees.slice(0, topGlowCount).map(([id]) => id));
     const baseNodeFilter = (n: GraphNode) => {
       if (n.id === user?.id) return "url(#glow-selected)";
-      if (!glowSet.has(n.id)) return null;
       return `url(#bloom-${n.type})`;
     };
     baseNodeFilterRef.current = baseNodeFilter;
@@ -825,7 +1480,19 @@ export default function CampusGraph() {
     const flowLinks = simLinks.filter(l => l.style !== "direct");
     const flowWeights = flowLinks.map(l => 0.22 + edgeStrength(l) * 0.78);
     const flowWeightTotal = flowWeights.reduce((sum, w) => sum + w, 0);
-    const pickFlowLinkIndex = () => {
+    const pickFlowLinkIndex = (allowedIndices?: number[]) => {
+      if (allowedIndices && allowedIndices.length > 0) {
+        let localTotal = 0;
+        for (const idx of allowedIndices) localTotal += (flowWeights[idx] ?? 0);
+        if (localTotal > 0) {
+          let roll = Math.random() * localTotal;
+          for (const idx of allowedIndices) {
+            roll -= (flowWeights[idx] ?? 0);
+            if (roll <= 0) return idx;
+          }
+          return allowedIndices[allowedIndices.length - 1];
+        }
+      }
       if (!flowLinks.length || flowWeightTotal <= 0) return -1;
       let roll = Math.random() * flowWeightTotal;
       for (let i = 0; i < flowWeights.length; i++) {
@@ -834,6 +1501,36 @@ export default function CampusGraph() {
       }
       return flowWeights.length - 1;
     };
+    const linkIndicesByNode = new Map<string, number[]>();
+    const linkIndexByKey = new Map<string, number>();
+    const simEdgeRanked = simLinks
+      .map((l, i) => ({ i, strength: edgeStrength(l) }))
+      .sort((a, b) => b.strength - a.strength)
+      .map((x) => x.i);
+    simLinks.forEach((l, i) => {
+      const s = getNodeId(l.source);
+      const t = getNodeId(l.target);
+      if (!linkIndicesByNode.has(s)) linkIndicesByNode.set(s, []);
+      if (!linkIndicesByNode.has(t)) linkIndicesByNode.set(t, []);
+      linkIndicesByNode.get(s)?.push(i);
+      linkIndicesByNode.get(t)?.push(i);
+      linkIndexByKey.set(edgePairKey(s, t), i);
+    });
+    const flowIndicesByNode = new Map<string, number[]>();
+    const flowIndexByKey = new Map<string, number>();
+    const flowEdgeRanked = flowLinks
+      .map((l, i) => ({ i, strength: edgeStrength(l) }))
+      .sort((a, b) => b.strength - a.strength)
+      .map((x) => x.i);
+    flowLinks.forEach((l, i) => {
+      const s = getNodeId(l.source);
+      const t = getNodeId(l.target);
+      if (!flowIndicesByNode.has(s)) flowIndicesByNode.set(s, []);
+      if (!flowIndicesByNode.has(t)) flowIndicesByNode.set(t, []);
+      flowIndicesByNode.get(s)?.push(i);
+      flowIndicesByNode.get(t)?.push(i);
+      flowIndexByKey.set(edgePairKey(s, t), i);
+    });
 
     const g = svg.append("g").attr("class", "graph-root");
 
@@ -844,6 +1541,7 @@ export default function CampusGraph() {
       // Soft boundary: prevent drifting into empty space more than 2× canvas
       .translateExtent([[-width * 2, -height * 2], [width * 3, height * 3]])
       .on("start.inertia", () => {
+        markHeavyInteraction(520);
         // Instant interrupt: any new drag/pan cancels ongoing glide
         if (inertiaRafRef.current) cancelAnimationFrame(inertiaRafRef.current);
         inertiaRafRef.current = null;
@@ -852,6 +1550,7 @@ export default function CampusGraph() {
         inertiaDeltaRef.current = { dx: 0, dy: 0 };
       })
       .on("zoom", (e: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+        if (e.sourceEvent) markHeavyInteraction(360);
         g.attr("transform", e.transform.toString());
         currentZoomKRef.current = e.transform.k;
         if (bgGlowRef.current) {
@@ -859,10 +1558,55 @@ export default function CampusGraph() {
           const parallaxY = e.transform.y * 0.014;
           bgGlowRef.current.style.transform = `translate(${parallaxX}px, ${parallaxY}px) scale(${1 + (e.transform.k - 1) * 0.02})`;
         }
+        if (ambientFxRef.current) {
+          const px = e.transform.x * GRAPH_MOTION.parallax.ambientLayerMul;
+          const py = e.transform.y * GRAPH_MOTION.parallax.ambientLayerMul;
+          ambientFxRef.current.style.transform = `translate(${px}px, ${py}px)`;
+        }
+        parallaxPanRef.current = {
+          coreX: e.transform.x * (GRAPH_MOTION.parallax.ambientLayerMul * 0.8),
+          coreY: e.transform.y * (GRAPH_MOTION.parallax.ambientLayerMul * 0.8),
+          densityX: e.transform.x * (GRAPH_MOTION.parallax.ambientLayerMul * 1.2),
+          densityY: e.transform.y * (GRAPH_MOTION.parallax.ambientLayerMul * 1.2),
+        };
+        if (ambientFarRef.current) {
+          const fx = e.transform.x * GRAPH_MOTION.parallax.farMul * 0.02;
+          const fy = e.transform.y * GRAPH_MOTION.parallax.farMul * 0.02;
+          ambientFarRef.current.style.transform = `translate(${fx}px, ${fy}px)`;
+        }
+        if (ambientMidRef.current) {
+          const mx = e.transform.x * GRAPH_MOTION.parallax.midMul * 0.02;
+          const my = e.transform.y * GRAPH_MOTION.parallax.midMul * 0.02;
+          ambientMidRef.current.style.transform = `translate(${mx}px, ${my}px)`;
+        }
+        if (ambientNearRef.current) {
+          const nx = e.transform.x * GRAPH_MOTION.parallax.nearMul * 0.02;
+          const ny = e.transform.y * GRAPH_MOTION.parallax.nearMul * 0.02;
+          ambientNearRef.current.style.transform = `translate(${nx}px, ${ny}px)`;
+        }
+        if (ambientGrainRef.current) {
+          const gx = e.transform.x * 0.004;
+          const gy = e.transform.y * 0.004;
+          ambientGrainRef.current.style.transform = `translate(${gx}px, ${gy}px)`;
+        }
         updateMiniViewportRef.current?.();
         // Show more labels when zoomed in
         if (modeRef.current === "free" && !searchActiveRef.current && !hoveredNodeIdRef.current) {
-          fadeLabels(e.transform.k > 1.7 ? 1 : LABEL_OPACITY_BASE, 140);
+          const tier = motionTierRef.current;
+          const zoomK = e.transform.k;
+          const lowDetail = tier === "performance" ? 0.7 : 0.6;
+          const richDetail = tier === "full" ? 1.45 : 1.65;
+          const selectedId = selectedIdRef.current;
+          fadeLabels((n: GraphNode) => {
+            if (selectedId && (modeRef.current === "locked" || modeRef.current === "path")) {
+              if (n.id === selectedId) return 1;
+              if (neighborsById.get(selectedId)?.has(n.id)) return 0.9;
+              return (degree[n.id] ?? 0) >= 7 && zoomK > 1 ? 0.52 : 0.02;
+            }
+            if (zoomK <= lowDetail) return (n.id === user?.id || (degree[n.id] ?? 0) >= 8) ? 0.56 : 0;
+            if (zoomK < richDetail) return (n.id === user?.id || (degree[n.id] ?? 0) >= 5) ? 0.76 : 0.14;
+            return 1;
+          }, 120);
         }
         // Track translation delta for inertia (pan events only, not programmatic)
         if (e.sourceEvent) {
@@ -877,6 +1621,7 @@ export default function CampusGraph() {
         }
       })
       .on("end.inertia", (e: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+        markHeavyInteraction(260);
         // Only glide after pointer pan, not scroll-zoom
         if (!e.sourceEvent || e.sourceEvent.type === "wheel") return;
         const svgNode = svgRef.current;
@@ -896,18 +1641,57 @@ export default function CampusGraph() {
     svg.call(zoom);
     zoomRef.current = zoom;
 
+    // Edge Bundling algorithm: pull long edges into semantic 'highways'
     const curvePathForLink = (d: GraphLink) => {
       const s = d.source as GraphNode;
       const t = d.target as GraphNode;
-      return curvePathBetweenNodes(s, t);
+      const sx = s?.x ?? 0;
+      const sy = s?.y ?? 0;
+      const tx = t?.x ?? 0;
+      const ty = t?.y ?? 0;
+      const dx = tx - sx;
+      const dy = ty - sy;
+      const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
+      const ux = dx / dist;
+      const uy = dy / dist;
+      
+      const sPad = Math.max(3, (s?.r ?? 10) * 0.86);
+      const tPad = Math.max(3, (t?.r ?? 10) * 0.86);
+      const x1 = sx + ux * sPad;
+      const y1 = sy + uy * sPad;
+      const x2 = tx - ux * tPad;
+      const y2 = ty - uy * tPad;
+      
+      const midX = (x1 + x2) / 2;
+      const midY = (y1 + y2) / 2;
+
+      // Bundling logic: the longer the edge, the harder it is pulled to the graph center
+      const bundleX = dimsRef.current.w / 2;
+      const bundleY = dimsRef.current.h / 2;
+      const bundleStrength = clamp01(Math.pow(dist / 650, 1.8)) * 0.94; // Exponential pull for very long links
+      
+      // Spread offset to give the bundle physical thickness
+      const curveLift = Math.max(10, dist * 0.16);
+      const liftX = -uy * curveLift;
+      const liftY = ux * curveLift;
+
+      const cx = midX + (bundleX - midX) * bundleStrength + liftX;
+      const cy = midY + (bundleY - midY) * bundleStrength + liftY;
+
+      return `M${x1},${y1} Q${cx},${cy} ${x2},${y2}`;
     };
 
     // ── Links ─────────────────────────────────────────────────────────────
     const linkSel = g.append("g")
       .selectAll<SVGPathElement, GraphLink>("path")
       .data(simLinks).enter().append("path")
-      .attr("class", (d: GraphLink) =>
-        `link link-t${edgeTier(d)}${d.style === "dashed" ? " link-dashed" : ""}${d.style === "direct" ? " link-direct" : ""}`)
+      .attr("class", (d: GraphLink) => {
+        const sId = getNodeId(d.source);
+        const tId = getNodeId(d.target);
+        const maxDeg = Math.max(degree[sId] ?? 0, degree[tId] ?? 0);
+        const depthClass = maxDeg >= 5 ? " link-depth-foreground" : maxDeg <= 2 ? " link-depth-background" : " link-depth-mid";
+        return `link link-t${edgeTier(d)}${d.style === "dashed" ? " link-dashed" : ""}${d.style === "direct" ? " link-direct" : ""}${depthClass}`;
+      })
       .attr("stroke-width", (d: GraphLink) => edgeWidthForLink(d))
       .attr("stroke-opacity", (d: GraphLink) => defOp(d))
       .attr("stroke", (d: GraphLink) => edgeStrokeColorForLink(d))
@@ -932,23 +1716,116 @@ export default function CampusGraph() {
       .attr("stroke-opacity", (l: GraphLink) => defOp(l));
 
     // ── Pulse layer (between links and nodes) ────────────────────────────
+    g.append("g").attr("class", "ghost-prediction-layer").attr("pointer-events", "none");
     const pulseLayer = g.append("g").attr("class", "edge-pulse-layer").attr("pointer-events", "none");
     const rippleLayer = g.append("g").attr("class", "node-ripple-layer").attr("pointer-events", "none");
+    const clusterAuraLayer = g.append("g").attr("class", "cluster-aura-layer").attr("pointer-events", "none").attr("filter", "url(#goo-blobs)");
+    const satelliteLayer = g.append("g").attr("class", "node-satellite-layer").attr("pointer-events", "none");
+    const clusterAuraByType = new Map<NodeType, d3.Selection<SVGCircleElement, unknown, null, undefined>>();
+    (["student", "club", "company", "interest", "professor"] as NodeType[]).forEach((type) => {
+      const aura = clusterAuraLayer.append("circle").attr("class", `cluster-aura cluster-aura--${type}`);
+      clusterAuraByType.set(type, aura);
+    });
     pulseLayerRef.current = pulseLayer;
     rippleLayerRef.current = rippleLayer;
     const flowPathNodes = linkSel.nodes();
+    let mainCircleNodes: SVGCircleElement[] = [];
+    let auraRingNodes: SVGCircleElement[] = [];
+    let auraHaloNodes: SVGCircleElement[] = [];
+    const coreSeedId = currentUserNode?.id && nodeById.has(currentUserNode.id)
+      ? currentUserNode.id
+      : [...Object.entries(degree)].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    const importantNodeIds = new Set<string>(
+      [...Object.entries(degree)]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .map(([id]) => id)
+    );
+    if (coreSeedId) importantNodeIds.add(coreSeedId);
+    if (user?.id) importantNodeIds.add(user.id);
+    const importantNodes = nodes.filter((n: GraphNode) => importantNodeIds.has(n.id));
+    const satellitesData: Array<{ key: string; nodeId: string; orbit: number; speed: number; phase: number; size: number }> = [];
+    importantNodes.forEach((n: GraphNode, idx: number) => {
+      const rankBoost = n.id === coreSeedId ? 1 : 0;
+      const count = Math.min(
+        GRAPH_MOTION.satellites.maxPerNode,
+        1 + rankBoost + (((degree[n.id] ?? 0) > HUB_BUNDLE_DEGREE + 1) ? 1 : 0)
+      );
+      for (let i = 0; i < count; i++) {
+        satellitesData.push({
+          key: `${n.id}-${i}`,
+          nodeId: n.id,
+          orbit: GRAPH_MOTION.satellites.radiusMin + Math.random() * (GRAPH_MOTION.satellites.radiusMax - GRAPH_MOTION.satellites.radiusMin) + i * 4,
+          speed: GRAPH_MOTION.satellites.speedMin + Math.random() * (GRAPH_MOTION.satellites.speedMax - GRAPH_MOTION.satellites.speedMin),
+          phase: Math.random() * Math.PI * 2 + idx * 0.2 + i * 0.8,
+          size: 0.9 + Math.random() * 1.3,
+        });
+      }
+    });
+    const satelliteSel = satelliteLayer.selectAll<SVGCircleElement, { key: string; nodeId: string; orbit: number; speed: number; phase: number; size: number }>("circle")
+      .data(satellitesData)
+      .enter()
+      .append("circle")
+      .attr("class", "node-satellite")
+      .attr("r", (d) => d.size)
+      .attr("fill-opacity", 0);
+    const nodePulseMeta = nodes.map((n: GraphNode, i: number) => {
+      const profile = GRAPH_MOTION.nodeTypeProfile[n.type];
+      const period = GRAPH_MOTION.nodePulse.periodMsMin + Math.random() * (GRAPH_MOTION.nodePulse.periodMsMax - GRAPH_MOTION.nodePulse.periodMsMin);
+      const cohort = i % GRAPH_MOTION.cohorts.nodeCount;
+      return {
+        id: n.id,
+        cohort,
+        phase: Math.random() * Math.PI * 2 + i * 0.13,
+        periodMs: (period / profile.speedMul) * (0.92 + cohort * 0.06),
+        scaleAmp: (GRAPH_MOTION.nodePulse.scaleMin + Math.random() * (GRAPH_MOTION.nodePulse.scaleMax - GRAPH_MOTION.nodePulse.scaleMin)) * profile.scaleMul,
+        glowAmp: GRAPH_MOTION.nodePulse.glowSwing * profile.glowMul,
+        flicker: profile.flicker,
+      };
+    });
+    const edgeEnergyMeta = simLinks.map((l: GraphLink, i: number) => {
+      const strength = edgeStrength(l);
+      const edgeTypeBonus = l.rel === "CONNECTED_TO" ? 1.1 : l.rel === "WORKS_AT" ? 1.06 : 0.96;
+      const cohort = i % GRAPH_MOTION.cohorts.edgeCount;
+      return {
+        key: edgePairKey(getNodeId(l.source), getNodeId(l.target)),
+        cohort,
+        active: strength >= GRAPH_MOTION.ambientEdge.strengthThreshold && Math.random() < GRAPH_MOTION.ambientEdge.activeRatio * edgeTypeBonus,
+        phase: Math.random() * Math.PI * 2 + i * 0.2,
+        speed: (GRAPH_MOTION.ambientEdge.driftSpeedMin + Math.random() * (GRAPH_MOTION.ambientEdge.driftSpeedMax - GRAPH_MOTION.ambientEdge.driftSpeedMin)) * (0.9 + cohort * 0.16),
+      };
+    });
+    const neighborsById = new Map<string, Set<string>>();
+    simLinks.forEach((l: GraphLink) => {
+      const s = getNodeId(l.source);
+      const t = getNodeId(l.target);
+      if (!neighborsById.has(s)) neighborsById.set(s, new Set());
+      if (!neighborsById.has(t)) neighborsById.set(t, new Set());
+      neighborsById.get(s)?.add(t);
+      neighborsById.get(t)?.add(s);
+    });
+    const nodeBoosts = new Map<string, { start: number; until: number; intensity: number }>();
+    const edgeBoosts = new Map<string, { start: number; until: number; intensity: number }>();
+    const ignitionTimers: number[] = [];
+    let idleHintNodeId: string | null = null;
+    let idleHintUntil = 0;
+    let nextMicroActivationAt = 700 + Math.random() * 1200;
+    let nextIdleHintAt = 1800 + Math.random() * 2200;
+    let nextIdleCascadeAt = GRAPH_MOTION.idle.cascadeIntervalMinMs + Math.random() * (GRAPH_MOTION.idle.cascadeIntervalMaxMs - GRAPH_MOTION.idle.cascadeIntervalMinMs);
+    let nextOpportunityAt = GRAPH_MOTION.idle.opportunityIntervalMsMin + Math.random() * (GRAPH_MOTION.idle.opportunityIntervalMsMax - GRAPH_MOTION.idle.opportunityIntervalMsMin);
+    let nextScanAt = GRAPH_MOTION.idle.scanIntervalMsMin + Math.random() * (GRAPH_MOTION.idle.scanIntervalMsMax - GRAPH_MOTION.idle.scanIntervalMsMin);
 
     let lastFlowTs = 0;
     let nextFlowBurstAt = 1300;
-    const spawnFlowParticle = () => {
-      if (activeParticles.length >= FLOW_ACTIVE_MAX) return;
-      const linkIdx = pickFlowLinkIndex();
+    const spawnFlowParticle = (allowedIndices?: number[]) => {
+      if (activeParticles.length >= MOTION_PROFILE[motionTierRef.current].flowMax) return;
+      const linkIdx = pickFlowLinkIndex(allowedIndices);
       if (linkIdx < 0 || linkIdx >= flowPathNodes.length) return;
       const l = flowLinks[linkIdx];
       const sId = getNodeId(l.source);
       const tId = getNodeId(l.target);
-      const sNode = nodesRef.current.find(n => n.id === sId);
-      const tNode = nodesRef.current.find(n => n.id === tId);
+      const sNode = nodeById.get(sId);
+      const tNode = nodeById.get(tId);
       if (!sNode || !tNode) return;
       if (hiddenTypesRef.current.has(sNode.type) || hiddenTypesRef.current.has(tNode.type)) return;
       const pathEl = flowPathNodes[linkIdx];
@@ -956,14 +1833,14 @@ export default function CampusGraph() {
       const strength = edgeStrength(l);
       const particle = pulseLayer.append<SVGCircleElement>("circle")
         .attr("class", "flow-particle")
-        .attr("r", 1.6 + strength * 2.2)
+        .attr("r", 2 + strength * 2.9)
         .attr("fill-opacity", 0);
       activeParticles.push({
         el: particle,
         linkIdx,
         t: 0,
-        speed: 0.00011 + strength * 0.00015,
-        size: 1.6 + strength * 2.2,
+        speed: 0.00009 + strength * 0.00013,
+        size: 2 + strength * 2.9,
       });
     };
 
@@ -971,14 +1848,126 @@ export default function CampusGraph() {
       if (!lastFlowTs) lastFlowTs = ts;
       const dt = ts - lastFlowTs;
       lastFlowTs = ts;
-      if (modeRef.current === "free" && flowLinks.length > 0) {
+      const profile = MOTION_PROFILE[motionTierRef.current];
+      const lod = currentZoomKRef.current < 0.65 ? 0 : currentZoomKRef.current < 1.2 ? 1 : 2;
+      const heavyInteraction = ts < heavyInteractionUntilRef.current;
+      if (rootEl) rootEl.classList.toggle("perf-interacting", heavyInteraction);
+      const ambientDampen = heavyInteraction ? profile.ambientDampenOnInteraction : 1;
+      if (ts - motionDebugTsRef.current > 2200) {
+        motionDebugTsRef.current = ts;
+        const frameBudget = dt > 33 ? "low" : dt > 22 ? "medium" : "good";
+        if (frameBudget === "low" && !perfTierOverride) {
+          if (motionTierRef.current === "full") {
+            motionTierRef.current = "balanced";
+            setMotionTier("balanced");
+          } else if (motionTierRef.current === "balanced") {
+            motionTierRef.current = "performance";
+            setMotionTier("performance");
+          }
+        }
+        if (perfDebug) {
+          console.debug("[CampusGraph/perf]", {
+            tier: motionTierRef.current,
+            frameBudget,
+            dt: Math.round(dt),
+            nodes: nodes.length,
+            links: simLinks.length,
+            activeFlow: activeParticles.length,
+            zoom: Number(currentZoomKRef.current.toFixed(2)),
+          });
+        }
+      }
+      const ambientAllowed = viewModeRef.current === "2d"
+        && modeRef.current === "free"
+        && !searchActiveRef.current
+        && !draggingNodeIdRef.current
+        && !demoModeRef.current
+        && multiSelectedCountRef.current === 0;
+      const ambientDecorAllowed = ambientAllowed && !heavyInteraction;
+      const idleAllowed = ambientDecorAllowed
+        && !hoveredNodeIdRef.current
+        && ts - lastInteractionAtRef.current >= 420
+        && ts >= idleTimeoutAtRef.current;
+      const focusId = hoveredNodeIdRef.current ?? ((modeRef.current === "locked" || modeRef.current === "path") ? selectedIdRef.current : null);
+      const oneHop = new Set<string>(focusId ? [...(neighborsById.get(focusId) ?? new Set<string>())] : []);
+      const twoHop = new Set<string>();
+      if (focusId && (lod >= 1 || motionTierRef.current === "full")) {
+        oneHop.forEach((nid) => {
+          const next = neighborsById.get(nid);
+          if (!next) return;
+          next.forEach((x) => {
+            if (x !== focusId && !oneHop.has(x)) twoHop.add(x);
+          });
+        });
+      }
+      const maxAnimatedEdges = Math.max(8, Math.floor(nodes.length / 5));
+      const prioritizedSimEdgeSet = new Set<number>();
+      const prioritizedFlowEdgeSet = new Set<number>();
+      const pathIds = pathNodeIdsRef.current;
+      for (let i = 0; i < pathIds.length - 1; i++) {
+        const key = edgePairKey(pathIds[i], pathIds[i + 1]);
+        const simIdx = linkIndexByKey.get(key);
+        if (simIdx != null && prioritizedSimEdgeSet.size < maxAnimatedEdges) prioritizedSimEdgeSet.add(simIdx);
+        const flowIdx = flowIndexByKey.get(key);
+        if (flowIdx != null && prioritizedFlowEdgeSet.size < maxAnimatedEdges) prioritizedFlowEdgeSet.add(flowIdx);
+      }
+      if (focusId) {
+        const focusSim = linkIndicesByNode.get(focusId) ?? [];
+        for (const idx of focusSim) {
+          if (prioritizedSimEdgeSet.size >= maxAnimatedEdges) break;
+          prioritizedSimEdgeSet.add(idx);
+        }
+        const focusFlow = flowIndicesByNode.get(focusId) ?? [];
+        for (const idx of focusFlow) {
+          if (prioritizedFlowEdgeSet.size >= maxAnimatedEdges) break;
+          prioritizedFlowEdgeSet.add(idx);
+        }
+      }
+      if (prioritizedSimEdgeSet.size < maxAnimatedEdges && oneHop.size) {
+        for (const nid of oneHop) {
+          const list = linkIndicesByNode.get(nid) ?? [];
+          for (const idx of list) {
+            if (prioritizedSimEdgeSet.size >= maxAnimatedEdges) break;
+            prioritizedSimEdgeSet.add(idx);
+          }
+          if (prioritizedSimEdgeSet.size >= maxAnimatedEdges) break;
+        }
+      }
+      if (prioritizedFlowEdgeSet.size < maxAnimatedEdges && oneHop.size) {
+        for (const nid of oneHop) {
+          const list = flowIndicesByNode.get(nid) ?? [];
+          for (const idx of list) {
+            if (prioritizedFlowEdgeSet.size >= maxAnimatedEdges) break;
+            prioritizedFlowEdgeSet.add(idx);
+          }
+          if (prioritizedFlowEdgeSet.size >= maxAnimatedEdges) break;
+        }
+      }
+      for (const idx of simEdgeRanked) {
+        if (prioritizedSimEdgeSet.size >= maxAnimatedEdges) break;
+        prioritizedSimEdgeSet.add(idx);
+      }
+      for (const idx of flowEdgeRanked) {
+        if (prioritizedFlowEdgeSet.size >= maxAnimatedEdges) break;
+        prioritizedFlowEdgeSet.add(idx);
+      }
+      const prioritizedFlowIndices = [...prioritizedFlowEdgeSet];
+
+      if (modeRef.current === "free" && !heavyInteraction && flowLinks.length > 0) {
+        const targetMax = Math.max(4, Math.floor(nodes.length / 5));
+        const targetMin = Math.floor(targetMax * 0.7);
+        if (activeParticles.length < targetMin) {
+          const need = targetMin - activeParticles.length;
+          for (let i = 0; i < need; i++) spawnFlowParticle(prioritizedFlowIndices);
+        }
         nextFlowBurstAt -= dt;
         if (nextFlowBurstAt <= 0) {
-          const burst = FLOW_BURST_MIN + Math.floor(Math.random() * (FLOW_BURST_MAX - FLOW_BURST_MIN + 1));
-          const room = Math.max(0, FLOW_ACTIVE_MAX - activeParticles.length);
+          const burst = Math.max(3, Math.floor(targetMax / 4));
+          const room = Math.max(0, targetMax - activeParticles.length);
           const spawnCount = Math.min(burst, room);
-          for (let i = 0; i < spawnCount; i++) spawnFlowParticle();
-          nextFlowBurstAt = FLOW_BURST_INTERVAL_MIN_MS + Math.random() * (FLOW_BURST_INTERVAL_MAX_MS - FLOW_BURST_INTERVAL_MIN_MS);
+          for (let i = 0; i < spawnCount; i++) spawnFlowParticle(prioritizedFlowIndices);
+          const burstMul = motionTierRef.current === "performance" ? 1.32 : motionTierRef.current === "balanced" ? 1.15 : 1;
+          nextFlowBurstAt = (1000 + Math.random() * 1500) * burstMul;
         }
       } else if (activeParticles.length > 0) {
         activeParticles.forEach(p => p.el.remove());
@@ -991,8 +1980,8 @@ export default function CampusGraph() {
         if (!pathEl || !lnk) { p.el.remove(); activeParticles.splice(i, 1); continue; }
         const sId = getNodeId(lnk.source);
         const tId = getNodeId(lnk.target);
-        const sNode = nodesRef.current.find(n => n.id === sId);
-        const tNode = nodesRef.current.find(n => n.id === tId);
+        const sNode = nodeById.get(sId);
+        const tNode = nodeById.get(tId);
         if (!sNode || !tNode || hiddenTypesRef.current.has(sNode.type) || hiddenTypesRef.current.has(tNode.type)) {
           p.el.remove(); activeParticles.splice(i, 1); continue;
         }
@@ -1008,7 +1997,354 @@ export default function CampusGraph() {
           .attr("cy", point.y)
           .attr("r", p.size)
           .attr("fill", color)
-          .attr("fill-opacity", clamp01(fade) * (0.42 + strength * 0.52));
+          .attr("fill-opacity", clamp01(fade) * (0.56 + strength * 0.48));
+      }
+
+      if (mainCircleNodes.length) {
+        const ambientBase = viewModeRef.current !== "2d" ? 0 : modeRef.current === "path" ? 0 : modeRef.current === "locked" ? 0.56 : 1;
+        const tierMul = motionTierRef.current === "full" ? 1 : motionTierRef.current === "balanced" ? 0.86 : 0.72;
+        const ambientGain = ambientBase * ambientDampen * tierMul;
+        const visibleNodesFrame = nodes.filter((n: GraphNode) => !hiddenTypesRef.current.has(n.type) && n.x != null && n.y != null);
+        const visibleByType = new Map<NodeType, GraphNode[]>();
+        for (const n of visibleNodesFrame) {
+          const arr = visibleByType.get(n.type) ?? [];
+          arr.push(n);
+          visibleByType.set(n.type, arr);
+        }
+        if (ambientDecorAllowed && !hoveredNodeIdRef.current) {
+          nextMicroActivationAt -= dt;
+          if (nextMicroActivationAt <= 0) {
+            const countRange = GRAPH_MOTION.microActivation.nodeCountMax - GRAPH_MOTION.microActivation.nodeCountMin + 1;
+            const pickCount = GRAPH_MOTION.microActivation.nodeCountMin + Math.floor(Math.random() * Math.max(1, countRange));
+            const pool = nodes.filter((n: GraphNode) => !hiddenTypesRef.current.has(n.type) && n.id !== selectedIdRef.current);
+            for (let i = 0; i < pickCount && pool.length; i++) {
+              const idx = Math.floor(Math.random() * pool.length);
+              const n = pool.splice(idx, 1)[0];
+              nodeBoosts.set(n.id, { start: ts, until: ts + GRAPH_MOTION.microActivation.durationMs, intensity: GRAPH_MOTION.microActivation.intensity });
+              const edgeNbrs = neighborsById.get(n.id);
+              edgeNbrs?.forEach((neighborId) => {
+                edgeBoosts.set(edgePairKey(n.id, neighborId), {
+                  start: ts,
+                  until: ts + GRAPH_MOTION.microActivation.durationMs * 0.82,
+                  intensity: GRAPH_MOTION.microActivation.intensity * 0.7,
+                });
+              });
+            }
+            nextMicroActivationAt = GRAPH_MOTION.microActivation.minIntervalMs + Math.random() * (GRAPH_MOTION.microActivation.maxIntervalMs - GRAPH_MOTION.microActivation.minIntervalMs);
+          }
+        }
+
+        if (idleAllowed) {
+          nextIdleHintAt -= dt;
+          nextIdleCascadeAt -= dt;
+          nextOpportunityAt -= dt;
+          nextScanAt -= dt;
+
+          if (nextIdleHintAt <= 0 && !idleHintNodeId) {
+            const pool = nodes
+              .filter((n: GraphNode) => !hiddenTypesRef.current.has(n.type))
+              .sort((a: GraphNode, b: GraphNode) => (degree[b.id] ?? 0) - (degree[a.id] ?? 0))
+              .slice(0, 16);
+            const target = pool[Math.floor(Math.random() * Math.max(1, pool.length))];
+            if (target) {
+              idleHintNodeId = target.id;
+              idleHintUntil = ts + GRAPH_MOTION.idle.hintDurationMs;
+              nodeBoosts.set(target.id, { start: ts, until: idleHintUntil, intensity: 0.22 });
+              neighborsById.get(target.id)?.forEach((nid) => {
+                nodeBoosts.set(nid, { start: ts, until: ts + GRAPH_MOTION.idle.hintDurationMs * 0.8, intensity: 0.11 });
+                edgeBoosts.set(edgePairKey(target.id, nid), { start: ts, until: ts + GRAPH_MOTION.idle.hintDurationMs * 0.86, intensity: 0.16 });
+              });
+            }
+            nextIdleHintAt = GRAPH_MOTION.idle.hintCooldownMsMin + Math.random() * (GRAPH_MOTION.idle.hintCooldownMsMax - GRAPH_MOTION.idle.hintCooldownMsMin);
+          }
+
+          if (nextIdleCascadeAt <= 0) {
+            const visibleNodes = nodes
+              .filter((n: GraphNode) => !hiddenTypesRef.current.has(n.type))
+              .sort((a: GraphNode, b: GraphNode) => (degree[b.id] ?? 0) - (degree[a.id] ?? 0))
+              .slice(0, 22);
+            const seed = visibleNodes[Math.floor(Math.random() * Math.max(1, visibleNodes.length))];
+            if (seed) {
+              const nodeCount = GRAPH_MOTION.idle.cascadeNodeMin
+                + Math.floor(Math.random() * (GRAPH_MOTION.idle.cascadeNodeMax - GRAPH_MOTION.idle.cascadeNodeMin + 1));
+              const edgeCount = GRAPH_MOTION.idle.cascadeEdgeMin
+                + Math.floor(Math.random() * (GRAPH_MOTION.idle.cascadeEdgeMax - GRAPH_MOTION.idle.cascadeEdgeMin + 1));
+              const sequence: string[] = [seed.id];
+              const seen = new Set<string>(sequence);
+              for (let i = 0; i < sequence.length && sequence.length < nodeCount; i++) {
+                const cur = sequence[i];
+                const nbrs = [...(neighborsById.get(cur) ?? new Set<string>())]
+                  .filter((id) => !seen.has(id))
+                  .sort((a, b) => (degree[b] ?? 0) - (degree[a] ?? 0));
+                const pick = nbrs.slice(0, 2 + Math.floor(Math.random() * 2));
+                pick.forEach((id) => {
+                  if (sequence.length < nodeCount && !seen.has(id)) {
+                    seen.add(id);
+                    sequence.push(id);
+                  }
+                });
+              }
+              sequence.forEach((nid, idx) => {
+                const start = ts + idx * GRAPH_MOTION.idle.cascadeStepMs;
+                const until = start + 880;
+                nodeBoosts.set(nid, { start, until, intensity: 0.16 });
+              });
+              let placedEdges = 0;
+              for (let i = 1; i < sequence.length && placedEdges < edgeCount; i++) {
+                const a = sequence[i - 1];
+                const b = sequence[i];
+                const start = ts + i * GRAPH_MOTION.idle.cascadeStepMs;
+                edgeBoosts.set(edgePairKey(a, b), { start, until: start + 820, intensity: 0.18 });
+                placedEdges++;
+              }
+            }
+            nextIdleCascadeAt = GRAPH_MOTION.idle.cascadeIntervalMinMs + Math.random() * (GRAPH_MOTION.idle.cascadeIntervalMaxMs - GRAPH_MOTION.idle.cascadeIntervalMinMs);
+          }
+
+          if (nextOpportunityAt <= 0) {
+            const weakLinks = simLinks
+              .filter((l: GraphLink) => edgeStrength(l) <= 0.46)
+              .filter((l: GraphLink) => {
+                const s = nodeById.get(getNodeId(l.source));
+                const t = nodeById.get(getNodeId(l.target));
+                return Boolean(s && t && !hiddenTypesRef.current.has(s.type) && !hiddenTypesRef.current.has(t.type));
+              });
+            if (weakLinks.length) {
+              const target = weakLinks[Math.floor(Math.random() * weakLinks.length)];
+              const s = getNodeId(target.source);
+              const t = getNodeId(target.target);
+              edgeBoosts.set(edgePairKey(s, t), { start: ts, until: ts + GRAPH_MOTION.idle.opportunityDurationMs, intensity: 0.2 });
+              nodeBoosts.set(s, { start: ts, until: ts + GRAPH_MOTION.idle.opportunityDurationMs, intensity: 0.1 });
+              nodeBoosts.set(t, { start: ts, until: ts + GRAPH_MOTION.idle.opportunityDurationMs, intensity: 0.1 });
+            }
+            nextOpportunityAt = GRAPH_MOTION.idle.opportunityIntervalMsMin + Math.random() * (GRAPH_MOTION.idle.opportunityIntervalMsMax - GRAPH_MOTION.idle.opportunityIntervalMsMin);
+          }
+
+          if (nextScanAt <= 0) {
+            triggerScanSweep();
+            nextScanAt = GRAPH_MOTION.idle.scanIntervalMsMin + Math.random() * (GRAPH_MOTION.idle.scanIntervalMsMax - GRAPH_MOTION.idle.scanIntervalMsMin);
+          }
+        }
+
+        if (idleHintNodeId && ts >= idleHintUntil) idleHintNodeId = null;
+
+        const coreId = selectedIdRef.current && modeRef.current === "locked"
+          ? selectedIdRef.current
+          : (currentUserNode?.id && nodeById.has(currentUserNode.id) ? currentUserNode.id : coreSeedId);
+        const coreNode = coreId ? nodeById.get(coreId) : null;
+        const ambientBreathingIds = new Set<string>();
+        if (!focusId && coreId) {
+          ambientBreathingIds.add(coreId);
+          const local = [...(neighborsById.get(coreId) ?? new Set<string>())]
+            .sort((a, b) => (degree[b] ?? 0) - (degree[a] ?? 0))
+            .slice(0, 6);
+          local.forEach((id) => ambientBreathingIds.add(id));
+        }
+        const coreBeat = Math.sin(ts * GRAPH_MOTION.core.waveSpeed) * 0.5 + 0.5;
+        const coreRadius = GRAPH_MOTION.core.neighborRadiusPx;
+
+        if (energyCoreRef.current || energyDensityRef.current) {
+          const w = dimsRef.current.w;
+          const h = dimsRef.current.h;
+          const weighted = visibleNodesFrame.reduce((acc, n) => {
+            const wt = (degree[n.id] ?? 1) + 1;
+            return { x: acc.x + (n.x ?? 0) * wt, y: acc.y + (n.y ?? 0) * wt, w: acc.w + wt };
+          }, { x: 0, y: 0, w: 0 });
+          const denseX = weighted.w > 0 ? weighted.x / weighted.w : w / 2;
+          const denseY = weighted.w > 0 ? weighted.y / weighted.w : h / 2;
+
+          if (energyDensityRef.current) {
+            const driftX = Math.sin(ts * 0.00012) * GRAPH_MOTION.field.driftPx;
+            const driftY = Math.cos(ts * 0.0001) * GRAPH_MOTION.field.driftPx;
+            const pan = parallaxPanRef.current;
+            energyDensityRef.current.style.transform = `translate(${pan.densityX + driftX}px, ${pan.densityY + driftY}px)`;
+            energyDensityRef.current.style.opacity = `${GRAPH_MOTION.field.densityOpacity * ambientGain}`;
+            energyDensityRef.current.style.background = `radial-gradient(ellipse at ${(denseX / Math.max(1, w)) * 100}% ${(denseY / Math.max(1, h)) * 100}%, rgba(86,156,242,0.38) 0%, rgba(67,125,214,0.19) 26%, rgba(25,44,83,0.12) 54%, rgba(7,14,27,0) 78%)`;
+          }
+          if (energyCoreRef.current && coreNode?.x != null && coreNode?.y != null) {
+            const corePx = (coreNode.x / Math.max(1, w)) * 100;
+            const corePy = (coreNode.y / Math.max(1, h)) * 100;
+            const opacity = (GRAPH_MOTION.field.coreOpacityBase + coreBeat * GRAPH_MOTION.field.coreOpacitySwing) * ambientGain;
+            energyCoreRef.current.style.opacity = `${opacity}`;
+            const pan = parallaxPanRef.current;
+            energyCoreRef.current.style.transform = `translate(${pan.coreX}px, ${pan.coreY}px)`;
+            energyCoreRef.current.style.background = `radial-gradient(circle at ${corePx}% ${corePy}%, rgba(164,212,255,0.62) 0%, rgba(118,170,255,0.28) 17%, rgba(61,95,173,0.18) 36%, rgba(10,20,40,0) 70%)`;
+          }
+        }
+
+        for (let i = 0; i < nodes.length; i++) {
+          const n = nodes[i];
+          const circle = mainCircleNodes[i];
+          if (!circle || hiddenTypesRef.current.has(n.type)) continue;
+          const auraRing = auraRingNodes[i];
+          const auraHalo = auraHaloNodes[i];
+          const pulseMeta = nodePulseMeta[i];
+          const cohortActive = pulseMeta.cohort < MOTION_PROFILE[motionTierRef.current].activeNodeCohorts;
+          const nodeAmbientMul = cohortActive ? 1 : 0.28;
+          const focusZoneMul = !focusId
+            ? (ambientBreathingIds.has(n.id) ? (n.id === coreId ? 1 : 0.45) : 0.04)
+            : n.id === focusId
+              ? 1.18
+              : oneHop.has(n.id)
+                ? 0.58
+                : twoHop.has(n.id)
+                  ? 0.3
+                  : 0.08;
+          const wave = Math.sin((ts / Math.max(1, pulseMeta.periodMs)) * Math.PI * 2 + pulseMeta.phase);
+          const boostData = nodeBoosts.get(n.id);
+          let boost = 0;
+          if (boostData) {
+            if (boostData.until <= ts) {
+              nodeBoosts.delete(n.id);
+            } else if (ts >= boostData.start) {
+              boost = clamp01((boostData.until - ts) / Math.max(1, GRAPH_MOTION.microActivation.durationMs)) * boostData.intensity;
+            }
+          }
+
+          let scale = pulseMeta.scaleAmp * (0.5 + wave * 0.5) * ambientGain * nodeAmbientMul * focusZoneMul;
+          let fillLift = boost * ambientGain * Math.max(0.4, focusZoneMul);
+          let strokeLift = ((wave * 0.5 + 0.5) * pulseMeta.glowAmp * 0.2 + boost * 0.7) * ambientGain * nodeAmbientMul * focusZoneMul;
+          let auraLift = ((wave * 0.5 + 0.5) * 0.22 + boost * 0.7) * ambientGain * nodeAmbientMul * focusZoneMul;
+          const cohortWave = Math.sin(ts * (0.00036 + pulseMeta.cohort * 0.00004) + pulseMeta.phase + pulseMeta.cohort * 0.75) * 0.5 + 0.5;
+          scale += 0.008 * cohortWave * ambientGain * nodeAmbientMul * focusZoneMul;
+          strokeLift += 0.028 * cohortWave * ambientGain * nodeAmbientMul * focusZoneMul;
+
+          if (coreNode?.x != null && coreNode?.y != null && n.x != null && n.y != null) {
+            const dx = n.x - coreNode.x;
+            const dy = n.y - coreNode.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const near = clamp01(1 - dist / coreRadius);
+            if (n.id === coreId) {
+              scale += GRAPH_MOTION.core.pulseScale * coreBeat * ambientGain;
+              strokeLift += GRAPH_MOTION.core.glowLift * coreBeat * ambientGain;
+              auraLift += 0.36 * coreBeat * ambientGain;
+            } else if (near > 0) {
+              const propagated = near * near * coreBeat;
+              scale += GRAPH_MOTION.core.neighborScale * propagated * ambientGain;
+              strokeLift += GRAPH_MOTION.core.neighborGlow * propagated * ambientGain;
+              auraLift += 0.16 * propagated * ambientGain;
+            }
+          }
+          const hoveredId = hoveredNodeIdRef.current;
+          if (hoveredId && n.id === hoveredId) {
+            scale += GRAPH_MOTION.hover.nodeScale;
+            fillLift += 0.08;
+            strokeLift += 0.22;
+            auraLift += 0.22;
+          } else if (hoveredId && neighborsById.get(hoveredId)?.has(n.id)) {
+            scale += GRAPH_MOTION.hover.neighborScale;
+            fillLift += 0.03;
+            strokeLift += 0.08;
+            auraLift += 0.08;
+          }
+          if (selectedIdRef.current && modeRef.current === "locked" && n.id === selectedIdRef.current) {
+            scale += GRAPH_MOTION.selected.pulseScale * (0.5 + wave * 0.5) * GRAPH_MOTION.selected.pulseSpeedMul;
+            strokeLift += GRAPH_MOTION.selected.glowLift;
+            auraLift += 0.19;
+          } else if (selectedIdRef.current && modeRef.current === "locked" && neighborsById.get(selectedIdRef.current)?.has(n.id)) {
+            strokeLift += GRAPH_MOTION.selected.neighborGlowLift;
+            auraLift += 0.08;
+          }
+
+          const baseFill = n.id === user?.id ? 1 : 0.9;
+          const baseStroke = NODE_FLICKER_BASE;
+          circle.setAttribute("r", `${(n.r ?? 12) * (1 + scale)}`);
+          circle.setAttribute("fill-opacity", `${clamp01(baseFill + fillLift)}`);
+          circle.setAttribute("stroke-opacity", `${clamp01(baseStroke + strokeLift + Math.sin(ts * pulseMeta.flicker * 0.02 + pulseMeta.phase) * 0.04)}`);
+          if (auraRing) {
+            const auraScale = 1 + scale * 0.65 + auraLift * 0.26;
+            auraRing.setAttribute("r", `${(n.r ?? 12) * auraScale + 4.4}`);
+            auraRing.setAttribute("stroke-opacity", `${clamp01(0.28 + auraLift * 0.84)}`);
+          }
+          if (auraHalo) {
+            const haloScale = 1.22 + scale * 0.7 + auraLift * 0.35;
+            auraHalo.setAttribute("r", `${(n.r ?? 12) * haloScale + 4}`);
+            auraHalo.setAttribute("fill-opacity", `${clamp01(0.06 + auraLift * 0.4)}`);
+          }
+        }
+
+        satelliteSel.each(function (d) {
+          const target = nodeById.get(d.nodeId);
+          if (!target || target.x == null || target.y == null || hiddenTypesRef.current.has(target.type)) {
+            this.setAttribute("fill-opacity", "0");
+            return;
+          }
+          const isFocused = d.nodeId === selectedIdRef.current || d.nodeId === coreId;
+          const hoverAdj = hoveredNodeIdRef.current === d.nodeId ? 0.2 : 0;
+          const a = ts * d.speed + d.phase;
+          const radius = d.orbit + (isFocused ? 3.2 : 0);
+          this.setAttribute("cx", `${(target.x ?? 0) + Math.cos(a) * radius}`);
+          this.setAttribute("cy", `${(target.y ?? 0) + Math.sin(a) * radius}`);
+          this.setAttribute("fill", TYPE_COLOR[target.type]);
+          this.setAttribute("fill-opacity", `${(GRAPH_MOTION.satellites.opacity + (isFocused ? 0.16 : 0) + hoverAdj) * ambientGain}`);
+        });
+
+        if (ambientDecorAllowed && !hoveredNodeIdRef.current) {
+          for (let i = 0; i < simLinks.length; i++) {
+            const l = simLinks[i];
+            const pathEl = flowPathNodes[i];
+            if (!pathEl) continue;
+            const sId = getNodeId(l.source);
+            const tId = getNodeId(l.target);
+            const sNode = nodeById.get(sId);
+            const tNode = nodeById.get(tId);
+            if (!sNode || !tNode || hiddenTypesRef.current.has(sNode.type) || hiddenTypesRef.current.has(tNode.type)) continue;
+            const base = defOp(l);
+            const driftMeta = edgeEnergyMeta[i];
+            const edgeCohortActive = (driftMeta?.cohort ?? 0) < profile.activeEdgeCohorts;
+            const edgeBudgeted = prioritizedSimEdgeSet.has(i);
+            const cohortAmp = driftMeta?.cohort === 0 ? 0.16 : driftMeta?.cohort === 1 ? 0.1 : 0.06;
+            const drift = driftMeta?.active
+              ? (Math.sin(ts * driftMeta.speed + driftMeta.phase) * 0.5 + 0.5)
+                * (GRAPH_MOTION.ambientEdge.driftAmplitude + cohortAmp)
+                * ambientGain
+                * (edgeCohortActive ? 1 : 0.3)
+                * (edgeBudgeted ? 1 : focusId ? 0.06 : 0.22)
+              : 0;
+            const edgeBoost = edgeBoosts.get(driftMeta?.key ?? "");
+            let boost = 0;
+            if (edgeBoost) {
+              if (edgeBoost.until <= ts) edgeBoosts.delete(driftMeta.key);
+              else if (ts >= edgeBoost.start) boost = clamp01((edgeBoost.until - ts) / Math.max(1, GRAPH_MOTION.idle.opportunityDurationMs)) * edgeBoost.intensity;
+            }
+            const sDegree = degree[sId] ?? 0;
+            const tDegree = degree[tId] ?? 0;
+            const nodeMax = Math.max(sDegree, tDegree);
+            const depthLift = selectedIdRef.current && (sId === selectedIdRef.current || tId === selectedIdRef.current)
+              ? GRAPH_MOTION.depth.edgeForegroundLift
+              : nodeMax >= 5
+                ? GRAPH_MOTION.depth.edgeForegroundLift * 0.7
+                : GRAPH_MOTION.depth.edgeBackgroundDrop * -1;
+            const focusSuppression = focusId && !edgeBudgeted ? -0.08 : 0;
+            pathEl.setAttribute("stroke-opacity", `${clamp01(base + drift + boost + depthLift + focusSuppression)}`);
+          }
+        }
+
+        (["student", "club", "company", "interest", "professor"] as NodeType[]).forEach((type, idx) => {
+          const aura = clusterAuraByType.get(type);
+          if (!aura) return;
+          const visible = visibleByType.get(type) ?? [];
+          if (!visible.length) {
+            aura.attr("opacity", 0);
+            return;
+          }
+          const cx = visible.reduce((sum, n) => sum + (n.x ?? 0), 0) / visible.length;
+          const cy = visible.reduce((sum, n) => sum + (n.y ?? 0), 0) / visible.length;
+          const spread = Math.sqrt(visible.reduce((sum, n) => {
+            const dx = (n.x ?? cx) - cx;
+            const dy = (n.y ?? cy) - cy;
+            return sum + dx * dx + dy * dy;
+          }, 0) / visible.length);
+          const breath = Math.sin(ts * 0.00034 + idx * 0.9) * 0.5 + 0.5;
+          const rotationPhase = ts * (0.000045 + idx * 0.000006);
+          const driftX = Math.cos(rotationPhase) * 1.7;
+          const driftY = Math.sin(rotationPhase) * 1.35;
+          aura
+            .attr("cx", cx + driftX)
+            .attr("cy", cy + driftY)
+            .attr("r", GRAPH_MOTION.cluster.radiusBase + spread * GRAPH_MOTION.cluster.radiusSpreadFactor + breath * 12)
+            .attr("opacity", GRAPH_MOTION.cluster.baseOpacity + breath * GRAPH_MOTION.cluster.breathOpacitySwing);
+        });
       }
       particleRafRef.current = requestAnimationFrame(animateParticles);
     };
@@ -1018,12 +2354,18 @@ export default function CampusGraph() {
     const nodeSel = g.append("g")
       .selectAll<SVGGElement, GraphNode>("g")
       .data(nodes).enter().append("g")
-      .attr("class", (d: GraphNode) =>
-        d.id === user?.id ? "node node-current-user" : "node"
-      )
+      .attr("class", (d: GraphNode) => {
+        const elevated = (degree[d.id] ?? 0) >= 5 || d.type === "company" || d.id === user?.id;
+        const background = !elevated && (degree[d.id] ?? 0) <= 2;
+        const currentUser = d.id === user?.id ? " node-current-user" : "";
+        const important = elevated ? " node-important" : "";
+        const depth = elevated ? " node-depth-foreground" : background ? " node-depth-background" : " node-depth-mid";
+        return `node${currentUser}${important}${depth}`;
+      })
       .call(
         d3.drag<SVGGElement, GraphNode>()
           .on("start", (e: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>, d: GraphNode) => {
+            markHeavyInteraction(720);
             if (!e.active) sim.alphaTarget(0.3).restart();
             d.fx = d.x; d.fy = d.y;
             if (modeRef.current !== "free") return;
@@ -1044,9 +2386,11 @@ export default function CampusGraph() {
             });
           })
           .on("drag", (e: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>, d: GraphNode) => {
+            markHeavyInteraction(280);
             d.fx = e.x; d.fy = e.y;
           })
           .on("end", (e: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>, d: GraphNode) => {
+            markHeavyInteraction(320);
             if (!e.active) sim.alphaTarget(0);
             if (modeRef.current === "free") { d.fx = null; d.fy = null; }
             if (modeRef.current !== "free") return;
@@ -1057,6 +2401,7 @@ export default function CampusGraph() {
           })
       )
       .on("click", (e: MouseEvent, d: GraphNode) => {
+        noteInteraction();
         e.stopPropagation();
         setDemoMode(false);
         setDemoMessage("");
@@ -1079,7 +2424,11 @@ export default function CampusGraph() {
         selectNodeFn(d);
       })
       .on("mouseenter", (e: MouseEvent, d: GraphNode) => {
+        noteInteraction();
         if (modeRef.current !== "free") return;
+        nodeSel.select<SVGCircleElement>("circle.main-circle").attr("transform", null);
+        nodeSel.select<SVGCircleElement>("circle.node-aura-ring").attr("transform", null);
+        nodeSel.select<SVGCircleElement>("circle.node-aura-halo").attr("transform", null);
         spawnHoverRings(d);
         hoveredNodeIdRef.current = d.id;
         setHoverCard({ node: d, x: e.clientX, y: e.clientY });
@@ -1091,23 +2440,52 @@ export default function CampusGraph() {
         });
         linkSel.attr("stroke-opacity", (l: GraphLink) => {
           const s = getNodeId(l.source), t = getNodeId(l.target);
-          return (s === d.id || t === d.id) ? 0.78 : 0.15;
+          return (s === d.id || t === d.id) ? GRAPH_MOTION.hover.edgeOpacity : GRAPH_MOTION.hover.neighborEdgeOpacity;
         });
-        nodeSel.transition().duration(150)
-          .style("opacity", (n: GraphNode) => conn.has(n.id) ? 1 : 0.15);
+        linkSel
+          .classed("link-hover-energized", (l: GraphLink) => {
+            const s = getNodeId(l.source), t = getNodeId(l.target);
+            return s === d.id || t === d.id;
+          })
+          .attr("stroke-width", (l: GraphLink) => {
+            const s = getNodeId(l.source), t = getNodeId(l.target);
+            if (s === d.id || t === d.id) return edgeWidthForLink(l) * GRAPH_MOTION.hover.edgeWidthMul;
+            return edgeWidthForLink(l) * 0.92;
+          });
+        nodeSel.transition().duration(GRAPH_MOTION.premium.hoverMs)
+          .style("opacity", (n: GraphNode) => conn.has(n.id) ? 1 : GRAPH_MOTION.hover.unrelatedOpacity);
         fadeLabels((n: GraphNode) => (conn.has(n.id) ? 1 : 0), 140);
+        nodeSel.select<SVGCircleElement>("circle.main-circle")
+          .transition()
+          .duration(GRAPH_MOTION.premium.hoverMs)
+          .attr("r", (n: GraphNode) => {
+            if (n.id === d.id) return (n.r ?? 12) * (1 + GRAPH_MOTION.hover.nodeScale);
+            if (conn.has(n.id)) return (n.r ?? 12) * (1 + GRAPH_MOTION.hover.neighborScale);
+            return n.r ?? 12;
+          });
         nodeSel.filter((n: GraphNode) => n.id === d.id)
           .select<SVGCircleElement>("circle.main-circle")
-          .attr("filter", "url(#glow-soft)");
+          .attr("filter", "url(#glow-selected)");
       })
       .on("mouseleave", () => {
+        noteInteraction();
         if (modeRef.current !== "free") return;
         hoveredNodeIdRef.current = null;
         setHoverCard(null);
         if (draggingNodeIdRef.current) return;
         linkSel.attr("stroke-opacity", (l: GraphLink) => defOp(l));
-        nodeSel.transition().duration(200).style("opacity", 1);
-        fadeLabels(currentZoomKRef.current > 1.7 ? 1 : LABEL_OPACITY_BASE, 200);
+        linkSel.classed("link-hover-energized", false).attr("stroke-width", (l: GraphLink) => edgeWidthForLink(l));
+        nodeSel.transition().duration(180).style("opacity", 1);
+        nodeSel.select<SVGCircleElement>("circle.main-circle")
+          .transition()
+          .duration(180)
+          .attr("r", (n: GraphNode) => n.r ?? 12);
+        fadeLabels((n: GraphNode) => {
+          const zoomK = currentZoomKRef.current;
+          if (zoomK < 0.72) return (n.id === user?.id || (degree[n.id] ?? 0) >= 8) ? 0.56 : 0;
+          if (zoomK < 1.45) return (n.id === user?.id || (degree[n.id] ?? 0) >= 5) ? 0.72 : 0.12;
+          return 1;
+        }, 200);
         nodeSel.select<SVGCircleElement>("circle.main-circle").attr("filter", (n: GraphNode) => baseNodeFilterRef.current(n));
       });
 
@@ -1120,6 +2498,22 @@ export default function CampusGraph() {
       .attr("stroke-width", 1.5)
       .attr("stroke-opacity", 0.35)
       .attr("stroke-dasharray", "4,3");
+
+    const auraHalos = nodeSel.append("circle")
+      .attr("class", (d: GraphNode) => `node-aura-halo node-aura-halo--${d.type}`)
+      .attr("r", 0)
+      .attr("fill", (d: GraphNode) => TYPE_COLOR[d.type])
+      .attr("fill-opacity", 0)
+      .attr("pointer-events", "none");
+
+    const auraRings = nodeSel.append("circle")
+      .attr("class", (d: GraphNode) => `node-aura-ring node-aura-ring--${d.type}`)
+      .attr("r", 0)
+      .attr("fill", "none")
+      .attr("stroke", (d: GraphNode) => TYPE_COLOR[d.type])
+      .attr("stroke-opacity", 0)
+      .attr("stroke-width", (d: GraphNode) => d.type === "company" ? 1.25 : 1)
+      .attr("pointer-events", "none");
 
     // Main circle
     const mainCircles = nodeSel.append("circle")
@@ -1137,6 +2531,21 @@ export default function CampusGraph() {
       .attr("stroke-width", (d: GraphNode) => d.id === user?.id ? 3 : 2)
       .attr("stroke-opacity", 0.9)
       .attr("filter", (d: GraphNode) => baseNodeFilter(d));
+    mainCircleNodes = mainCircles.nodes();
+    auraRingNodes = auraRings.nodes();
+    auraHaloNodes = auraHalos.nodes();
+    auraHalos
+      .transition()
+      .delay((_d: GraphNode, i: number) => Math.min(220, i * 6))
+      .duration(500)
+      .attr("r", (d: GraphNode) => (d.r ?? 12) * 1.56)
+      .attr("fill-opacity", (d: GraphNode) => d.id === coreSeedId ? 0.22 : 0.11);
+    auraRings
+      .transition()
+      .delay((_d: GraphNode, i: number) => Math.min(240, i * 6))
+      .duration(520)
+      .attr("r", (d: GraphNode) => (d.r ?? 12) + 4.5)
+      .attr("stroke-opacity", (d: GraphNode) => d.id === coreSeedId ? 0.64 : 0.36);
     mainCircles
       .transition()
       .delay((_d: GraphNode, i: number) => Math.min(220, i * 7))
@@ -1161,6 +2570,21 @@ export default function CampusGraph() {
       .attr("pointer-events", "none")
       .style("opacity", LABEL_OPACITY_BASE);
     labelSelRef.current = labels;
+
+    const ignitionCenterId = (currentUserNode?.id && nodeById.has(currentUserNode.id)) ? currentUserNode.id : coreSeedId;
+    if (viewModeRef.current === "2d" && ignitionCenterId) {
+      ignitionTimers.push(window.setTimeout(() => {
+        triggerFullSystemPulse(ignitionCenterId);
+      }, 220));
+      const centerNeighborIds = [...(neighborsById.get(ignitionCenterId) ?? new Set<string>())];
+      centerNeighborIds.slice(0, 14).forEach((nid, idx) => {
+        ignitionTimers.push(window.setTimeout(() => {
+          const now = performance.now();
+          nodeBoosts.set(nid, { start: now, until: now + 920, intensity: GRAPH_MOTION.signature.ignitionNodeLift });
+          edgeBoosts.set(edgePairKey(ignitionCenterId, nid), { start: now, until: now + 860, intensity: GRAPH_MOTION.signature.ignitionEdgeLift });
+        }, 260 + idx * GRAPH_MOTION.signature.ignitionStepMs));
+      });
+    }
 
     // ── Minimap ─────────────────────────────────────────────────────────────
     let miniLinksSel: d3.Selection<SVGLineElement, GraphLink, SVGGElement, unknown> | null = null;
@@ -1333,6 +2757,9 @@ export default function CampusGraph() {
     // ── Force Simulation ──────────────────────────────────────────────────
     const clusterX: Partial<Record<string, number>> = { club: -0.28, company: 0.28, professor: -0.14, interest: 0.14, student: 0 };
     const clusterY: Partial<Record<string, number>> = { club: 0.1, company: 0.1, professor: -0.25, interest: -0.2, student: 0 };
+    const HIGH_CONNECTION_DEGREE = 5;
+    const resolvedCurrentUserId = currentUserNode?.id ?? user?.id ?? null;
+    const isHighConnectionStudent = (n: GraphNode) => n.type === "student" && (degree[n.id] ?? 0) >= HIGH_CONNECTION_DEGREE;
 
     const sim = d3.forceSimulation<GraphNode>(nodes)
       .force("link", d3.forceLink<GraphNode, GraphLink>(simLinks)
@@ -1341,15 +2768,38 @@ export default function CampusGraph() {
           const s = d.source as GraphNode, t = d.target as GraphNode;
           const sHub = hubIds.has(s.id) || (degree[s.id] ?? 0) > HUB_BUNDLE_DEGREE;
           const tHub = hubIds.has(t.id) || (degree[t.id] ?? 0) > HUB_BUNDLE_DEGREE;
-          if (sHub || tHub) return 202;
+          const sHighStudent = isHighConnectionStudent(s);
+          const tHighStudent = isHighConnectionStudent(t);
+          const touchesCurrentUser = Boolean(resolvedCurrentUserId && (s.id === resolvedCurrentUserId || t.id === resolvedCurrentUserId));
+          if (s.type === "student" && t.type === "student") {
+            if (touchesCurrentUser && (sHighStudent || tHighStudent)) return 252;
+            if (touchesCurrentUser) return 224;
+            if (sHighStudent && tHighStudent) return 266;
+            if (sHighStudent || tHighStudent) return 236;
+            return 194;
+          }
+          if (sHub || tHub) return 226;
           return ["company", "club"].includes(s.type) || ["company", "club"].includes(t.type) ? 164 : 128;
         })
         .strength(0.4)
       )
       .force("charge", d3.forceManyBody<GraphNode>().strength((d: GraphNode) =>
-        d.type === "club" ? -980 : d.type === "company" ? -860 : d.type === "student" ? -760 : -640))
+        d.type === "club"
+          ? -1020
+          : d.type === "company"
+            ? -920
+            : d.type === "student"
+              ? (-820
+                - ((degree[d.id] ?? 0) >= HIGH_CONNECTION_DEGREE ? 220 : 0)
+                - (resolvedCurrentUserId && d.id === resolvedCurrentUserId ? 180 : 0))
+              : -670))
       .force("center", d3.forceCenter(width / 2, height / 2).strength(0.03))
-      .force("collision", d3.forceCollide<GraphNode>().radius((d: GraphNode) => (d.r ?? 12) + ((degree[d.id] ?? 0) > HUB_BUNDLE_DEGREE ? 22 : 16)).strength(0.92))
+      .force("collision", d3.forceCollide<GraphNode>().radius((d: GraphNode) => {
+        const deg = degree[d.id] ?? 0;
+        const highBonus = deg >= HIGH_CONNECTION_DEGREE ? 14 : 0;
+        const userBonus = resolvedCurrentUserId && d.id === resolvedCurrentUserId ? 10 : 0;
+        return (d.r ?? 12) + ((deg > HUB_BUNDLE_DEGREE ? 24 : 17) + highBonus + userBonus);
+      }).strength(0.94))
       .force("x", d3.forceX<GraphNode>((d: GraphNode) => width / 2 + (clusterX[d.type] ?? 0) * width).strength(0.038))
       .force("y", d3.forceY<GraphNode>((d: GraphNode) => height / 2 + (clusterY[d.type] ?? 0) * height).strength(0.038))
       .alphaDecay(0.028);
@@ -1371,43 +2821,214 @@ export default function CampusGraph() {
     };
     sim.force("hubBundle", hubBundleForce as d3.Force<GraphNode, GraphLink>);
 
+    const highConnectionSpreadForce = (alpha: number) => {
+      const spreadNodes = nodes.filter((n: GraphNode) =>
+        isHighConnectionStudent(n) || (resolvedCurrentUserId && n.id === resolvedCurrentUserId)
+      );
+      for (let i = 0; i < spreadNodes.length; i++) {
+        const a = spreadNodes[i];
+        if (a.x == null || a.y == null) continue;
+        for (let j = i + 1; j < spreadNodes.length; j++) {
+          const b = spreadNodes[j];
+          if (b.x == null || b.y == null) continue;
+          let dx = (a.x as number) - (b.x as number);
+          let dy = (a.y as number) - (b.y as number);
+          let dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 0.001) {
+            dx = (Math.random() - 0.5) * 0.01;
+            dy = (Math.random() - 0.5) * 0.01;
+            dist = Math.sqrt(dx * dx + dy * dy);
+          }
+          const pairIncludesCurrent = Boolean(resolvedCurrentUserId && (a.id === resolvedCurrentUserId || b.id === resolvedCurrentUserId));
+          const minDist = pairIncludesCurrent ? 284 : 248;
+          if (dist >= minDist) continue;
+          const ux = dx / dist;
+          const uy = dy / dist;
+          const push = ((minDist - dist) / minDist) * alpha * (pairIncludesCurrent ? 0.74 : 0.58);
+          a.vx = (a.vx ?? 0) + ux * push;
+          a.vy = (a.vy ?? 0) + uy * push;
+          b.vx = (b.vx ?? 0) - ux * push;
+          b.vy = (b.vy ?? 0) - uy * push;
+        }
+      }
+    };
+    sim.force("highConnectionSpread", highConnectionSpreadForce as d3.Force<GraphNode, GraphLink>);
+
     const ambientOrbitForce = (alpha: number) => {
       if (modeRef.current !== "free" || searchActiveRef.current || draggingNodeIdRef.current || demoMode) return;
+      if (performance.now() < heavyInteractionUntilRef.current) return;
       const cx = width / 2;
       const cy = height / 2;
+      const coreId = selectedIdRef.current ?? (currentUserNode?.id && nodeById.has(currentUserNode.id) ? currentUserNode.id : coreSeedId);
+      let applied = 0;
       nodes.forEach((n: GraphNode) => {
+        if (applied >= 8) return;
+        if (n.id === coreId) return;
+        if ((degree[n.id] ?? 0) >= 5) return;
         if (n.x == null || n.y == null) return;
         const dx = n.x - cx;
         const dy = n.y - cy;
         const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-        const tangential = AMBIENT_ORBIT_SPEED * (0.35 + Math.min(1.2, dist / 380)) * (0.55 + alpha);
+        const tangential = AMBIENT_ORBIT_SPEED * 0.46 * (0.35 + Math.min(1.2, dist / 380)) * (0.45 + alpha);
         n.vx = (n.vx ?? 0) + (-dy / dist) * tangential;
         n.vy = (n.vy ?? 0) + (dx / dist) * tangential;
+        applied += 1;
       });
     };
     sim.force("ambientOrbit", ambientOrbitForce as d3.Force<GraphNode, GraphLink>);
 
+    const quantumCollapseForce = (alpha: number) => {
+      if (!searchActiveRef.current || modeRef.current !== "free") return;
+      const matches = searchMatchesRef.current;
+      if (matches.size === 0) return;
+      
+      const cx = width / 2;
+      const cy = height / 2;
+      
+      nodes.forEach((n: GraphNode) => {
+        if (n.x == null || n.y == null) return;
+        if (matches.has(n.id)) {
+           // Magnetize to center
+           n.vx = (n.vx ?? 0) + (cx - n.x) * alpha * 1.5;
+           n.vy = (n.vy ?? 0) + (cy - n.y) * alpha * 1.5;
+        } else {
+           // Crumble (push outwards chaotically)
+           const dx = n.x - cx;
+           const dy = n.y - cy;
+           const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+           const push = 1800 * alpha; // High outward force
+           n.vx = (n.vx ?? 0) + (dx / dist) * push + (Math.random() - 0.5) * 15 * alpha;
+           n.vy = (n.vy ?? 0) + (dy / dist) * push + (Math.random() - 0.5) * 15 * alpha;
+        }
+      });
+    };
+    sim.force("quantumCollapse", quantumCollapseForce as d3.Force<GraphNode, GraphLink>);
+
     let tick = 0;
     sim.on("tick", () => {
-      linkSel.attr("d", (d: GraphLink) => curvePathForLink(d));
-      nodeSel.attr("transform", (d: GraphNode) => `translate(${d.x ?? 0},${d.y ?? 0})`);
-      if (modeRef.current === "path" && svgRef.current) {
-        d3.select(svgRef.current)
-          .selectAll<SVGPathElement, unknown>(".path-overlay path")
-          .attr("d", function () {
-            const sourceId = this.getAttribute("data-source-id");
-            const targetId = this.getAttribute("data-target-id");
-            if (!sourceId || !targetId) return this.getAttribute("d") ?? "";
-            const source = nodesRef.current.find((n) => n.id === sourceId);
-            const target = nodesRef.current.find((n) => n.id === targetId);
-            if (!source || !target) return this.getAttribute("d") ?? "";
-            return curvePathBetweenNodes(source, target);
-          });
-      }
-      updateMiniFn?.();
-      updateMiniViewportRef.current?.();
+      tick += 1;
+      const profile = MOTION_PROFILE[motionTierRef.current];
+      const hoveredId = hoveredNodeIdRef.current;
+      const activeForce = sim.alpha() > 0.045 || draggingNodeIdRef.current != null;
+      const runHeavyTick = activeForce || hoveredId != null || modeRef.current === "path" || tick % profile.heavyTickDiv === 0;
+      if (runHeavyTick) {
+        linkSel.attr("d", (d: GraphLink) => curvePathForLink(d));
+        nodeSel.attr("transform", (d: GraphNode) => {
+          let nx = d.x ?? 0;
+          let ny = d.y ?? 0;
+          let scaleMul = 1;
 
-      if (modeRef.current === "free" && !hoveredNodeIdRef.current && !searchActiveRef.current) {
+          if (lensModeRef.current && lensPosRef.current && modeRef.current === "free") {
+            const LENS_RADIUS = 280;
+            const dx = nx - lensPosRef.current.x;
+            const dy = ny - lensPosRef.current.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < LENS_RADIUS && dist > 0.01) {
+              const force = 1 - dist / LENS_RADIUS;
+              // Push radius outward and scale up heavily based on proximity
+              const stretch = Math.pow(force, 1.2) * LENS_RADIUS * 1.8;
+              nx += (dx / dist) * stretch;
+              ny += (dy / dist) * stretch;
+              scaleMul = 1 + force * 2.2; 
+            }
+          }
+
+          if (scaleMul !== 1) {
+             return `translate(${nx},${ny}) scale(${scaleMul})`;
+          }
+          return `translate(${nx},${ny})`;
+        });
+        nodeSel.attr("class", null);
+
+        // If lens is over a node, reveal labels!
+        if (lensModeRef.current && lensPosRef.current && modeRef.current === "free") {
+          nodeSel.select("text.node-label").style("opacity", (n: GraphNode) => {
+            if (!lensPosRef.current) return 0;
+            const dx = (n.x ?? 0) - lensPosRef.current.x;
+            const dy = (n.y ?? 0) - lensPosRef.current.y;
+            return Math.sqrt(dx * dx + dy * dy) < 280 ? 1 : 0;
+          });
+        }
+
+        // Live Pulse Heatmap (Idea 15)
+        if (heatmapModeRef.current && nodes.length > 0) {
+          let sSumX = 0, sSumY = 0, sCount = 0;
+          let oSumX = 0, oSumY = 0, oCount = 0;
+          
+          nodes.forEach(n => {
+             if (n.x == null || n.y == null) return;
+             if (n.type === 'student' && (degree[n.id] ?? 0) > 3) {
+                sSumX += n.x; sSumY += n.y; sCount++;
+             } else if (n.type === 'company' && (degree[n.id] ?? 0) < 2) {
+                oSumX += n.x; oSumY += n.y; oCount++;
+             }
+          });
+
+          if (energyDensityRef.current && sCount > 0) {
+             const px = (sSumX / sCount) / width * 100;
+             const py = (sSumY / sCount) / height * 100;
+             energyDensityRef.current.style.background = `radial-gradient(circle at ${px}% ${py}%, rgba(16, 185, 129, 0.28) 0%, transparent 65%)`;
+          }
+          if (energyCoreRef.current && oCount > 0) {
+            const px = (oSumX / oCount) / width * 100;
+            const py = (oSumY / oCount) / height * 100;
+            energyCoreRef.current.style.background = `radial-gradient(circle at ${px}% ${py}%, rgba(192, 57, 43, 0.18) 0%, transparent 55%)`;
+          }
+        }
+      }
+
+      if (runHeavyTick || tick % 2 === 0) {
+        if (modeRef.current === "locked" && selectedIdRef.current) {
+          const sNode = nodeById.get(selectedIdRef.current);
+          if (sNode && sNode.type === "student") {
+            const ghostPaths = d3.select(svgRef.current).selectAll<SVGPathElement, unknown>("path.ghost-path");
+            const ghostLabels = d3.select(svgRef.current).selectAll<SVGTextElement, unknown>("text.ghost-label");
+            
+            ghostPaths.attr("d", (_, i) => {
+               const pred = ghostPredictionsRef.current[i];
+               const tNode = pred ? nodeById.get(pred.targetId) : null;
+               if (!tNode || sNode.x == null || sNode.y == null || tNode.x == null || tNode.y == null) return "";
+               return curvePathBetweenNodes(sNode, tNode);
+            });
+            ghostLabels
+              .attr("x", (_, i) => {
+                 const pred = ghostPredictionsRef.current[i];
+                 const tNode = pred ? nodeById.get(pred.targetId) : null;
+                 if (!tNode || sNode.x == null || tNode.x == null) return 0;
+                 return (sNode.x + tNode.x) / 2;
+              })
+              .attr("y", (_, i) => {
+                 const pred = ghostPredictionsRef.current[i];
+                 const tNode = pred ? nodeById.get(pred.targetId) : null;
+                 if (!tNode || sNode.y == null || tNode.y == null) return 0;
+                 return (sNode.y + tNode.y) / 2 - 8;
+              });
+          }
+        }
+      }
+
+      if (modeRef.current === "path" && svgRef.current) {
+        if (runHeavyTick || tick % 2 === 0) {
+          d3.select(svgRef.current)
+            .selectAll<SVGPathElement, unknown>(".path-overlay path")
+            .attr("d", function () {
+              const sourceId = this.getAttribute("data-source-id");
+              const targetId = this.getAttribute("data-target-id");
+              if (!sourceId || !targetId) return this.getAttribute("d") ?? "";
+              const source = nodeById.get(sourceId);
+              const target = nodeById.get(targetId);
+              if (!source || !target) return this.getAttribute("d") ?? "";
+              return curvePathBetweenNodes(source, target);
+            });
+        }
+      }
+      if (runHeavyTick || tick % 2 === 0) {
+        updateMiniFn?.();
+        updateMiniViewportRef.current?.();
+      }
+
+      if (runHeavyTick && modeRef.current === "free" && !hoveredNodeIdRef.current && !searchActiveRef.current) {
         const cx = width / 2;
         const cy = height / 2;
         const maxDist = Math.max(width, height) * 0.82;
@@ -1432,20 +3053,22 @@ export default function CampusGraph() {
         });
       }
 
-      flickerTimeRef.current += 0.014;
-      nodeSel.select<SVGCircleElement>("circle.main-circle")
-        .attr("stroke-opacity", (n: GraphNode, i: number) => {
-          const amp = NODE_FLICKER_SWING + ((n.id === selectedIdRef.current || n.id === user?.id) ? NODE_FLICKER_HIGHLIGHT_BONUS : 0);
-          const wave = Math.sin(flickerTimeRef.current + i * 0.53);
-          return clamp01(NODE_FLICKER_BASE + wave * amp);
-        });
+      if (runHeavyTick && (motionTierRef.current !== "performance" || hoveredId || selectedIdRef.current)) {
+        flickerTimeRef.current += 0.014;
+        nodeSel.select<SVGCircleElement>("circle.main-circle")
+          .attr("stroke-opacity", (n: GraphNode, i: number) => {
+            const amp = NODE_FLICKER_SWING + ((n.id === selectedIdRef.current || n.id === user?.id) ? NODE_FLICKER_HIGHLIGHT_BONUS : 0);
+            const wave = Math.sin(flickerTimeRef.current + i * 0.53);
+            return clamp01(NODE_FLICKER_BASE + wave * amp);
+          });
+      }
 
       // ── Edge pulse update ──────────────────────────────────────────────
       // CONSTANTS (tweak here):
       // particles animate via requestAnimationFrame loop
 
       // One-time intro flyover: show whole graph, then zoom to current user node
-      if (!introDoneRef.current && user?.id && zoomRef.current && svgRef.current && ++tick > 45) {
+      if (!introDoneRef.current && user?.id && zoomRef.current && svgRef.current && tick > 45) {
         const allNodes = nodesRef.current.filter(n => n.x != null && n.y != null);
         if (!allNodes.length) return;
 
@@ -1538,7 +3161,8 @@ export default function CampusGraph() {
 
     const applyCursorAwareness = (gx: number, gy: number) => {
       if (modeRef.current !== "free" || draggingNodeIdRef.current || hoveredNodeIdRef.current) return;
-      const radius = 170;
+      const profile = MOTION_PROFILE[motionTierRef.current];
+      const radius = GRAPH_MOTION.magnetic.radius * profile.magneticRadiusMul;
       const radiusSq = radius * radius;
       nodeSel.select<SVGCircleElement>("circle.main-circle")
         .attr("fill-opacity", (n: GraphNode) => {
@@ -1547,7 +3171,38 @@ export default function CampusGraph() {
           const distSq = dx * dx + dy * dy;
           if (distSq >= radiusSq) return n.id === user?.id ? 1 : 0.9;
           const t = 1 - Math.sqrt(distSq) / radius;
-          return (n.id === user?.id ? 1 : 0.9) + t * 0.13;
+          return (n.id === user?.id ? 1 : 0.9) + t * 0.18;
+        })
+        .attr("transform", (n: GraphNode) => {
+          const dx = gx - (n.x ?? 0);
+          const dy = gy - (n.y ?? 0);
+          const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
+          if (dist >= radius) return "translate(0,0)";
+          const t = 1 - dist / radius;
+          const pull = GRAPH_MOTION.magnetic.maxOffsetPx * t * t;
+          const ox = (dx / dist) * pull;
+          const oy = (dy / dist) * pull;
+          return `translate(${ox},${oy})`;
+        });
+      nodeSel.select<SVGCircleElement>("circle.node-aura-ring")
+        .attr("transform", (n: GraphNode) => {
+          const dx = gx - (n.x ?? 0);
+          const dy = gy - (n.y ?? 0);
+          const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
+          if (dist >= radius) return "translate(0,0)";
+          const t = 1 - dist / radius;
+          const pull = GRAPH_MOTION.magnetic.maxOffsetPx * GRAPH_MOTION.magnetic.auraOffsetMul * t * t;
+          return `translate(${(dx / dist) * pull},${(dy / dist) * pull})`;
+        });
+      nodeSel.select<SVGCircleElement>("circle.node-aura-halo")
+        .attr("transform", (n: GraphNode) => {
+          const dx = gx - (n.x ?? 0);
+          const dy = gy - (n.y ?? 0);
+          const dist = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
+          if (dist >= radius) return "translate(0,0)";
+          const t = 1 - dist / radius;
+          const pull = GRAPH_MOTION.magnetic.maxOffsetPx * (GRAPH_MOTION.magnetic.auraOffsetMul + 0.18) * t * t;
+          return `translate(${(dx / dist) * pull},${(dy / dist) * pull})`;
         });
       linkSel.attr("stroke-opacity", (l: GraphLink) => {
         const s = l.source as GraphNode;
@@ -1566,21 +3221,41 @@ export default function CampusGraph() {
     svg.on("mousemove.aware", (e: MouseEvent) => {
       if (!svgRef.current || !zoomRef.current) return;
       if (modeRef.current !== "free" || draggingNodeIdRef.current) return;
+      markHeavyInteraction(180);
       const [mx, my] = d3.pointer(e, svgRef.current);
       const currentTransform = d3.zoomTransform(svgRef.current);
       const gx = (mx - currentTransform.x) / currentTransform.k;
       const gy = (my - currentTransform.y) / currentTransform.k;
-      applyCursorAwareness(gx, gy);
+      pointerAwarePendingRef.current = { x: gx, y: gy };
+      const now = performance.now();
+      if (now - pointerAwareLastTsRef.current < MOTION_PROFILE[motionTierRef.current].pointerThrottleMs) return;
+      if (pointerAwareRafRef.current != null) return;
+      pointerAwareRafRef.current = requestAnimationFrame(() => {
+        pointerAwareRafRef.current = null;
+        pointerAwareLastTsRef.current = performance.now();
+        const pending = pointerAwarePendingRef.current;
+        if (!pending) return;
+        applyCursorAwareness(pending.x, pending.y);
+      });
     });
 
     svg.on("mouseleave.aware", () => {
       if (modeRef.current !== "free" || draggingNodeIdRef.current) return;
+      pointerAwarePendingRef.current = null;
+      if (pointerAwareRafRef.current != null) {
+        cancelAnimationFrame(pointerAwareRafRef.current);
+        pointerAwareRafRef.current = null;
+      }
       nodeSel.select<SVGCircleElement>("circle.main-circle")
-        .attr("fill-opacity", (n: GraphNode) => n.id === user?.id ? 1 : 0.9);
+        .attr("fill-opacity", (n: GraphNode) => n.id === user?.id ? 1 : 0.9)
+        .attr("transform", null);
+      nodeSel.select<SVGCircleElement>("circle.node-aura-ring").attr("transform", null);
+      nodeSel.select<SVGCircleElement>("circle.node-aura-halo").attr("transform", null);
       linkSel.attr("stroke-opacity", (l: GraphLink) => defOp(l));
     });
 
     svg.on("click", () => {
+      noteInteraction();
       setEdgeExplain(null);
       if (modeRef.current !== "free") deselectAll();
     });
@@ -1606,15 +3281,22 @@ export default function CampusGraph() {
       resizeObserver?.disconnect();
       if (inertiaRafRef.current) cancelAnimationFrame(inertiaRafRef.current);
       if (particleRafRef.current) cancelAnimationFrame(particleRafRef.current);
+      if (pointerAwareRafRef.current != null) cancelAnimationFrame(pointerAwareRafRef.current);
       if (demoTimerRef.current) {
         window.clearTimeout(demoTimerRef.current);
         demoTimerRef.current = null;
       }
+      if (selectionCommitTimerRef.current) {
+        window.clearTimeout(selectionCommitTimerRef.current);
+        selectionCommitTimerRef.current = null;
+      }
+      ignitionTimers.forEach((t) => window.clearTimeout(t));
       activeParticles.forEach(p => p.el.remove());
       activeParticles.length = 0;
       pulseLayerRef.current = null;
       rippleLayerRef.current = null;
       labelSelRef.current = null;
+      rootEl?.classList.remove("perf-interacting");
       updateMiniViewportRef.current = null;
       visibleLinksRef.current = [];
       sim.stop();
@@ -1630,6 +3312,7 @@ export default function CampusGraph() {
     if (!nodeSel || !linkSel || !svgRef.current) return;
 
     const pathSet = new Set(pathNodeIds);
+    triggerOpportunityExplosion(pathNodeIds);
     fitToNodeIds(pathNodeIds, 900);
 
     // Dim everything not on the path
@@ -1678,7 +3361,7 @@ export default function CampusGraph() {
       clearInterval(interval);
       overlay.remove();
     };
-  }, [mode, pathNodeIds, fadeLabels, fitToNodeIds]);
+  }, [mode, pathNodeIds, fadeLabels, fitToNodeIds, triggerOpportunityExplosion]);
 
   // ── Filter Effect ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1704,13 +3387,19 @@ export default function CampusGraph() {
     if (mode !== "free") { searchActiveRef.current = false; return; }
     if (multiSelectedIds.size > 0) return;
     searchActiveRef.current = Boolean(searchQuery.trim());
+    const matches = new Set(searchMatches.map((n) => n.id));
+    const wasActive = searchMatchesRef.current.size > 0;
+    searchMatchesRef.current = matches;
+
     if (!searchQuery.trim()) {
       nodeSelRef.current?.transition().duration(200).style("opacity", 1);
       linkSelRef.current?.transition().duration(180).attr("stroke-opacity", (l: GraphLink) => defOp(l));
       fadeLabels(currentZoomKRef.current > 1.7 ? 1 : LABEL_OPACITY_BASE, 140);
+      if (wasActive) simRef.current?.alpha(0.8).restart(); // Recover from explosion
       return;
     }
-    const matches = new Set(searchMatches.map((n) => n.id));
+    
+    simRef.current?.alpha(1).restart(); // Trigger quantum collapse
     nodeSelRef.current?.transition().duration(200)
       .style("opacity", (d: GraphNode) => matches.has(d.id) ? 1 : 0.07);
     linkSelRef.current?.transition().duration(180)
@@ -1790,6 +3479,49 @@ export default function CampusGraph() {
   }, [viewMode, mode, fadeLabels]);
 
   useEffect(() => {
+    const nodeSel = nodeSelRef.current;
+    if (!nodeSel) return;
+    
+    if (heatmapMode) {
+      const degree: Record<string, number> = {};
+      links.forEach((l) => {
+        const s = getNodeId(l.source);
+        const t = getNodeId(l.target);
+        degree[s] = (degree[s] ?? 0) + 1;
+        degree[t] = (degree[t] ?? 0) + 1;
+      });
+      const maxDeg = Math.max(...nodes.map(n => degree[n.id] ?? 1), 1);
+      const thermalColor = (n: GraphNode) => {
+         let score = (degree[n.id] ?? 1) / maxDeg;
+         if (n.type === "company" || n.type === "professor") score = Math.min(1, score + 0.35);
+         if (score < 0.15) return "#020b1e"; // Cold deep space
+         if (score < 0.35) return "#240046"; // Cold purple
+         if (score < 0.55) return "#7b2cbf"; // Warm magenta
+         if (score < 0.75) return "#f72585"; // Hot pink/red
+         if (score < 0.90) return "#ff9e00"; // Hot orange
+         return "#ffff3f"; // White/Yellow core heat
+      };
+      
+      nodeSel.select("circle.main-circle").transition().duration(800)
+        .attr("fill", thermalColor)
+        .attr("stroke", thermalColor);
+      nodeSel.select("circle.node-aura-halo").transition().duration(800)
+        .attr("fill", thermalColor);
+      nodeSel.select("circle.node-aura-ring").transition().duration(800)
+        .attr("stroke", thermalColor);
+      
+    } else {
+      nodeSel.select("circle.main-circle").transition().duration(800)
+        .attr("fill", (d: GraphNode) => d.id === user?.id ? "#facc15" : TYPE_COLOR[d.type])
+        .attr("stroke", (d: GraphNode) => d.id === user?.id ? "#fef3c7" : TYPE_COLOR[d.type]);
+      nodeSel.select("circle.node-aura-halo").transition().duration(800)
+        .attr("fill", (d: GraphNode) => TYPE_COLOR[d.type]);
+      nodeSel.select("circle.node-aura-ring").transition().duration(800)
+        .attr("stroke", (d: GraphNode) => TYPE_COLOR[d.type]);
+    }
+  }, [heatmapMode, nodes, links, user?.id]);
+
+  useEffect(() => {
     const walkthrough2DActive = demoMode && viewMode === "2d";
     const updateOverlaySafeZones = () => {
       const root = rootRef.current;
@@ -1867,9 +3599,10 @@ export default function CampusGraph() {
     };
     const raf = requestAnimationFrame(runScan);
     return () => cancelAnimationFrame(raf);
-  }, [selectedNode?.id, viewMode, demoMode, mode, pathNodeIds.length, overlaySafeRight]);
+  }, [selectedNode, selectedNode?.id, viewMode, demoMode, mode, pathNodeIds.length, overlaySafeRight]);
 
   const selectNodeFromSpatial = useCallback((id: string) => {
+    noteInteraction();
     const n = nodes.find((x) => x.id === id);
     if (!n) return;
     setDemoMode(false);
@@ -1884,7 +3617,7 @@ export default function CampusGraph() {
     setSelectedNode(n);
     setMode("locked");
     setSpatialFocusNodeIds([n.id]);
-  }, [nodes]);
+  }, [nodes, noteInteraction]);
 
   const handleSearchEnter = useCallback(() => {
     if (searchMatches.length !== 1) return;
@@ -1897,11 +3630,12 @@ export default function CampusGraph() {
   }, [searchMatches, viewMode, selectNodeFromSpatial, selectNodeFn]);
 
   const handleSpatialBackgroundClick = useCallback(() => {
+    noteInteraction();
     setEdgeExplain(null);
     if (modeRef.current !== "free") {
       deselectAll();
     }
-  }, [deselectAll]);
+  }, [deselectAll, noteInteraction]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1915,6 +3649,10 @@ export default function CampusGraph() {
         if (demoTimerRef.current) {
           window.clearTimeout(demoTimerRef.current);
           demoTimerRef.current = null;
+        }
+        if (selectionCommitTimerRef.current) {
+          window.clearTimeout(selectionCommitTimerRef.current);
+          selectionCommitTimerRef.current = null;
         }
       }
     };
@@ -2135,6 +3873,7 @@ export default function CampusGraph() {
   }, [mode, multiSelectedIds.size]);
 
   const stopDemoMode = useCallback(() => {
+    noteInteraction();
     setDemoMode(false);
     setDemoStep(0);
     demoAppliedStepRef.current = -1;
@@ -2151,9 +3890,14 @@ export default function CampusGraph() {
       window.clearTimeout(demoTimerRef.current);
       demoTimerRef.current = null;
     }
-  }, [exitToFree]);
+    if (selectionCommitTimerRef.current) {
+      window.clearTimeout(selectionCommitTimerRef.current);
+      selectionCommitTimerRef.current = null;
+    }
+  }, [exitToFree, noteInteraction]);
 
   const startDemoMode = useCallback(() => {
+    noteInteraction();
     stopDemoMode();
     setEdgeExplain(null);
     setHiddenTypes(new Set());
@@ -2169,7 +3913,17 @@ export default function CampusGraph() {
     setDemoStep(0);
     demoAppliedStepRef.current = -1;
     setDemoMessage("Step 1/4 · Focus on your profile node");
-  }, [exitToFree, stopDemoMode]);
+  }, [exitToFree, noteInteraction, stopDemoMode]);
+  const stageDemoMessage = useCallback((message: string, delayMs = 220) => {
+    if (demoTimerRef.current) {
+      window.clearTimeout(demoTimerRef.current);
+      demoTimerRef.current = null;
+    }
+    demoTimerRef.current = window.setTimeout(() => {
+      setDemoMessage(message);
+      demoTimerRef.current = null;
+    }, delayMs);
+  }, []);
   useEffect(() => {
     if (!demoMode) return;
     if (demoAppliedStepRef.current === demoStep) return;
@@ -2177,7 +3931,7 @@ export default function CampusGraph() {
 
     const userNode = currentUserNode;
     if (!userNode) {
-      setDemoMessage("Walkthrough unavailable: current profile node is not present in this graph.");
+      stageDemoMessage("Walkthrough unavailable: current profile node is not present in this graph.", 120);
       return;
     }
     const userNeighbors = topNeighbors(userNode, 8);
@@ -2187,7 +3941,8 @@ export default function CampusGraph() {
     const demoCompany = reachableCompanies[0];
 
     if (demoStep === 0 && userNode) {
-      setDemoMessage("Step 1/4 - Focus on your profile node");
+      stageDemoMessage("Step 1/4 - Focus on your profile node", 220);
+      if (viewMode === "2d") triggerFullSystemPulse(userNode.id);
       if (viewMode === "3d") {
         selectedIdRef.current = userNode.id;
         setSelectedNode(userNode);
@@ -2199,7 +3954,8 @@ export default function CampusGraph() {
       return;
     }
     if (demoStep === 1 && userNode) {
-      setDemoMessage("Step 2/4 - Nearby clubs and interests reveal your network context");
+      stageDemoMessage("Step 2/4 - Nearby clubs and interests reveal your network context", 240);
+      if (viewMode === "2d") triggerFullSystemPulse(userNode.id);
       const focusIds = [userNode.id, ...(contextNeighbors.length ? contextNeighbors : userNeighbors.slice(0, 2)).map((n) => n.id)];
       if (viewMode === "3d") {
         setSpatialFocusNodeIds(focusIds);
@@ -2209,7 +3965,8 @@ export default function CampusGraph() {
       return;
     }
     if (demoStep === 2 && demoCompany) {
-      setDemoMessage(`Step 3/4 - Trace strongest path to ${demoCompany.label}`);
+      stageDemoMessage(`Step 3/4 - Trace strongest path to ${demoCompany.label}`, 260);
+      if (viewMode === "2d") triggerFullSystemPulse(demoCompany.id);
       setCompanyQuery(demoCompany.label);
       if (viewMode === "3d") {
         setSpatialFocusNodeIds(userNode ? [userNode.id, demoCompany.id] : [demoCompany.id]);
@@ -2218,12 +3975,12 @@ export default function CampusGraph() {
       return;
     }
     if (demoStep === 3) {
-      setDemoMessage("Step 4/4 - Path insight: your network has a credible route to this opportunity");
+      stageDemoMessage("Step 4/4 - Path insight: your network has a credible route to this opportunity", 260);
       if (viewMode === "3d" && pathNodeIds.length) {
         setSpatialFocusNodeIds(pathNodeIds);
       }
     }
-  }, [demoMode, demoStep, currentUserNode, topNeighbors, reachableCompanies, selectNodeFn, fitToNodeIds, findPath, viewMode, pathNodeIds]);
+  }, [demoMode, demoStep, currentUserNode, topNeighbors, reachableCompanies, selectNodeFn, fitToNodeIds, findPath, viewMode, pathNodeIds, triggerFullSystemPulse, stageDemoMessage]);
 
   const demoBack = useCallback(() => {
     setDemoStep((s) => Math.max(0, s - 1));
@@ -2271,7 +4028,7 @@ export default function CampusGraph() {
   const walkthroughInsightNode = selectedNode ?? currentUserNode;
   const walkthroughTargetCompany = companyQuery || reachableCompanies[0]?.label || "a target company";
 
-  const edgeExplainStyle = useMemo(() => {
+  const edgeExplainStyle = (() => {
     if (!edgeExplain || !rootRef.current) return undefined;
     const rootRect = rootRef.current.getBoundingClientRect();
     const cardW = 320;
@@ -2296,10 +4053,10 @@ export default function CampusGraph() {
       }
     }
     return { left: `${x}px`, top: `${y}px` };
-  }, [edgeExplain, overlayNoFlyRect]);
+  })();
 
   return (
-    <div className="root" ref={rootRef}>
+    <div className={`root perf-${motionTier}`} ref={rootRef} data-motion-tier={motionTier}>
 
       {/* Intro animation overlay — renders on top while graph loads underneath */}
       {!introComplete && <NetworkIntro onComplete={handleIntroComplete} />}
@@ -2337,7 +4094,7 @@ export default function CampusGraph() {
                 setViewMode("3d");
               }}
             >
-              2.5D Spatial
+              3D Globe
             </button>
           </div>
           <button
@@ -2348,6 +4105,11 @@ export default function CampusGraph() {
             {demoMode ? "Exit Walkthrough" : "Start Walkthrough"}
           </button>
           <span className={`graphModeBadge graphModeBadge--${mode}`}>{modeLabel}</span>
+          {perfDebug && (
+            <span className="graphHeaderChip graphHeaderChip--perf">
+              motion: <strong>{motionTier}</strong>
+            </span>
+          )}
           <span className="graphHeaderChip">
             <strong>{userConnCount}</strong>
             <span>connections</span>
@@ -2370,6 +4132,24 @@ export default function CampusGraph() {
       <div className="toolbar">
         <SearchBar value={searchQuery} onChange={setSearchQuery} onEnter={handleSearchEnter} />
         <FilterBar hiddenTypes={hiddenTypes} onToggleType={toggleType} />
+        <button
+          className={`btn-ghost ${lensMode ? "active" : ""}`}
+          style={{ padding: "4px 8px", background: lensMode ? "rgba(250, 204, 21, 0.2)" : undefined, color: lensMode ? "#facc15" : undefined, border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}
+          onClick={() => setLensMode(p => !p)}
+          title="Toggle Fisheye Lens"
+        >
+          <Crosshair size={14} />
+          {lensMode ? "Lens Mode: ON" : "Lens Mode"}
+        </button>
+        <button
+          className={`btn-ghost ${heatmapMode ? "active" : ""}`}
+          style={{ padding: "4px 8px", background: heatmapMode ? "rgba(255, 69, 0, 0.2)" : undefined, color: heatmapMode ? "#ff4500" : undefined, border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}
+          onClick={() => setHeatmapMode(p => !p)}
+          title="Toggle Thermal Heatmap"
+        >
+          <Flame size={14} />
+          {heatmapMode ? "Heatmap: ON" : "Heatmap"}
+        </button>
         {multiSelectedIds.size > 0 && (
           <button type="button" className="graphClearBtn" onClick={() => setMultiSelectedIds(new Set())}>
             Clear Multi-Select ({multiSelectedIds.size})
@@ -2419,6 +4199,61 @@ export default function CampusGraph() {
       </div>
 
       {/* Main */}
+      <div className="main" data-heatmap={heatmapMode}>
+        <div ref={ambientFxRef} className={`graphAmbientFx${viewMode === "3d" ? " graphAmbientFx--hidden" : ""}`} aria-hidden="true">
+          <div className="graphAmbientLayer graphAmbientLayer--far" ref={ambientFarRef}>
+            {ambientSpecks.far.map((speck) => (
+              <span
+                key={speck.id}
+                className={`graphSpeck${speck.twinkle ? " graphSpeck--twinkle" : ""}`}
+                style={{
+                  left: `${speck.x}%`,
+                  top: `${speck.y}%`,
+                  width: `${speck.size}px`,
+                  height: `${speck.size}px`,
+                  opacity: speck.opacity,
+                }}
+              />
+            ))}
+          </div>
+          <div className="graphAmbientLayer graphAmbientLayer--mid" ref={ambientMidRef}>
+            {ambientSpecks.mid.map((speck) => (
+              <span
+                key={speck.id}
+                className={`graphSpeck graphSpeck--mid${speck.twinkle ? " graphSpeck--twinkle" : ""}`}
+                style={{
+                  left: `${speck.x}%`,
+                  top: `${speck.y}%`,
+                  width: `${speck.size}px`,
+                  height: `${speck.size}px`,
+                  opacity: speck.opacity,
+                }}
+              />
+            ))}
+          </div>
+          <div className="graphAmbientLayer graphAmbientLayer--near" ref={ambientNearRef}>
+            {ambientSpecks.near.map((speck) => (
+              <span
+                key={speck.id}
+                className={`graphSpeck graphSpeck--near${speck.twinkle ? " graphSpeck--twinkle" : ""}`}
+                style={{
+                  left: `${speck.x}%`,
+                  top: `${speck.y}%`,
+                  width: `${speck.size}px`,
+                  height: `${speck.size}px`,
+                  opacity: speck.opacity,
+                }}
+              />
+            ))}
+          </div>
+          <div className="graphAmbientGrain" ref={ambientGrainRef} />
+          <div className="graphEnergyField graphEnergyField--density" ref={energyDensityRef} />
+          <div className="graphEnergyField graphEnergyField--core" ref={energyCoreRef} />
+          <div className="graphAmbientFog graphAmbientFog--core" />
+          <div className="graphAmbientFog graphAmbientFog--secondary" />
+          <div className="graphAmbientSpecks" />
+          <div className="graphScanSweep" ref={scanSweepRef} />
+        </div>
       <div className="main">
         <div className="bgGlow" />
         <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} />
@@ -2560,4 +4395,3 @@ export default function CampusGraph() {
     </div>
   );
 }
-

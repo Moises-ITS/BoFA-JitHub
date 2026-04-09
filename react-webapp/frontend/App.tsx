@@ -156,19 +156,19 @@ export default function App() {
                   </Suspense>
                 </ErrorBoundary>
               } />
-              <Route path="/research" element={
-                <ErrorBoundary>
-                  <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0a0b10", color:"#718096" }}>Loading Research Districts…</div>}>
-                    <ResearchDistricts />
-                  </Suspense>
-                </ErrorBoundary>
-              } />
 
               <Route element={<Layout />}>
                 <Route path="/home" element={<Home />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/events" element={<EventsPage />} />
                 <Route path="/opportunities" element={<OpportunitiesPage />} />
+                <Route path="/research" element={
+                  <ErrorBoundary>
+                    <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"calc(100vh - 64px)", background:"#0a0b10", color:"#718096", margin: "-24px" }}>Loading Research Districts…</div>}>
+                      <ResearchDistricts />
+                    </Suspense>
+                  </ErrorBoundary>
+                } />
                 <Route
                   path="/network"
                   element={

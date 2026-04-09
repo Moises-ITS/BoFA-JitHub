@@ -501,7 +501,7 @@ export default function ResearchDistrictsScene() {
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
   const reset = () => { setFocusedDistrict(null); setSelectedBuilding(null); };
   useEffect(() => { const onEsc = (e: KeyboardEvent) => e.key === "Escape" && reset(); window.addEventListener("keydown", onEsc); return () => window.removeEventListener("keydown", onEsc); }, []);
-  return <div className="relative h-screen w-full overflow-hidden bg-[#02030a] text-white">
+  return <div className="relative overflow-hidden bg-[#02030a] text-white" style={{ margin: "-24px", height: "calc(100vh - 64px)" }}>
     <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,rgba(76,115,255,0.24),transparent_24%),radial-gradient(circle_at_82%_20%,rgba(255,92,168,0.18),transparent_20%),radial-gradient(circle_at_50%_0%,rgba(144,89,255,0.16),transparent_28%),radial-gradient(circle_at_50%_100%,rgba(45,85,160,0.22),transparent_34%),linear-gradient(180deg,#02030a_0%,#050814_44%,#09111d_100%)]" />
     <div className="absolute inset-0 opacity-70" style={{ backgroundImage: "radial-gradient(1px 1px at 12% 20%, rgba(255,255,255,0.95), transparent 60%), radial-gradient(1.2px 1.2px at 24% 72%, rgba(180,210,255,0.9), transparent 60%), radial-gradient(1px 1px at 38% 28%, rgba(255,255,255,0.82), transparent 60%), radial-gradient(1.4px 1.4px at 52% 16%, rgba(161,196,255,0.95), transparent 60%), radial-gradient(1px 1px at 63% 60%, rgba(255,255,255,0.9), transparent 60%), radial-gradient(1.3px 1.3px at 74% 26%, rgba(255,209,240,0.8), transparent 60%), radial-gradient(1px 1px at 88% 68%, rgba(255,255,255,0.85), transparent 60%)" }} />
     <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-4 p-4 md:flex-row md:items-start md:justify-between md:p-6">
@@ -516,23 +516,27 @@ export default function ResearchDistrictsScene() {
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="pointer-events-auto relative z-50 flex items-center gap-3 self-start transition-all duration-300 md:ml-auto">
-        <AnimatePresence>
-          {!focusedDistrict && (
-            <motion.a
-              href="/home"
+      <div className={`pointer-events-auto relative z-50 flex items-center gap-3 self-start transition-all duration-300 ${focusedDistrict ? "" : "md:ml-auto"}`}>
+        <AnimatePresence mode="popLayout">
+          {focusedDistrict && (
+            <motion.button
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              key="to-home"
-              style={{ pointerEvents: 'all', cursor: 'pointer', zIndex: 9999 }}
+              key="to-map"
+              type="button"
               onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                reset();
+              }}
               whileHover={{ scale: 1.04, y: -1 }}
               whileTap={{ scale: 0.97 }}
-              className="inline-block rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.15)] backdrop-blur-md transition-colors hover:bg-white/10"
+              className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.15)] backdrop-blur-md transition-colors hover:bg-white/10"
             >
-              Return to Home Page
-            </motion.a>
+              Return to Map
+            </motion.button>
           )}
         </AnimatePresence>
       </div>

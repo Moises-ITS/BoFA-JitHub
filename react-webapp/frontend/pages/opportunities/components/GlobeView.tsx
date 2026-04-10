@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Stars, useTexture } from '@react-three/drei';
+import { Stars, useTexture, Html } from '@react-three/drei';
 import { useRef, useMemo, useEffect, Suspense, useState } from 'react';
 import * as THREE from 'three';
 import type { BufferGeometry, LineBasicMaterial } from 'three';
@@ -97,7 +97,30 @@ function ClusterGroup({
   const clusterHaloRef = useRef<THREE.Mesh>(null!);
   const dotRefs    = useRef<(THREE.Mesh | null)[]>([]);
   const dotHaloRefs = useRef<(THREE.Mesh | null)[]>([]);
-  const lineRefs = useRef<(THREE.Line<BufferGeometry, LineBasicMaterial> | null)[]>([]);
+  const lineRefs   = useRef<(THREE.Line<BufferGeometry, LineBasicMaterial> | null)[]>([]);
+  const pulseRef   = useRef<THREE.Mesh>(null!);
+  const pulsePhase = useRef(0);
+
+  const [hoveredCluster, setHoveredCluster] = useState(false);
+  const [hoveredOppId,   setHoveredOppId]   = useState<string | null>(null);
+
+  const tooltipOpp  = hoveredOppId ? (cluster.opps.find((o) => o.id === hoveredOppId) ?? null) : null;
+  const showTooltip = hoveredCluster || hoveredOppId !== null;
+  const tooltipPos  = useMemo<[number, number, number]>(() => (
+    tooltipOpp
+      ? ll(tooltipOpp.lat, tooltipOpp.lng, GLOBE_R + 0.55)
+      : ll(cluster.lat, cluster.lng, GLOBE_R + 0.55)
+  ), [tooltipOpp, cluster.lat, cluster.lng]);
+
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    cluster.opps.forEach((o) => { counts[o.type] = (counts[o.type] ?? 0) + 1; });
+    return counts;
+  }, [cluster.opps]);
+
+  const activeOppColor = isActive
+    ? TYPE_COLOR[cluster.opps.find((o) => o.id === activeId)?.type ?? cluster.opps[0].type]
+    : '#ffffff';
 
   useFrame((state, delta) => {
     const t         = state.clock.elapsedTime;
@@ -161,12 +184,37 @@ function ClusterGroup({
         );
       }
     });
+
+    /* Pulsing ring on active pin */
+    if (pulseRef.current) {
+      if (isActive) {
+        pulsePhase.current = (pulsePhase.current + delta * 1.1) % 1;
+        const activeIdx = cluster.opps.findIndex((o) => o.id === activeId);
+        const dotRef = activeIdx >= 0 ? dotRefs.current[activeIdx] : null;
+        if (dotRef && exp.current > 0.15) {
+          pulseRef.current.position.copy(dotRef.position);
+        } else {
+          pulseRef.current.position.set(center[0], center[1], center[2]);
+        }
+        pulseRef.current.scale.setScalar(1 + pulsePhase.current * 3.2);
+        (pulseRef.current.material as THREE.MeshBasicMaterial).opacity =
+          Math.max(0, 0.55 * (1 - pulsePhase.current));
+      } else {
+        pulsePhase.current = 0;
+        (pulseRef.current.material as THREE.MeshBasicMaterial).opacity = 0;
+      }
+    }
   });
 
   return (
     <>
       {/* Main cluster bubble */}
-      <mesh ref={clusterRef} position={center}>
+      <mesh
+        ref={clusterRef}
+        position={center}
+        onPointerOver={(e) => { e.stopPropagation(); setHoveredCluster(true); document.body.style.cursor = 'pointer'; }}
+        onPointerOut={() => { setHoveredCluster(false); document.body.style.cursor = 'auto'; }}
+      >
         <sphereGeometry args={[clusterSize, 8, 8]} />
         <meshBasicMaterial color={clusterColor} transparent opacity={1} />
       </mesh>
@@ -180,6 +228,65 @@ function ClusterGroup({
           depthWrite={false}
         />
       </mesh>
+
+      {/* Pulsing ring — expands outward from active pin */}
+      <mesh ref={pulseRef} position={center}>
+        <sphereGeometry args={[0.062, 16, 16]} />
+        <meshBasicMaterial
+          color={activeOppColor}
+          transparent
+          opacity={0}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* Hover tooltip */}
+      {showTooltip && (
+        <Html position={tooltipPos} center zIndexRange={[100, 0]}>
+          <div style={{
+            background: 'rgba(6,9,26,0.93)',
+            border: '1px solid rgba(255,255,255,0.13)',
+            borderRadius: 9,
+            padding: '8px 12px',
+            color: '#e2e8f0',
+            fontSize: '12px',
+            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+            maxWidth: 230,
+          }}>
+            {tooltipOpp ? (
+              <>
+                <div style={{ fontWeight: 700, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {tooltipOpp.title}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: TYPE_COLOR[tooltipOpp.type], fontWeight: 600, fontSize: '11px', textTransform: 'capitalize' }}>
+                    {tooltipOpp.type}
+                  </span>
+                  <span style={{ color: '#8a97b0', fontSize: '11px' }}>·</span>
+                  <span style={{ color: '#8a97b0', fontSize: '11px' }}>{tooltipOpp.org}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>{n} opportunities</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {Object.entries(typeCounts).map(([type, count]) => (
+                    <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: TYPE_COLOR[type], display: 'inline-block', flexShrink: 0 }} />
+                      <span style={{ color: '#8a97b0', fontSize: '11px', textTransform: 'capitalize' }}>{count} {type}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </Html>
+      )}
 
       {/* Individual dots — start at center, animate to ring */}
       {cluster.opps.map((opp, i) => (
@@ -218,6 +325,8 @@ function ClusterGroup({
           <mesh
             ref={(el) => { dotRefs.current[i] = el; }}
             position={center}
+            onPointerOver={(e) => { e.stopPropagation(); setHoveredOppId(opp.id); document.body.style.cursor = 'pointer'; }}
+            onPointerOut={() => { setHoveredOppId(null); document.body.style.cursor = 'auto'; }}
           >
             <sphereGeometry args={[0.036, 16, 16]} />
             <meshBasicMaterial
@@ -310,7 +419,10 @@ function GlobeGroup({
   const targetCamZ = useRef(CAM_DEFAULT);
   const targetCamY = useRef(0);
 
-  const clusters  = useMemo(() => buildClusters(opportunities), [opportunities]);
+  const clusters  = useMemo(
+    () => buildClusters(opportunities.filter((o) => o.lat !== 0 || o.lng !== 0)),
+    [opportunities],
+  );
   const activeOpp = useMemo(
     () => opportunities.find((o) => o.id === activeId) ?? null,
     [opportunities, activeId],
@@ -471,15 +583,15 @@ export default function GlobeView({
         <div className="opportunities-globe-legend-title">Globe Guide</div>
         <div className="opportunities-globe-legend-item">
           <span className="opportunities-globe-legend-dot internship" />
-          Orb size grows with opportunity density
+          Internship
         </div>
         <div className="opportunities-globe-legend-item">
           <span className="opportunities-globe-legend-dot scholarship" />
-          Color shows the dominant opportunity type
+          Scholarship
         </div>
         <div className="opportunities-globe-legend-item">
           <span className="opportunities-globe-legend-dot networking" />
-          Zoom in to unpack clusters into real locations
+          Networking
         </div>
       </div>
     </div>

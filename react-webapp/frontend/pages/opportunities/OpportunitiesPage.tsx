@@ -26,6 +26,7 @@ export default function OpportunitiesPage() {
     districtFilter, setDistrictFilter,
     locationFilter, setLocationFilter, locationOptions,
     sortBy, setSortBy, urgencyFilter, setUrgencyFilter,
+    searchQuery, setSearchQuery,
   } = useOpportunities(districtParam);
 
 
@@ -124,7 +125,8 @@ export default function OpportunitiesPage() {
     filter !== 'all' ||
     locationFilter !== 'all' ||
     urgencyFilter !== 'all' ||
-    districtFilter !== null;
+    districtFilter !== null ||
+    searchQuery !== '';
   const focusedLabel = selectedOpportunity
     ? `${selectedOpportunity.city}, ${getLocationLabel(getCountry(selectedOpportunity.city).country)}`
     : null;
@@ -215,6 +217,27 @@ export default function OpportunitiesPage() {
                 </span>
               </button>
             ))}
+          </div>
+
+          <div className="opportunities-search-wrap">
+            <svg className="opportunities-search-icon" viewBox="0 0 20 20" fill="none">
+              <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.6"/>
+              <path d="M13.5 13.5L17 17" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+            <input
+              className="opportunities-search-input"
+              type="text"
+              placeholder="Search by title, org, or tag…"
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setActiveId(null); }}
+            />
+            {searchQuery && (
+              <button
+                className="opportunities-search-clear"
+                onClick={() => { setSearchQuery(''); setActiveId(null); }}
+                aria-label="Clear search"
+              >×</button>
+            )}
           </div>
 
           <div className="opportunities-location-filter">
@@ -363,6 +386,7 @@ export default function OpportunitiesPage() {
                 setLocationFilter('all');
                 setUrgencyFilter('all');
                 setDistrictFilter(null);
+                setSearchQuery('');
                 setActiveId(null);
               }}
               onSortChange={setSortBy}

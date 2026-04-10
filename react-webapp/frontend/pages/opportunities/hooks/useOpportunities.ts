@@ -70,6 +70,7 @@ export function useOpportunities(initialDistrict?: string | null) {
   const [locationFilter, setLocationFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<SortType>('best-match');
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyFilter>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
     fetch(`${API}/api/opportunities?limit=300`)
@@ -137,6 +138,25 @@ export function useOpportunities(initialDistrict?: string | null) {
       : urgencyScoped.filter((opportunity) => opportunity.type === filter)
   ), [filter, urgencyScoped]);
 
+  const searchScoped = useMemo(() => {
+    const q = searchQuery.trim();
+    if (!q) return filtered;
+    const terms = q.split(/\s+/).filter(Boolean);
+    return filtered.filter((opportunity) =>
+      terms.every((term) => {
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(`\\b${escaped}\\b`, 'i');
+        return (
+          re.test(opportunity.title) ||
+          re.test(opportunity.org) ||
+          opportunity.tags.some((tag) =>
+            tag.split(/[\s-]+/).some((word) => word.toLowerCase() === term.toLowerCase())
+          )
+        );
+      })
+    );
+  }, [filtered, searchQuery]);
+
   const sortedFiltered = useMemo(() => {
     const indexMap = new Map(allOpportunities.map((opportunity, index) => [opportunity.id, index]));
     const trackedMap = new Map(tracked.map((item) => [item.opportunityId, item]));
@@ -154,7 +174,7 @@ export function useOpportunities(initialDistrict?: string | null) {
       return score;
     };
 
-    return [...filtered].sort((a, b) => {
+    return [...searchScoped].sort((a, b) => {
       if (sortBy === 'due-soon') {
         const delta = getDaysUntilDeadline(a.deadline) - getDaysUntilDeadline(b.deadline);
         if (delta !== 0) return delta;
@@ -175,7 +195,7 @@ export function useOpportunities(initialDistrict?: string | null) {
       const bIndex = indexMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
       return aIndex - bIndex;
     });
-  }, [allOpportunities, districtFilter, filtered, sortBy, tracked]);
+  }, [allOpportunities, districtFilter, searchScoped, sortBy, tracked]);
 
   const counts = useMemo(() => ({
     all: urgencyScoped.length,
@@ -246,5 +266,7 @@ export function useOpportunities(initialDistrict?: string | null) {
     setSortBy,
     urgencyFilter,
     setUrgencyFilter,
+    searchQuery,
+    setSearchQuery,
   };
 }

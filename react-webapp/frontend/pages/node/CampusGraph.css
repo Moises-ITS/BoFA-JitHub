@@ -55,7 +55,6 @@
 .root.perf-performance .graphAmbientLayer--near { opacity: 0.26; }
 .root.perf-performance .graphAmbientSpecks { opacity: 0.3; animation-duration: 34s; }
 .root.perf-performance .graphSpeck--twinkle { animation-duration: 8.2s; }
-.root.perf-performance .cluster-aura-layer .cluster-aura { opacity: 0.7; }
 .root.perf-performance .node-aura-halo { filter: blur(3px); }
 .root.perf-performance .link-hover-energized { animation-duration: 1.5s; filter: drop-shadow(0 0 5px rgba(156, 214, 255, 0.52)); }
 .root.perf-performance .flow-particle { filter: drop-shadow(0 0 4px rgba(168, 219, 255, 0.62)); }
@@ -787,6 +786,11 @@
 .link-t2 { stroke: #3d6080; stroke-dasharray: 3 30; animation: flowParticle 3.5s linear infinite; }
 .link-t3 { stroke: #253448; stroke-dasharray: 2 40; animation: flowParticle 5s linear infinite; }
 .link-dashed { stroke-dasharray: 5,4 !important; animation: none; }
+.link-company-primary {
+  stroke-dasharray: none !important;
+  animation: none !important;
+  stroke-linecap: round;
+}
 
 /* Student↔student CONNECTED_TO edges — traveling light-ball effect */
 @keyframes flowBall {
@@ -965,25 +969,6 @@
 }
 
 .company-ring { pointer-events: none; }
-.cluster-aura-layer .cluster-aura {
-  mix-blend-mode: screen;
-  transition: opacity 0.45s ease;
-}
-.cluster-aura--student {
-  fill: rgba(102, 168, 255, 0.14);
-}
-.cluster-aura--company {
-  fill: rgba(147, 197, 253, 0.18);
-}
-.cluster-aura--club {
-  fill: rgba(251, 191, 36, 0.13);
-}
-.cluster-aura--interest {
-  fill: rgba(167, 139, 250, 0.12);
-}
-.cluster-aura--professor {
-  fill: rgba(110, 231, 183, 0.1);
-}
 .node-satellite-layer .node-satellite {
   pointer-events: none;
   filter: drop-shadow(0 0 4px rgba(191, 232, 255, 0.85));

@@ -136,7 +136,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     if (!node || !user) return;
     setConnLoading(true);
     try {
-      const res = await fetch(`${API}/api/connections/${node.id}`, {
+      const res = await fetch(`${API}/api/connections/by-user/${node.id}`, {
         method:  "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -318,7 +318,6 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     </div>
   );
 }
-
 
 
 

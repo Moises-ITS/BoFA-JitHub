@@ -23,6 +23,10 @@ class BatchStatusBody(BaseModel):
     event_ids: List[int]
 
 
+class BatchAttendeesBody(BaseModel):
+    event_ids: List[int]
+
+
 @router.get("/user/{user_id}")
 def get_user_rsvps(user_id: str, db: Session = Depends(get_db)):
     """Return every event the user is currently RSVP'd to."""
@@ -121,6 +125,45 @@ def get_attendees(event_id: int, db: Session = Depends(get_db)):
         for r in rows[:20]
     ]
     return {"count": len(rows), "preview": preview}
+
+
+@router.post("/batch-attendees")
+def batch_attendees(body: BatchAttendeesBody, db: Session = Depends(get_db)):
+    """Return attendee counts and previews for multiple events in one request."""
+    if not body.event_ids:
+        return {}
+
+    rows = (
+        db.query(
+            models.EventRSVP.event_id,
+            models.EventRSVP.user_id,
+            models.EventRSVP.user_name,
+            models.EventRSVP.user_major,
+        )
+        .filter(
+            models.EventRSVP.event_id.in_(body.event_ids),
+            models.EventRSVP.status == "going",
+        )
+        .order_by(models.EventRSVP.event_id.asc(), models.EventRSVP.rsvp_time.desc())
+        .all()
+    )
+
+    attendee_map = {
+        str(event_id): {"count": 0, "preview": []}
+        for event_id in body.event_ids
+    }
+
+    for row in rows:
+        entry = attendee_map[str(row.event_id)]
+        entry["count"] += 1
+        if len(entry["preview"]) < 20:
+            entry["preview"].append({
+                "user_id": row.user_id,
+                "user_name": row.user_name or "Anonymous",
+                "user_major": row.user_major or "",
+            })
+
+    return attendee_map
 
 
 @router.post("/batch-status")

@@ -261,7 +261,7 @@ export default function SandboxPage() {
   }
 
   function isContextRelevant(text: string): boolean {
-    return /event|club|org|connect|network|people|trending|popular|semester|happening|rsvp|attend|hackathon|workshop|panel|social|recruit|intern|research|food|talk|meet|who should|what'?s? (going|up|on)|top|shpe|ieee|acm|wics|nsbe|swe|greek|fraternity|sorority/i.test(text);
+    return /event|club|org|connect|network|people|trending|popular|semester|happening|rsvp|attend|hackathon|workshop|panel|social|recruit|intern|research|food|talk|meet|who should|what'?s? (going|up|on)|top|shpe|ieee|acm|wics|nsbe|swe|haccs|greek|fraternity|sorority/i.test(text);
   }
 
   function emptyContext() {

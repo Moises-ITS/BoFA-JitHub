@@ -8,6 +8,7 @@ import LoginPage from "./pages/auth/LoginPage"
 import SignupPage from "./pages/auth/SignupPage"
 import ProfileSetupPage from "./pages/auth/ProfileSetupPage"
 import Home from "./pages/home/Home"
+import ReportIssuePage from "./pages/home/ReportIssuePage"
 import Profile from "./pages/profile/profile"
 import EventsPage from "./pages/events/EventsPage"
 import OpportunitiesPage from "./pages/opportunities/OpportunitiesPage"
@@ -159,6 +160,7 @@ export default function App() {
 
               <Route element={<Layout />}>
                 <Route path="/home" element={<Home />} />
+                <Route path="/report-issue" element={<ReportIssuePage />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/events" element={<EventsPage />} />
                 <Route path="/opportunities" element={<OpportunitiesPage />} />

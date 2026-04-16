@@ -173,7 +173,7 @@ function toTitleCase(s: string) {
 }
 
 export default function ProfileSetupPage() {
-  const { syncProfile, user: appUser, loading: authLoading } = useAuth()
+  const { syncProfile, user: appUser, token, loading: authLoading } = useAuth()
   const { isSignedIn, isLoaded } = useClerkAuth()
   const { user: clerkUser } = useUser()
   const navigate = useNavigate()
@@ -202,14 +202,17 @@ export default function ProfileSetupPage() {
 
   // Merge hardcoded baseline with any custom interests from other users
   useEffect(() => {
-    fetch(`${API}/api/auth/interests`)
+    if (!token) return
+    fetch(`${API}/api/auth/interests`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then(r => r.ok ? r.json() : [])
       .then((fetched: string[]) => {
         const merged = Array.from(new Set([...KNOWN_INTERESTS, ...fetched])).sort()
         setAvailableInterests(merged)
       })
       .catch(() => {/* keep baseline on failure */})
-  }, [])
+  }, [token])
 
   // Sync name if Clerk loads after mount
   useEffect(() => {

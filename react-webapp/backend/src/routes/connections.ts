@@ -2,6 +2,8 @@ import { Router, Response } from "express"
 import { db } from "../config/postgres"
 import { requireAuth, AuthRequest } from "../middlewear/auth"
 import { createConnectionInNeo4j, removeConnectionFromNeo4j, getRecommendations } from "../services/graphService"
+import { connectionActionRateLimiter } from "../middlewear/authRateLimit"
+import { requireSafeId, toBoundedPositiveInt } from "../middlewear/security"
 
 const router = Router()
 
@@ -12,7 +14,8 @@ router.use(requireAuth)
 router.get("/status", async (req: AuthRequest, res: Response) => {
   const { userId } = req.query
   const myId = req.userId!
-  if (!userId || typeof userId !== "string") {
+  const safeUserId = requireSafeId(userId)
+  if (!safeUserId) {
     res.status(400).json({ error: "userId required" })
     return
   }
@@ -23,7 +26,7 @@ router.get("/status", async (req: AuthRequest, res: Response) => {
        WHERE (from_user_id = $1 AND to_user_id = $2)
           OR (from_user_id = $2 AND to_user_id = $1)
        LIMIT 1`,
-      [myId, userId]
+      [myId, safeUserId]
     )
     if (result.rows.length === 0) {
       res.json({ status: "none" })
@@ -91,22 +94,23 @@ router.get("/recommendations", async (req: AuthRequest, res: Response) => {
 })
 
 // POST /api/connections/request — send a connection request
-router.post("/request", async (req: AuthRequest, res: Response) => {
+router.post("/request", connectionActionRateLimiter, async (req: AuthRequest, res: Response) => {
   const { toUserId } = req.body
   const fromUserId = req.userId!
+  const safeToUserId = requireSafeId(toUserId)
 
-  if (!toUserId) {
+  if (!safeToUserId) {
     res.status(400).json({ error: "toUserId is required" })
     return
   }
-  if (toUserId === fromUserId) {
+  if (safeToUserId === fromUserId) {
     res.status(400).json({ error: "Cannot connect to yourself" })
     return
   }
 
   try {
     // Check target user exists
-    const target = await db.query("SELECT id FROM users WHERE id = $1", [toUserId])
+    const target = await db.query("SELECT id FROM users WHERE id = $1", [safeToUserId])
     if (target.rows.length === 0) {
       res.status(404).json({ error: "User not found" })
       return
@@ -117,7 +121,7 @@ router.post("/request", async (req: AuthRequest, res: Response) => {
       `SELECT id, status FROM connection_requests
        WHERE (from_user_id = $1 AND to_user_id = $2)
           OR (from_user_id = $2 AND to_user_id = $1)`,
-      [fromUserId, toUserId]
+      [fromUserId, safeToUserId]
     )
     if (existing.rows.length > 0) {
       res.status(409).json({ error: "Connection request already exists", status: existing.rows[0].status })
@@ -126,7 +130,7 @@ router.post("/request", async (req: AuthRequest, res: Response) => {
 
     await db.query(
       "INSERT INTO connection_requests (from_user_id, to_user_id) VALUES ($1, $2)",
-      [fromUserId, toUserId]
+      [fromUserId, safeToUserId]
     )
     res.status(201).json({ message: "Connection request sent" })
   } catch (err) {
@@ -136,11 +140,12 @@ router.post("/request", async (req: AuthRequest, res: Response) => {
 })
 
 // POST /api/connections/accept — accept a pending request
-router.post("/accept", async (req: AuthRequest, res: Response) => {
+router.post("/accept", connectionActionRateLimiter, async (req: AuthRequest, res: Response) => {
   const { fromUserId } = req.body
   const toUserId = req.userId!
+  const safeFromUserId = requireSafeId(fromUserId)
 
-  if (!fromUserId) {
+  if (!safeFromUserId) {
     res.status(400).json({ error: "fromUserId is required" })
     return
   }
@@ -151,7 +156,7 @@ router.post("/accept", async (req: AuthRequest, res: Response) => {
        SET status = 'accepted', updated_at = NOW()
        WHERE from_user_id = $1 AND to_user_id = $2 AND status = 'pending'
        RETURNING id`,
-      [fromUserId, toUserId]
+      [safeFromUserId, toUserId]
     )
 
     if (result.rowCount === 0) {
@@ -160,7 +165,16 @@ router.post("/accept", async (req: AuthRequest, res: Response) => {
     }
 
     // Create bidirectional relationship in Neo4j
-    await createConnectionInNeo4j(fromUserId, toUserId)
+    await createConnectionInNeo4j(safeFromUserId, toUserId)
+
+    // Notify original sender that their request was accepted.
+    const accepter = await db.query("SELECT name FROM users WHERE id = $1", [toUserId])
+    const accepterName = (accepter.rows[0]?.name as string | undefined)?.trim() || "A user"
+    await db.query(
+      `INSERT INTO user_notifications (user_id, kind, title, message, related_user_id)
+       VALUES ($1, 'connection_accepted', 'Connection accepted', $2, $3)`,
+      [safeFromUserId, `${accepterName} accepted your connection request.`, toUserId]
+    )
 
     res.json({ message: "Connection accepted" })
   } catch (err) {
@@ -169,11 +183,101 @@ router.post("/accept", async (req: AuthRequest, res: Response) => {
   }
 })
 
-// DELETE /api/connections/:userId — remove an accepted connection
-router.delete("/:userId", async (req: AuthRequest, res: Response) => {
-  const myId     = req.userId!
-  const otherId  = req.params.userId
+// GET /api/connections/notifications — pending requests + inbox updates for current user
+router.get("/notifications", async (req: AuthRequest, res: Response) => {
+  const myId = req.userId!
+  try {
+    const [pendingResult, updatesResult] = await Promise.all([
+      db.query(
+        `SELECT cr.id, cr.from_user_id, cr.created_at,
+                u.name AS from_name, u.email AS from_email, u.major AS from_major
+         FROM connection_requests cr
+         JOIN users u ON u.id = cr.from_user_id
+         WHERE cr.to_user_id = $1 AND cr.status = 'pending'
+         ORDER BY cr.created_at DESC`,
+        [myId]
+      ),
+      db.query(
+        `SELECT n.id, n.kind, n.title, n.message, n.is_read, n.created_at, n.related_user_id,
+                u.name AS related_user_name
+         FROM user_notifications n
+         LEFT JOIN users u ON u.id = n.related_user_id
+         WHERE n.user_id = $1
+         ORDER BY n.created_at DESC
+         LIMIT 100`,
+        [myId]
+      ),
+    ])
 
+    const unreadUpdates = updatesResult.rows.reduce(
+      (acc, row) => acc + (row.is_read ? 0 : 1),
+      0
+    )
+    const unreadCount = pendingResult.rows.length + unreadUpdates
+
+    res.json({
+      unreadCount,
+      pendingRequests: pendingResult.rows,
+      updates: updatesResult.rows,
+    })
+  } catch (err) {
+    console.error("Notifications error:", err)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// POST /api/connections/notifications/mark-read — mark inbox updates as read
+router.post("/notifications/mark-read", connectionActionRateLimiter, async (req: AuthRequest, res: Response) => {
+  const myId = req.userId!
+  const { ids, markAll } = req.body as { ids?: number[]; markAll?: boolean }
+
+  try {
+    if (markAll) {
+      await db.query(
+        `UPDATE user_notifications
+         SET is_read = TRUE
+         WHERE user_id = $1 AND is_read = FALSE`,
+        [myId]
+      )
+      res.json({ message: "Notifications marked as read" })
+      return
+    }
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ error: "ids[] or markAll=true is required" })
+      return
+    }
+    const safeIds = ids
+      .slice(0, 100)
+      .map((id) => toBoundedPositiveInt(id, 0, 1, Number.MAX_SAFE_INTEGER))
+      .filter((id) => Number.isFinite(id) && id > 0)
+    if (!safeIds.length) {
+      res.status(400).json({ error: "ids[] must contain valid positive integers" })
+      return
+    }
+
+    await db.query(
+      `UPDATE user_notifications
+       SET is_read = TRUE
+       WHERE user_id = $1 AND id = ANY($2::int[])`,
+      [myId, safeIds]
+    )
+    res.json({ message: "Notifications marked as read" })
+  } catch (err) {
+    console.error("Mark notifications read error:", err)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// DELETE /api/connections/by-user/:userId — remove an accepted connection
+router.delete("/by-user/:userId", connectionActionRateLimiter, async (req: AuthRequest, res: Response) => {
+  const myId     = req.userId!
+  const otherId  = requireSafeId(req.params.userId)
+
+  if (!otherId) {
+    res.status(400).json({ error: "Invalid userId format" })
+    return
+  }
   if (otherId === myId) {
     res.status(400).json({ error: "Cannot remove yourself" })
     return
@@ -200,11 +304,12 @@ router.delete("/:userId", async (req: AuthRequest, res: Response) => {
 })
 
 // POST /api/connections/reject — reject a pending request
-router.post("/reject", async (req: AuthRequest, res: Response) => {
+router.post("/reject", connectionActionRateLimiter, async (req: AuthRequest, res: Response) => {
   const { fromUserId } = req.body
   const toUserId = req.userId!
+  const safeFromUserId = requireSafeId(fromUserId)
 
-  if (!fromUserId) {
+  if (!safeFromUserId) {
     res.status(400).json({ error: "fromUserId is required" })
     return
   }
@@ -215,7 +320,7 @@ router.post("/reject", async (req: AuthRequest, res: Response) => {
        SET status = 'rejected', updated_at = NOW()
        WHERE from_user_id = $1 AND to_user_id = $2 AND status = 'pending'
        RETURNING id`,
-      [fromUserId, toUserId]
+      [safeFromUserId, toUserId]
     )
 
     if (result.rowCount === 0) {

@@ -17,14 +17,14 @@ const FilterBar = memo(function FilterBar({ hiddenTypes, onToggleType }: FilterB
         return (
           <button
             key={type}
-            className="toggle"
+            className="toggle toggle--filter"
             data-active={active ? "true" : "false"}
             onClick={() => onToggleType(type)}
             // these values are dynamic (change per type + active state) so stay inline
             style={{
               borderColor: active ? color    : "#252d40",
               color:       active ? color    : "#718096",
-              background:  active ? `${color}1e` : "#1a1e2d",
+              background:  active ? `${color}2b` : "rgba(12, 17, 27, 0.52)",
               opacity:     active ? 1 : 0.4,
             }}
           >
@@ -33,7 +33,7 @@ const FilterBar = memo(function FilterBar({ hiddenTypes, onToggleType }: FilterB
               width: 9, height: 9, borderRadius: "50%",
               background: color, display: "inline-block", flexShrink: 0,
             }} />
-            {type.charAt(0).toUpperCase() + type.slice(1)}s
+            {type === "company" ? "Companies" : type.charAt(0).toUpperCase() + type.slice(1) + "s"}
           </button>
         );
       })}

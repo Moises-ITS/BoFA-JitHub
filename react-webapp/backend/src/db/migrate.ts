@@ -1,11 +1,22 @@
 import dotenv from "dotenv"
 import { fileURLToPath } from "url"
 import path from "path"
+import fs from "fs"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-dotenv.config({ path: path.resolve(__dirname, "../../.env") })
+const envCandidates = [
+  path.resolve(__dirname, "../../.env.local"),
+  path.resolve(__dirname, "../../.env"),
+  path.resolve(__dirname, "../../../.env.local"),
+  path.resolve(__dirname, "../../../.env"),
+]
+for (const candidate of envCandidates) {
+  if (fs.existsSync(candidate)) {
+    dotenv.config({ path: candidate, override: false })
+  }
+}
 
 import { db } from "../config/postgres.js"
 
@@ -132,6 +143,26 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       ALTER TABLE users
         ADD COLUMN IF NOT EXISTS clerk_id VARCHAR UNIQUE;
       CREATE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_id);
+    `,
+  },
+  {
+    name: "010_user_notifications",
+    sql: `
+      CREATE TABLE IF NOT EXISTS user_notifications (
+        id              SERIAL PRIMARY KEY,
+        user_id         VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind            VARCHAR NOT NULL,
+        title           VARCHAR NOT NULL,
+        message         TEXT NOT NULL,
+        related_user_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+        is_read         BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_user_notifications_user_created
+        ON user_notifications(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_user_notifications_unread
+        ON user_notifications(user_id, is_read);
     `,
   },
 ]

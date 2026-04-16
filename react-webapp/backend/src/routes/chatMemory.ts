@@ -1,6 +1,8 @@
 import { Router, Response } from "express"
 import { db } from "../config/postgres"
 import { requireAuth, AuthRequest } from "../middlewear/auth"
+import { apiWriteRateLimiter } from "../middlewear/authRateLimit"
+import { sanitizeStringArray } from "../middlewear/security"
 
 const router = Router()
 
@@ -24,14 +26,15 @@ router.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
 })
 
 // POST /api/chat-memory/record — upsert topics extracted from a user message
-router.post("/record", requireAuth, async (req: AuthRequest, res: Response) => {
+router.post("/record", requireAuth, apiWriteRateLimiter, async (req: AuthRequest, res: Response) => {
   const { topics } = req.body as { topics: string[] }
-  if (!Array.isArray(topics) || topics.length === 0) {
+  const safeTopics = sanitizeStringArray(topics, 80, 10)
+  if (safeTopics.length === 0) {
     res.status(400).json({ error: "topics must be a non-empty array" })
     return
   }
   try {
-    for (const topic of topics.slice(0, 10)) {
+    for (const topic of safeTopics) {
       await db.query(
         `INSERT INTO user_chat_memory (user_id, topic, weight, last_seen)
          VALUES ($1, $2, 1, NOW())

@@ -2,13 +2,21 @@ import { Router } from 'express';
 import { db } from '../config/postgres.js';
 import { requireAuth, type AuthRequest } from '../middlewear/auth.js';
 import { geocode } from '../scrapers/geocoder.js';
+import {
+  sanitizeOptionalHttpsUrl,
+  sanitizeStringArray,
+  sanitizeText,
+  toBoundedPositiveInt,
+} from '../middlewear/security.js';
+import { apiWriteRateLimiter } from '../middlewear/authRateLimit.js';
 
 const router = Router();
 
 /** GET /api/opportunities?type=all&limit=200 */
 router.get('/', async (req, res) => {
-  const type  = req.query.type as string | undefined;
-  const limit = Math.min(Number(req.query.limit) || 200, 500);
+  const typeRaw = sanitizeText(req.query.type, 30);
+  const type = typeRaw || undefined;
+  const limit = toBoundedPositiveInt(req.query.limit, 200, 1, 500);
 
   try {
     const { rows } = await db.query(
@@ -44,7 +52,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', requireAuth, async (req: AuthRequest, res) => {
+router.post('/', requireAuth, apiWriteRateLimiter, async (req: AuthRequest, res) => {
   const {
     type,
     title,
@@ -67,11 +75,11 @@ router.post('/', requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
-  const normalizedTitle = typeof title === 'string' ? title.trim() : '';
-  const normalizedOrg = typeof org === 'string' ? org.trim() : '';
-  const normalizedCity = typeof city === 'string' ? city.trim() : '';
-  const normalizedState = typeof state === 'string' ? state.trim().toUpperCase() : '';
-  const normalizedDescription = typeof description === 'string' ? description.trim() : '';
+  const normalizedTitle = sanitizeText(title, 180);
+  const normalizedOrg = sanitizeText(org, 160);
+  const normalizedCity = sanitizeText(city, 120);
+  const normalizedState = sanitizeText(state, 12).toUpperCase();
+  const normalizedDescription = sanitizeText(description, 4000);
   const parsedLat = Number(lat);
   const parsedLng = Number(lng);
 
@@ -89,9 +97,8 @@ router.post('/', requireAuth, async (req: AuthRequest, res) => {
     return;
   }
 
-  const normalizedTags = Array.isArray(tags)
-    ? tags.map((tag) => String(tag).trim()).filter(Boolean)
-    : [];
+  const normalizedTags = sanitizeStringArray(tags, 60, 20);
+  const safeUrl = sanitizeOptionalHttpsUrl(url);
 
   try {
     const { rows } = await db.query(
@@ -123,12 +130,12 @@ router.post('/', requireAuth, async (req: AuthRequest, res) => {
         normalizedState,
         geo.lat,
         geo.lng,
-        typeof amount === 'string' ? amount.trim() : '',
-        typeof stipend === 'string' ? stipend.trim() : '',
-        typeof deadline === 'string' ? deadline.trim() : '',
+        sanitizeText(amount, 80),
+        sanitizeText(stipend, 80),
+        sanitizeText(deadline, 40),
         normalizedTags,
         normalizedDescription,
-        typeof url === 'string' ? url.trim() : '',
+        safeUrl ?? '',
       ],
     );
 

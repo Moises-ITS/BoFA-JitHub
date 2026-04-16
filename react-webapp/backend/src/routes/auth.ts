@@ -6,6 +6,12 @@ import { requireAuth, AuthRequest } from "../middlewear/auth"
 import { createStudentNode, updateStudentNode } from "../services/graphService"
 import { verifyClerkSessionToken } from "../utils/clerkToken"
 import { syncRateLimiter, profileUpdateRateLimiter } from "../middlewear/authRateLimit"
+import {
+  requireSafeId,
+  sanitizeOptionalHttpsUrl,
+  sanitizeStringArray,
+  sanitizeText,
+} from "../middlewear/security"
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
@@ -58,7 +64,7 @@ function formatPublicProfile(user: Record<string, unknown>) {
 }
 
 function toStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+  return sanitizeStringArray(value, 80, 50)
 }
 
 function toNullableNumber(value: unknown): number | null {
@@ -79,6 +85,7 @@ const router = Router()
 router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
   const token = req.headers.authorization?.slice(7)
   if (!token) {
+    console.warn("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "missing_token", ip: req.ip })
     res.status(401).json({ error: "Unauthorized" })
     return
   }
@@ -89,6 +96,7 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
     clerkId = payload.sub
   } catch (error) {
     console.error("Clerk token verification failed in /api/auth/sync:", error)
+    console.warn("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "invalid_token", ip: req.ip })
     res.status(401).json({ error: "Invalid token" })
     return
   }
@@ -109,7 +117,10 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
     year,
   } = req.body
 
-  if (!clerkEmail || !String(clerkEmail).toLowerCase().endsWith("@njit.edu")) {
+  const normalizedEmail = sanitizeText(clerkEmail, 254).toLowerCase()
+  const normalizedName = sanitizeText(name, 120)
+  if (!normalizedEmail || !normalizedEmail.endsWith("@njit.edu")) {
+    console.warn("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "invalid_email_domain", ip: req.ip })
     res.status(400).json({ error: "Only @njit.edu addresses are allowed" })
     return
   }
@@ -117,6 +128,7 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
   try {
     const existing = await db.query("SELECT id FROM users WHERE clerk_id = $1", [clerkId])
     if (existing.rows.length > 0) {
+      console.info("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "existing_user", userId: existing.rows[0].id, ip: req.ip })
       const user = await db.query(SELECT_PROFILE, [existing.rows[0].id])
       res.json(formatUser(user.rows[0]))
       return
@@ -124,16 +136,17 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
 
     const legacy = await db.query(
       "SELECT id FROM users WHERE email = $1 AND clerk_id IS NULL",
-      [clerkEmail]
+      [normalizedEmail]
     )
     if (legacy.rows.length > 0) {
       await db.query("UPDATE users SET clerk_id = $1 WHERE id = $2", [clerkId, legacy.rows[0].id])
+      console.info("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "legacy_linked", userId: legacy.rows[0].id, ip: req.ip })
       const user = await db.query(SELECT_PROFILE, [legacy.rows[0].id])
       res.json(formatUser(user.rows[0]))
       return
     }
 
-    if (!name) {
+    if (!normalizedName) {
       res.status(400).json({ error: "name is required" })
       return
     }
@@ -141,28 +154,27 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
     // Legacy user reclaim handled above
 
     // Brand-new user — name is required; major/year can be filled in later
-    if (!name) {
+    if (!normalizedName) {
       res.status(400).json({ error: "name is required" }); return
     }
 
     // Brand-new user
     const id = uuidv4()
-    const majorValue = typeof major === "string" ? major.trim() : ""
+    const majorValue = sanitizeText(major, 120)
     const gpaValue = toNullableNumber(gpa)
     const graduationYearValue = toNullableInt(graduationYear)
-    const bioValue = typeof bio === "string" ? bio : ""
+    const bioValue = sanitizeText(bio, 2000)
     const clubList = toStringArray(clubs)
     const companyList = toStringArray(companies)
     const interestList = toStringArray(interests)
     const skillList = toStringArray(skills)
     const lookingForList = toStringArray(looking_for)
-    const yearValue = typeof year === "string" && year.trim() ? year.trim() : null
-    const linkedinUrlValue =
-      typeof linkedinUrl === "string" && linkedinUrl.trim() ? linkedinUrl.trim() : null
+    const yearValue = sanitizeText(year, 30) || null
+    const linkedinUrlValue = sanitizeOptionalHttpsUrl(linkedinUrl)
 
     const graphNodeId = await createStudentNode({
       id,
-      name,
+      name: normalizedName,
       major: majorValue,
       gpa: gpaValue,
       graduationYear: graduationYearValue,
@@ -181,8 +193,8 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [
         id,
-        clerkEmail,
-        name,
+        normalizedEmail,
+        normalizedName,
         majorValue,
         gpaValue,
         graduationYearValue,
@@ -200,6 +212,7 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
     )
 
     const user = await db.query(SELECT_PROFILE, [id])
+    console.info("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "new_user_created", userId: id, ip: req.ip })
     res.status(201).json(formatUser(user.rows[0]))
   } catch (err) {
     console.error("Sync error:", err)
@@ -222,8 +235,17 @@ router.get("/me", requireAuth, async (req: AuthRequest, res: Response) => {
 })
 
 router.get("/users/:id/profile", requireAuth, async (req: AuthRequest, res: Response) => {
+  const safeId = requireSafeId(req.params.id)
+  if (!safeId) {
+    res.status(400).json({ error: "Invalid user id format" })
+    return
+  }
+  if (safeId !== req.userId) {
+    res.status(403).json({ error: "Forbidden: cannot access another user's profile directly" })
+    return
+  }
   try {
-    const result = await db.query(SELECT_PUBLIC_PROFILE, [req.params.id])
+    const result = await db.query(SELECT_PUBLIC_PROFILE, [safeId])
     if (result.rows.length === 0) {
       res.status(404).json({ error: "User not found" })
       return
@@ -235,7 +257,7 @@ router.get("/users/:id/profile", requireAuth, async (req: AuthRequest, res: Resp
   }
 })
 
-router.get("/interests", async (_req: Request, res: Response) => {
+router.get("/interests", requireAuth, async (_req: Request, res: Response) => {
   try {
     const result = await db.query(
       `SELECT DISTINCT unnest(interests) AS interest FROM users
@@ -251,7 +273,10 @@ router.get("/interests", async (_req: Request, res: Response) => {
 router.put("/profile", requireAuth, profileUpdateRateLimiter, async (req: AuthRequest, res: Response) => {
   const { gpa, major, graduationYear, bio, clubs, companies, interests, linkedinUrl, skills, looking_for, year } = req.body
 
-  if (!major || !graduationYear) {
+  const majorValue = sanitizeText(major, 120)
+  const bioValue = sanitizeText(bio, 2000) || null
+  const yearValue = sanitizeText(year, 30) || null
+  if (!majorValue || !graduationYear) {
     res.status(400).json({ error: "major and graduationYear are required" })
     return
   }
@@ -261,11 +286,9 @@ router.put("/profile", requireAuth, profileUpdateRateLimiter, async (req: AuthRe
   const interestList = toStringArray(interests)
   const skillList = toStringArray(skills)
   const lookingForList = toStringArray(looking_for)
-  const yearValue = typeof year === "string" && year.trim() ? year.trim() : null
   const gpaValue = toNullableNumber(gpa)
   const graduationYearValue = toNullableInt(graduationYear)
-  const linkedinUrlValue =
-    typeof linkedinUrl === "string" && linkedinUrl.trim() ? linkedinUrl.trim() : null
+  const linkedinUrlValue = sanitizeOptionalHttpsUrl(linkedinUrl)
 
   if (graduationYearValue === null) {
     res.status(400).json({ error: "graduationYear must be a valid year" })
@@ -294,10 +317,10 @@ router.put("/profile", requireAuth, profileUpdateRateLimiter, async (req: AuthRe
            year = $11
        WHERE id = $12`,
       [
-        major,
+        majorValue,
         gpaValue,
         graduationYearValue,
-        typeof bio === "string" ? bio : null,
+        bioValue,
         clubList,
         companyList,
         interestList,
@@ -312,10 +335,10 @@ router.put("/profile", requireAuth, profileUpdateRateLimiter, async (req: AuthRe
     await updateStudentNode({
       id: req.userId!,
       name: existing.rows[0].name,
-      major,
+      major: majorValue,
       gpa: gpaValue,
       graduationYear: graduationYearValue,
-      bio: typeof bio === "string" ? bio : "",
+      bio: bioValue ?? "",
       clubs: clubList,
       companies: companyList,
       interests: interestList,

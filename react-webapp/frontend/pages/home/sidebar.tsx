@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { motion } from "motion/react";
-import { Home, Calendar, Briefcase, FlaskConical, Network, User, Bot } from "lucide-react";
+import { Home, Calendar, Briefcase, FlaskConical, Network, User, Bot, Flag } from "lucide-react";
 
 const navItems = [
   { icon: Home, label: "Home", path: "/home" },
@@ -10,6 +10,7 @@ const navItems = [
   { icon: Network, label: "Campus Network", path: "/network" },
   { icon: Bot, label: "Sandbox", path: "/sandbox" },
   { icon: User, label: "Profile", path: "/profile" },
+  { icon: Flag, label: "Report Issue", path: "/report-issue" },
 ];
 
 
@@ -67,7 +68,9 @@ export function Sidebar() {
                   />
                 )}
                 <item.icon className="w-5 h-5 relative z-10" />
-                <span className="text-[10px] font-medium relative z-10">{item.label}</span>
+                <span className="text-[10px] font-medium relative z-10 w-full text-center leading-tight min-h-[20px] flex items-center justify-center">
+                  {item.label}
+                </span>
               </>
             )}
           </NavLink>

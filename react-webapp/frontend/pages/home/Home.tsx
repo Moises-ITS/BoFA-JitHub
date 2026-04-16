@@ -107,7 +107,7 @@ const VIRTUAL_BADGE = {
 };
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const firstName = user?.name?.split(" ")[0] ?? "";
   const topOpportunity = mockOpportunities[0];
   const cachedOverview = readHomeOverviewCache();
@@ -272,22 +272,15 @@ export default function Home() {
   }, [selectedEventAttendees, selectedEventId]);
 
   useEffect(() => {
-    if (!user?.id) return;
-
-    let cancelled = false;
-
-    fetch(`${AUTH_API}/api/connections`, { credentials: "include" })
+    if (!user?.id || !token) return;
+    fetch(`${AUTH_API}/api/connections`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then((data: { id: string }[]) => {
         if (cancelled) return;
         setConnectionIds(new Set(data.map((connection) => connection.id)));
       })
       .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
+  }, [user?.id, token]);
 
   // Batch-fetch RSVP status for visible events
   useEffect(() => {

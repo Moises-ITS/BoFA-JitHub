@@ -16,13 +16,47 @@ import ProtectedRoute from "./components/ProtectedRoute"
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  importer: () => Promise<{ default: T }>,
+  key: string
+) {
+  return lazy(async () => {
+    try {
+      const mod = await importer()
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem(`jitHub:lazy-retry:${key}`)
+      }
+      return mod
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const isDynamicImportFailure =
+        /Failed to fetch dynamically imported module|Importing a module script failed/i.test(message)
+
+      if (typeof window !== "undefined" && isDynamicImportFailure) {
+        const retryKey = `jitHub:lazy-retry:${key}`
+        const alreadyRetried = sessionStorage.getItem(retryKey) === "1"
+
+        if (!alreadyRetried) {
+          sessionStorage.setItem(retryKey, "1")
+          window.location.reload()
+          return new Promise<never>(() => {})
+        }
+
+        sessionStorage.removeItem(retryKey)
+      }
+
+      throw error
+    }
+  })
+}
+
 // Lazy-load heavy pages to keep the initial bundle small.
-const CampusGraph = lazy(() => import("./pages/node/CampusGraph"))
-const SandboxPage = lazy(() => import("./pages/sandbox/SandboxPage"))
-const DigitalTwin = lazy(() => import("./pages/map/DigitalTwin"))
-const CampusView = lazy(() => import("./pages/campus/CampusView"))
-const GlbInspector = lazy(() => import("./pages/campus/GlbInspector"))
-const ResearchDistricts = lazy(() => import("./pages/districts/ResearchDistricts"))
+const CampusGraph = lazyWithRetry(() => import("./pages/node/CampusGraph"), "network")
+const SandboxPage = lazyWithRetry(() => import("./pages/sandbox/SandboxPage"), "sandbox")
+const DigitalTwin = lazyWithRetry(() => import("./pages/map/DigitalTwin"), "map")
+const CampusView = lazyWithRetry(() => import("./pages/campus/CampusView"), "campus")
+const GlbInspector = lazyWithRetry(() => import("./pages/campus/GlbInspector"), "inspect")
+const ResearchDistricts = lazyWithRetry(() => import("./pages/districts/ResearchDistricts"), "research")
 
 function MissingClerkConfigScreen() {
   return (
@@ -156,19 +190,37 @@ export default function App() {
                   </Suspense>
                 </ErrorBoundary>
               } />
-              <Route path="/research" element={
-                <ErrorBoundary>
-                  <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0a0b10", color:"#718096" }}>Loading Research Districts…</div>}>
-                    <ResearchDistricts />
-                  </Suspense>
-                </ErrorBoundary>
-              } />
-
               <Route element={<Layout />}>
                 <Route path="/home" element={<Home />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/events" element={<EventsPage />} />
                 <Route path="/opportunities" element={<OpportunitiesPage />} />
+                <Route
+                  path="/research"
+                  element={
+                    <ErrorBoundary>
+                      <Suspense
+                        fallback={
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              minHeight: "calc(100vh - 112px)",
+                              background: "#0a0b10",
+                              color: "#718096",
+                              borderRadius: 24,
+                            }}
+                          >
+                            Loading Research Districts...
+                          </div>
+                        }
+                      >
+                        <ResearchDistricts />
+                      </Suspense>
+                    </ErrorBoundary>
+                  }
+                />
                 <Route
                   path="/network"
                   element={

@@ -2,9 +2,9 @@ import os
 import re
 import json
 import asyncio
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from typing import Optional, AsyncGenerator
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, text as sa_text
@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 import anthropic
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
+import requests
 
 from app.database import get_db
 from app import models
@@ -27,6 +28,9 @@ router = APIRouter(prefix="/sandbox", tags=["sandbox"])
 client       = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
 async_client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
 CHAT_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+AUTH_API_URL = os.getenv("AUTH_API_URL", "http://localhost:3001")
+CLUB_POPULARITY_CACHE_TTL = timedelta(minutes=10)
+_club_popularity_cache: dict[str, tuple[datetime, list[dict]]] = {}
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
 
@@ -35,6 +39,7 @@ class HistoryEntry(BaseModel):
     content: str
 
 class ProfileContext(BaseModel):
+    user_id: Optional[str] = None
     name: str
     major: Optional[str] = None
     year: Optional[str] = None
@@ -155,6 +160,33 @@ TOOLS = [
                 "club_name": {
                     "type": "string",
                     "description": "Club name to look up (partial match). E.g. 'ACM', 'SHPE', 'Robotics'."
+                }
+            },
+            "required": ["club_name"]
+        }
+    },
+    {
+        "name": "find_club_members",
+        "description": (
+            "Find JitHub users who list membership in a specific club or organization. "
+            "Use this when the user asks who is in a club, who in SHPE/ACM/etc could help, "
+            "who they should connect with from a club, or asks for members from a specific org. "
+            "Pass topic when the user wants help with a skill, subject, or type of problem so results can be ranked for relevance."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "club_name": {
+                    "type": "string",
+                    "description": "Club or org name to search memberships for. E.g. 'SHPE', 'HACCS', 'IEEE'."
+                },
+                "topic": {
+                    "type": "string",
+                    "description": "Optional topic or help area to rank members by, e.g. 'linked lists', 'interview prep', 'networking'."
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max members to return. Default 5, max 8."
                 }
             },
             "required": ["club_name"]
@@ -308,7 +340,144 @@ def _resolve_club_filters(club_name: str, db: Session) -> tuple[list[models.Club
 
     return list(matched.values()), unique_terms
 
-def _execute_tool(name: str, args: dict, db: Session) -> dict:
+
+TOPIC_STOP_WORDS = {
+    "a", "an", "and", "are", "be", "can", "could", "for", "from", "help",
+    "helping", "how", "i", "in", "is", "it", "me", "my", "of", "on", "or",
+    "someone", "something", "that", "the", "these", "those", "to", "want",
+    "who", "with", "would", "you",
+}
+
+
+def _tokenize_topic(text: str | None) -> set[str]:
+    if not text:
+        return set()
+    return {
+        token
+        for token in re.findall(r"[a-z0-9\+#]+", text.lower())
+        if len(token) >= 3 and token not in TOPIC_STOP_WORDS
+    }
+
+
+def _member_matches_club(user_clubs: list[str], matched_clubs: list[models.Club], club_terms: list[str]) -> bool:
+    if not user_clubs:
+        return False
+
+    normalized_terms = [normalize_club_text(term) for term in club_terms]
+    for user_club in user_clubs:
+        if matched_clubs and find_matching_club(matched_clubs, user_club):
+            return True
+
+        normalized_user_club = normalize_club_text(user_club)
+        if not normalized_user_club:
+            continue
+
+        for normalized_term in normalized_terms:
+            if not normalized_term:
+                continue
+            if (
+                normalized_user_club == normalized_term
+                or normalized_term in normalized_user_club
+                or normalized_user_club in normalized_term
+            ):
+                return True
+
+    return False
+
+
+def _build_connection_status_map(current_user_id: str | None, db: Session) -> dict[str, dict[str, str]]:
+    if not current_user_id:
+        return {}
+
+    rows = db.execute(sa_text("""
+        SELECT from_user_id, to_user_id, status
+        FROM connection_requests
+        WHERE from_user_id = :current_user_id OR to_user_id = :current_user_id
+    """), {"current_user_id": current_user_id}).fetchall()
+
+    status_map: dict[str, dict[str, str]] = {}
+    for row in rows:
+        other_id = row.to_user_id if row.from_user_id == current_user_id else row.from_user_id
+        direction = "sent" if row.from_user_id == current_user_id else "received"
+        status_map[other_id] = {
+            "status": row.status,
+            "direction": direction,
+        }
+    return status_map
+
+
+def _score_member_match(
+    member: dict,
+    topic_tokens: set[str],
+    profile: ProfileContext | None,
+    requested_club_name: str,
+) -> tuple[int, list[str], list[str], list[str]]:
+    score = 1
+    reasons: list[str] = []
+
+    skills = [skill for skill in (member.get("skills") or []) if isinstance(skill, str)]
+    interests = [interest for interest in (member.get("interests") or []) if isinstance(interest, str)]
+    clubs = [club for club in (member.get("clubs") or []) if isinstance(club, str)]
+    looking_for = [item for item in (member.get("looking_for") or []) if isinstance(item, str)]
+
+    skill_matches = [skill for skill in skills if _tokenize_topic(skill) & topic_tokens]
+    interest_matches = [interest for interest in interests if _tokenize_topic(interest) & topic_tokens]
+    looking_for_matches = [item for item in looking_for if _tokenize_topic(item) & topic_tokens]
+
+    if skill_matches:
+        score += 4 + min(len(skill_matches), 2)
+        reasons.append(f"skills: {', '.join(skill_matches[:2])}")
+    if interest_matches:
+        score += 2 + min(len(interest_matches), 2)
+        reasons.append(f"interests: {', '.join(interest_matches[:2])}")
+    if looking_for_matches:
+        score += 2
+        reasons.append(f"also looking for: {', '.join(looking_for_matches[:2])}")
+
+    if topic_tokens:
+        searchable_chunks = [
+            member.get("major") or "",
+            member.get("bio") or "",
+            member.get("year") or "",
+        ]
+        searchable_tokens = _tokenize_topic(" ".join(str(chunk) for chunk in searchable_chunks if chunk))
+        topic_overlap = topic_tokens & searchable_tokens
+        if topic_overlap:
+            score += 2
+            reasons.append(f"background overlap: {', '.join(sorted(topic_overlap)[:3])}")
+
+    if profile:
+        if profile.major and member.get("major") and profile.major.strip().lower() == str(member.get("major")).strip().lower():
+            score += 2
+            reasons.append(f"same major: {member.get('major')}")
+
+        shared_interests = [interest for interest in interests if interest in (profile.interests or [])]
+        if shared_interests:
+            score += 2
+            reasons.append(f"shared interests: {', '.join(shared_interests[:2])}")
+
+        shared_skills = [skill for skill in skills if skill in (profile.skills or [])]
+        if shared_skills:
+            score += 2
+            reasons.append(f"shared skills: {', '.join(shared_skills[:2])}")
+
+        shared_other_clubs = [
+            club for club in clubs
+            if club in (profile.clubs or []) and normalize_club_text(club) != normalize_club_text(requested_club_name)
+        ]
+        if shared_other_clubs:
+            score += 1
+            reasons.append(f"shared clubs: {', '.join(shared_other_clubs[:2])}")
+
+    return score, reasons, skill_matches, interest_matches
+
+def _execute_tool(
+    name: str,
+    args: dict,
+    db: Session,
+    profile: ProfileContext | None = None,
+    auth_header: str | None = None,
+) -> dict:
     if name == "search_events":
         club_name  = args.get("club_name")
         categories = args.get("categories") or ([args["category"]] if args.get("category") else [])
@@ -480,6 +649,42 @@ def _execute_tool(name: str, args: dict, db: Session) -> dict:
             ]
         }
 
+    if name == "find_club_members":
+        raw_club_name = args.get("club_name", "")
+        if not raw_club_name.strip():
+            return {"error": "club_name is required"}
+
+        limit = min(int(args.get("limit", 5)), 8)
+        topic = (args.get("topic") or "").strip()
+        matched_clubs, club_terms = _resolve_club_filters(raw_club_name, db)
+        canonical_names = [resolve_canonical_club_name(club.name) for club in matched_clubs]
+
+        if not auth_header:
+            return {"error": "Authentication required to access member data"}
+
+        try:
+            response = requests.post(
+                f"{AUTH_API_URL}/api/connections/club-members",
+                headers={
+                    "Authorization": auth_header,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "clubName": canonical_names[0] if canonical_names else raw_club_name,
+                    "clubTerms": club_terms,
+                    "topic": topic or None,
+                    "limit": limit,
+                },
+                timeout=6,
+            )
+            payload = response.json()
+            if response.status_code >= 400:
+                return {"error": payload.get("error") or "Membership lookup failed"}
+            payload.setdefault("matched_clubs", canonical_names)
+            return payload
+        except requests.RequestException as exc:
+            return {"error": f"Membership lookup unavailable: {exc}"}
+
     return {"error": f"Unknown tool: {name}"}
 
 # ── System prompt ──────────────────────────────────────────────────────────────
@@ -523,8 +728,11 @@ TOOLS AVAILABLE:
 - search_events: query the full event database by club name, category, and/or keyword.
 - get_event_details: get full details for a specific event by event_id.
 - get_club_info: look up a club's description, Instagram, and follower count. Use this for "what is X club?" questions.
+- find_club_members: look up JitHub users who list membership in a specific club, and use topic relevance when the user wants help with something.
 
-MANDATORY TOOL USE: You MUST call search_events before answering ANY question about past events, specific clubs' event history, or types of events hosted on campus. You do NOT know this information from memory — the database is the only source of truth. Even if you think you know the answer, call the tool. Answering about past events without calling search_events first is an error.
+MANDATORY TOOL USE:
+- You MUST call search_events before answering ANY question about past events, specific clubs' event history, or types of events hosted on campus. You do NOT know this information from memory — the database is the only source of truth.
+- You MUST call find_club_members before answering who is in a specific club, who from SHPE/HACCS/etc could help, who the user should connect with inside a club, or any membership-roster style question. The JitHub membership database is the source of truth for that.
 
 RESPONSE RULES:
 CRITICAL: Output ZERO markdown. No asterisks, no **bold**, no *italic*, no `backticks`, no headers, no underscores for emphasis. Plain text only. Every ** you write is an error.
@@ -541,10 +749,11 @@ CRITICAL: Output ZERO markdown. No asterisks, no **bold**, no *italic*, no `back
 8. Keep message under 150 words. Use bullet points (• ) for listing events or people — one bullet per item, each 1-2 lines max. Lead with a 1-sentence intro, then bullets, then a 1-sentence closer if needed. No numbered lists, no headers, NO markdown (no **bold**, no *italic*, no backticks). Plain text only. BAD: "**IEEE** hosts workshops". GOOD: "IEEE hosts workshops".
 9. Today's date is {today}. Current semester week: {week}. "This week" = {week_mon} through {week_sun}. Events on {week_mon_next} or later are next week.
 10. For top/trending EVENT questions: use TOP EVENTS THIS SEMESTER. For top/popular CLUB questions: use TOP CLUBS BY POPULARITY. Do NOT volunteer rankings or numbers unless the user explicitly asks for stats. When recommending clubs unprompted, describe what they do — not where they rank. NEVER reference Instagram, engagement scores, follower counts, or internal ranking mechanics. DO acknowledge the Fall 2023 data cutoff when the user asks about "all time" or historical data — never silently substitute a different time frame. If asked "all time" and you only have since Fall 2023, say so and answer with that data. Do NOT add unsolicited personalized recommendations when the user asks a simple factual question.
-11. "connect" actions are ONLY for individual students in CONNECTION RECOMMENDATIONS with a real user_id. Never emit connect for a club or org.
+11. "connect" actions are ONLY for individual students with a real user_id. Never emit connect for a club or org. If a member result already shows connection_status as accepted or pending, do not emit a connect action for that person.
 12. Never emit duplicate actions. One action per unique event or person.
 13. NEVER end a response with a question ("What would you like to know?", "Is there anything else?", "Let me know if..."). State your answer and stop.
 14. NEVER pre-announce a count ("I found 5..."). List the items first, then optionally summarize after. Counts stated before the list are always wrong.
+15. When answering club-member questions, be explicit that these are JitHub members who listed that club in their profile. If find_club_members returns no one, say you do not see any matching JitHub members for that club right now.
 """.strip()
 
 def _semester_week(today: date) -> str:
@@ -566,6 +775,54 @@ def _semester_label(d) -> str:
     if 1 <= d.month <= 5:
         return f"Spring {d.year}"
     return f"Summer {d.year}"
+
+
+def _needs_club_popularity(message: str) -> bool:
+    text = (message or "").lower()
+    return bool(re.search(r"\b(top|popular|popularity|trending|biggest|best known|most active|most popular)\b", text)) and (
+        "club" in text or "org" in text or "organization" in text or "society" in text or "association" in text
+    )
+
+
+def _get_club_popularity(db: Session, today: date) -> list[dict]:
+    month = today.month
+    sem_start = date(today.year, 1, 1) if month <= 5 else date(today.year, 9, 1)
+    cache_key = str(sem_start)
+    now = datetime.utcnow()
+    cached = _club_popularity_cache.get(cache_key)
+    if cached and now - cached[0] < CLUB_POPULARITY_CACHE_TTL:
+        return cached[1]
+
+    pop_rows = (
+        db.query(
+            models.Club.name,
+            models.Club.follower_count,
+            func.sum(models.EventPost.engagement_score).label("engagement_total"),
+            func.sum(func.coalesce(models.EventPost.engagement_score, 0))
+                .filter(models.EventPost.post_datetime >= sem_start).label("semester_engagement"),
+        )
+        .outerjoin(models.Event, models.Event.club_id == models.Club.club_id)
+        .outerjoin(models.EventPost, models.EventPost.event_id == models.Event.event_id)
+        .group_by(models.Club.club_id, models.Club.name, models.Club.follower_count)
+        .order_by(func.sum(func.coalesce(models.EventPost.engagement_score, 0))
+                  .filter(models.EventPost.post_datetime >= sem_start).desc().nullslast())
+        .limit(10)
+        .all()
+    )
+
+    club_popularity = [
+        {
+            "name":               r.name,
+            "followers":          r.follower_count,
+            "engagement_total":   r.engagement_total,
+            "semester_engagement": r.semester_engagement,
+        }
+        for r in pop_rows
+    ]
+
+    _club_popularity_cache.clear()
+    _club_popularity_cache[cache_key] = (now, club_popularity)
+    return club_popularity
 
 def _build_system_prompt(context: ContextPayload, club_popularity: list[dict], today: date) -> str:
     week_mon      = today - timedelta(days=today.weekday())
@@ -643,33 +900,7 @@ def _build_system_prompt(context: ContextPayload, club_popularity: list[dict], t
 # ── Shared setup ───────────────────────────────────────────────────────────────
 
 def _build_context(body: ChatRequest, db: Session, today: date):
-    m = today.month
-    sem_start = date(today.year, 1, 1) if m <= 5 else date(today.year, 9, 1)
-    pop_rows = (
-        db.query(
-            models.Club.name,
-            models.Club.follower_count,
-            func.sum(models.EventPost.engagement_score).label("engagement_total"),
-            func.sum(func.coalesce(models.EventPost.engagement_score, 0))
-                .filter(models.EventPost.post_datetime >= sem_start).label("semester_engagement"),
-        )
-        .outerjoin(models.Event, models.Event.club_id == models.Club.club_id)
-        .outerjoin(models.EventPost, models.EventPost.event_id == models.Event.event_id)
-        .group_by(models.Club.club_id, models.Club.name, models.Club.follower_count)
-        .order_by(func.sum(func.coalesce(models.EventPost.engagement_score, 0))
-                  .filter(models.EventPost.post_datetime >= sem_start).desc().nullslast())
-        .limit(15)
-        .all()
-    )
-    club_popularity = [
-        {
-            "name":               r.name,
-            "followers":          r.follower_count,
-            "engagement_total":   r.engagement_total,
-            "semester_engagement": r.semester_engagement,
-        }
-        for r in pop_rows
-    ]
+    club_popularity = _get_club_popularity(db, today) if _needs_club_popularity(body.message) else []
 
     system_prompt = _build_system_prompt(body.context, club_popularity, today)
 
@@ -681,7 +912,13 @@ def _build_context(body: ChatRequest, db: Session, today: date):
     return system_prompt, messages
 
 
-async def _async_tool_loop(system_prompt: str, messages: list, db: Session):
+async def _async_tool_loop(
+    system_prompt: str,
+    messages: list,
+    db: Session,
+    profile: ProfileContext,
+    auth_header: str | None = None,
+):
     """
     Fully async tool loop.
     Returns (messages, direct_text):
@@ -691,7 +928,7 @@ async def _async_tool_loop(system_prompt: str, messages: list, db: Session):
     for _ in range(4):
         response = await async_client.messages.create(
             model=CHAT_MODEL,
-            max_tokens=512,
+            max_tokens=384,
             system=system_prompt,
             messages=messages,
             tools=TOOLS,
@@ -704,7 +941,7 @@ async def _async_tool_loop(system_prompt: str, messages: list, db: Session):
         tool_results = []
         for block in response.content:
             if block.type == "tool_use":
-                result = _execute_tool(block.name, block.input, db)
+                result = _execute_tool(block.name, block.input, db, profile, auth_header)
                 tool_results.append({
                     "type":        "tool_result",
                     "tool_use_id": block.id,
@@ -718,7 +955,7 @@ async def _async_tool_loop(system_prompt: str, messages: list, db: Session):
 # ── Streaming endpoint ─────────────────────────────────────────────────────────
 
 @router.post("/chat/stream")
-async def sandbox_chat_stream(body: ChatRequest, db: Session = Depends(get_db)):
+async def sandbox_chat_stream(request: Request, body: ChatRequest, db: Session = Depends(get_db)):
     import traceback as tb
     today = date.today()
 
@@ -729,14 +966,22 @@ async def sandbox_chat_stream(body: ChatRequest, db: Session = Depends(get_db)):
             print("[sandbox] context built")
 
             # Async tool loop — fully non-blocking
-            messages, direct_text = await _async_tool_loop(system_prompt, messages, db)
+            messages, direct_text = await _async_tool_loop(
+                system_prompt,
+                messages,
+                db,
+                body.context.profile,
+                request.headers.get("authorization"),
+            )
             print("[sandbox] tool loop done")
 
             MARKER = "ACTIONS:"
             mlen = len(MARKER)
-            pending = ""
-            found_actions = False
+            stream_buffer = ""
+            intro_buffer = ""
+            intro_processed = False
             actions_str = ""
+            actions_started = False
 
             _COUNT_INTRO = re.compile(
                 r'^(I found|Here are|There are|I\'ve found|I identified|I\'ve identified'
@@ -744,38 +989,66 @@ async def sandbox_chat_stream(body: ChatRequest, db: Session = Depends(get_db)):
                 re.IGNORECASE,
             )
 
-            def _clean_text(text: str) -> str:
-                text = text.replace("**", "").replace("__", "")
-                text = _COUNT_INTRO.sub("", text)
-                return text
+            def _flush_visible_text(text: str, final: bool = False) -> list[str]:
+                nonlocal intro_buffer, intro_processed
+                cleaned = text.replace("**", "").replace("__", "")
+                if not cleaned and not final:
+                    return []
+
+                if not intro_processed:
+                    intro_buffer += cleaned
+                    if not final and "\n" not in intro_buffer and len(intro_buffer) < 240:
+                        return []
+                    intro_processed = True
+                    visible = _COUNT_INTRO.sub("", intro_buffer)
+                    intro_buffer = ""
+                    return [visible] if visible else []
+
+                return [cleaned] if cleaned else []
+
+            def _consume_stream_text(text: str, final: bool = False) -> list[str]:
+                nonlocal stream_buffer, actions_str, actions_started
+                if actions_started:
+                    actions_str += text
+                    return []
+
+                stream_buffer += text
+                marker_index = stream_buffer.find(MARKER)
+                if marker_index != -1:
+                    visible_text = stream_buffer[:marker_index].rstrip("\n")
+                    actions_str += stream_buffer[marker_index + mlen:]
+                    stream_buffer = ""
+                    actions_started = True
+                    return _flush_visible_text(visible_text, final=True)
+
+                if final:
+                    visible_text = stream_buffer
+                    stream_buffer = ""
+                    return _flush_visible_text(visible_text, final=True)
+
+                if len(stream_buffer) <= mlen:
+                    return []
+
+                visible_text = stream_buffer[:-mlen]
+                stream_buffer = stream_buffer[-mlen:]
+                return _flush_visible_text(visible_text)
 
             if direct_text is not None:
-                # Model responded directly without tools — clean and send
-                pending = direct_text
+                for visible_chunk in _consume_stream_text(direct_text, final=True):
+                    yield f"data: {json.dumps({'type': 'text', 'text': visible_chunk})}\n\n"
             else:
-                # Tool results are in messages — buffer full stream then clean
                 async with async_client.messages.stream(
                     model=CHAT_MODEL,
-                    max_tokens=1024,
+                    max_tokens=640,
                     system=system_prompt,
                     messages=messages,
                 ) as stream:
                     async for chunk in stream.text_stream:
-                        pending += chunk
+                        for visible_chunk in _consume_stream_text(chunk):
+                            yield f"data: {json.dumps({'type': 'text', 'text': visible_chunk})}\n\n"
 
-            # Split message text from ACTIONS: block
-            idx = pending.find(MARKER)
-            if idx != -1:
-                message_text = pending[:idx].rstrip("\n")
-                actions_str = pending[idx + mlen:]
-                found_actions = True
-            else:
-                message_text = pending
-
-            # Clean and emit the full message text
-            cleaned = _clean_text(message_text)
-            if cleaned.strip():
-                yield f"data: {json.dumps({'type': 'text', 'text': cleaned})}\n\n"
+                for visible_chunk in _consume_stream_text("", final=True):
+                    yield f"data: {json.dumps({'type': 'text', 'text': visible_chunk})}\n\n"
 
             # Parse and send actions
             try:

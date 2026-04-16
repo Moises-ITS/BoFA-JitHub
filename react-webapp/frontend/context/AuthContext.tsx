@@ -3,6 +3,13 @@ import { useAuth as useClerkAuth, useClerk, useUser } from "@clerk/clerk-react"
 
 const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001"
 
+function toNetworkError(err: unknown, fallback: string) {
+  if (err instanceof TypeError && /fetch/i.test(err.message)) {
+    return new Error(fallback)
+  }
+  return err instanceof Error ? err : new Error(fallback)
+}
+
 export interface User {
   id: string
   name: string
@@ -49,31 +56,6 @@ export interface SignupData {
   skills: string[]
   looking_for: string[]
   year: string | null
-}
-
-export interface SyncData {
-  email: string
-  name: string
-  major: string
-  gpa: number | null
-  graduationYear: number
-  bio: string
-  clubs: string[]
-  companies: string[]
-  interests: string[]
-  linkedinUrl?: string | null
-}
-
-interface AuthContextValue {
-  user: User | null
-  token: string | null
-  loading: boolean
-  needsProfileSetup: boolean
-  login: (email: string, password: string) => Promise<void>
-  signup: (data: SignupData) => Promise<void>
-  logout: () => void
-  updateProfile: (data: ProfileUpdate) => Promise<void>
-  syncProfile: (data: SyncData) => Promise<void>
 }
 
 export interface SyncData {
@@ -176,28 +158,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const syncProfile = useCallback(async (data: SyncData) => {
     const t = await getSessionToken(true)
     if (!t) throw new Error("Not authenticated")
-    const res = await fetch(`${API}/api/auth/sync`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
-      body: JSON.stringify(data),
-    })
-    const result = await res.json()
-    if (!res.ok) throw new Error(result.error ?? "Sync failed")
-    setToken(t); setUser(result); setNeedsSetup(false)
+    try {
+      const res = await fetch(`${API}/api/auth/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+        body: JSON.stringify(data),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error ?? "Sync failed")
+      setToken(t); setUser(result); setNeedsSetup(false)
+    } catch (err) {
+      throw toNetworkError(err, "Couldn't reach the auth backend on http://localhost:3001.")
+    }
   }, [getSessionToken])
 
   const updateProfile = useCallback(async (data: ProfileUpdate) => {
     const t = await getSessionToken(true)
     if (!t) throw new Error("Not authenticated")
-    const res = await fetch(`${API}/api/auth/profile`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
-      body: JSON.stringify(data),
-    })
-    const updated = await res.json()
-    if (!res.ok) throw new Error(updated.error ?? "Update failed")
-    setToken(t)
-    setUser(updated)
+    try {
+      const res = await fetch(`${API}/api/auth/profile`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+        body: JSON.stringify(data),
+      })
+      const updated = await res.json()
+      if (!res.ok) throw new Error(updated.error ?? "Update failed")
+      setToken(t)
+      setUser(updated)
+    } catch (err) {
+      throw toNetworkError(err, "Couldn't reach the auth backend on http://localhost:3001.")
+    }
   }, [getSessionToken])
 
   function logout() { setLoading(true); signOut(); setUser(null); setToken(null); setNeedsSetup(false) }

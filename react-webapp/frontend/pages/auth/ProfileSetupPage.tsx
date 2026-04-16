@@ -5,7 +5,7 @@ import { useAuth } from "../../context/AuthContext"
 import type { SyncData } from "../../context/AuthContext"
 import "./auth.css"
 
-const API = import.meta.env.VITE_API_URL ?? ""
+const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001"
 
 const STEPS = ["Academic", "Campus Life", "Profile"] as const
 type Step = 0 | 1 | 2

@@ -36,6 +36,16 @@ interface SidePanelProps {
   onSelectNode: (id: string) => void;
 }
 
+interface Recommendation {
+  id: string;
+  name: string;
+  major: string;
+  score: number;
+  sameMajor: boolean;
+  sharedInterests: number;
+  sharedClubs: number;
+}
+
 export default function SidePanel({ node, nodes, links, onClose, onSelectNode }: SidePanelProps) {
   const { user, token } = useAuth();
   const isOwnNode = node?.id === user?.id;
@@ -44,9 +54,6 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
   const [connStatus,    setConnStatus]    = useState<ConnStatus>("none");
   const [connLoading,   setConnLoading]   = useState(false);
   const [connExpanded,  setConnExpanded]  = useState(false);
-  //  Connection status state 
-  const [connStatus,  setConnStatus]  = useState<ConnStatus>("none");
-  const [connLoading, setConnLoading] = useState(false);
 
   //  Recommendations (shown on own node) 
   const [recs, setRecs] = useState<Recommendation[]>([]);
@@ -308,7 +315,6 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     </div>
   );
 }
-
 
 
 

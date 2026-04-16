@@ -19,7 +19,7 @@ export function Sidebar() {
       className="fixed left-0 top-0 h-screen w-20 flex flex-col items-center py-6 z-50"
       style={{ backgroundColor: "var(--bg-canvas)", borderRight: "1px solid var(--border-default)" }}
     >
-      <div className="mb-8">
+      <NavLink to="/" aria-label="Go to main page" className="mb-8">
         <motion.div
           whileHover={{ scale: 1.05 }}
           className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
@@ -44,7 +44,7 @@ export function Sidebar() {
             <circle cx="8" cy="35" r="3.5" fill="white" />
           </svg>
         </motion.div>
-      </div>
+      </NavLink>
 
       <nav className="flex-1 flex flex-col gap-2 w-full px-3">
         {navItems.map((item) => (

@@ -8,6 +8,7 @@ import { EventDetailModal, type UserProfile, type AttendeeInfo } from "../events
 
 const EVENTS_API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
 const AUTH_API   = import.meta.env.VITE_API_URL         ?? "http://localhost:3001";
+const SANDBOX_CONTEXT_TTL_MS = 60_000;
 
 const STARTERS = [
   "What events are happening this week?",
@@ -53,6 +54,12 @@ interface Message {
   content: string;
   actions?: ChatAction[];
   error?: boolean;
+}
+
+interface SandboxContextPayload {
+  upcoming_events: any[];
+  trending_events: any[];
+  recommendations: any[];
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -239,7 +246,22 @@ export default function SandboxPage() {
       .catch(() => {});
   }, [token]); // eslint-disable-line
 
+  useEffect(() => {
+    if (!token) {
+      setConnectedIds(new Set());
+      return;
+    }
+
+    fetch(`${AUTH_API}/api/connections`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: { id: string }[]) => setConnectedIds(new Set(rows.map(row => row.id))))
+      .catch(() => setConnectedIds(new Set()));
+  }, [token]);
+
   const cachedEventsRef = useRef<any[]>([]);
+  const cachedContextRef = useRef<{ fetchedAt: number; data: SandboxContextPayload } | null>(null);
+  const contextRequestRef = useRef<Promise<SandboxContextPayload> | null>(null);
+  const contextIncludesAuthRef = useRef(false);
   const scrollRef       = useRef<HTMLDivElement>(null);
 
   // Persist messages to localStorage whenever they change
@@ -264,8 +286,16 @@ export default function SandboxPage() {
     return /event|club|org|connect|network|people|trending|popular|semester|happening|rsvp|attend|hackathon|workshop|panel|social|recruit|intern|research|food|talk|meet|who should|what'?s? (going|up|on)|top|shpe|ieee|acm|wics|nsbe|swe|haccs|greek|fraternity|sorority/i.test(text);
   }
 
-  function emptyContext() {
+  function emptyContext(): SandboxContextPayload {
     return { upcoming_events: [], trending_events: [], recommendations: [] };
+  }
+
+  function getCachedContext(): SandboxContextPayload | null {
+    const cached = cachedContextRef.current;
+    if (!cached) return null;
+    if (Date.now() - cached.fetchedAt > SANDBOX_CONTEXT_TTL_MS) return null;
+    if (token && !contextIncludesAuthRef.current) return null;
+    return cached.data;
   }
 
   function fetchWithTimeout(url: string, options: RequestInit = {}, ms = 5000): Promise<Response | null> {
@@ -276,47 +306,68 @@ export default function SandboxPage() {
       .catch(() => null);
   }
 
-  async function fetchContext() {
-    const [upcomingRes, trendingRes, recsRes] = await Promise.all([
-      fetchWithTimeout(`${EVENTS_API}/events/upcoming?limit=12`),
-      fetchWithTimeout(`${EVENTS_API}/events/top-risers?limit=10`),
-      token
-        ? fetchWithTimeout(`${AUTH_API}/api/connections/recommendations`, { headers: { Authorization: `Bearer ${token}` } })
-        : Promise.resolve(null),
-    ]);
+  async function fetchContext(force = false): Promise<SandboxContextPayload> {
+    const cached = !force ? getCachedContext() : null;
+    if (cached) return cached;
+    if (contextRequestRef.current) return contextRequestRef.current;
 
-    const upcoming     = upcomingRes?.ok     ? await upcomingRes.json()     : [];
-    const trending     = trendingRes?.ok     ? await trendingRes.json()     : [];
-    const recsRaw      = recsRes?.ok         ? await recsRes.json()         : [];
+    const request = (async () => {
+      const [upcomingRes, trendingRes, recsRes] = await Promise.all([
+        fetchWithTimeout(`${EVENTS_API}/events/upcoming?limit=12`, {}, 2500),
+        fetchWithTimeout(`${EVENTS_API}/events/top-risers?limit=10`, {}, 2500),
+        token
+          ? fetchWithTimeout(`${AUTH_API}/api/connections/recommendations`, { headers: { Authorization: `Bearer ${token}` } }, 2500)
+          : Promise.resolve(null),
+      ]);
 
-    const upcomingList = (upcoming.events ?? upcoming).slice(0, 12);
+      const upcoming     = upcomingRes?.ok ? await upcomingRes.json() : [];
+      const trending     = trendingRes?.ok ? await trendingRes.json() : [];
+      const recsRaw      = recsRes?.ok ? await recsRes.json() : [];
 
-    const trendingList = (trending.events ?? trending).slice(0, 10);
+      const upcomingList = (upcoming.events ?? upcoming).slice(0, 12);
+      const trendingList = (trending.events ?? trending).slice(0, 10);
 
-    // Cache full event objects for EventDetailModal
-    cachedEventsRef.current = [...upcomingList, ...trendingList];
+      cachedEventsRef.current = [...upcomingList, ...trendingList];
 
-    return {
-      upcoming_events: upcomingList.map((e: any) => ({
-        event_id: e.event_id, event_name: e.event_name, event_category: e.event_category,
-        date: e.date, club_name: e.club_name, campus_location: e.campus_location,
-        has_free_food: e.has_free_food ?? false, virtual: e.virtual ?? false,
-      })),
-      trending_events: trendingList.map((e: any) => ({
-        event_id: e.event_id, event_name: e.event_name, event_category: e.event_category,
-        date: e.date, club_name: e.club_name, campus_location: e.campus_location,
-        has_free_food: e.has_free_food ?? false, virtual: e.virtual ?? false,
-      })),
-      recommendations: (Array.isArray(recsRaw) ? recsRaw : []).slice(0, 5).map((r: any) => ({
-        id: r.id, name: r.name, major: r.major, year: r.year ?? null,
-        score: r.score ?? 0,
-        shared_clubs: Array.isArray(r.sharedClubs) ? r.sharedClubs : Array.isArray(r.shared_clubs) ? r.shared_clubs : [],
-        shared_interests: Array.isArray(r.sharedInterests) ? r.sharedInterests : Array.isArray(r.shared_interests) ? r.shared_interests : [],
-        shared_skills: Array.isArray(r.sharedSkills) ? r.sharedSkills : Array.isArray(r.shared_skills) ? r.shared_skills : [],
-        looking_for: Array.isArray(r.lookingFor) ? r.lookingFor : Array.isArray(r.looking_for) ? r.looking_for : [],
-      })),
-    };
+      const data: SandboxContextPayload = {
+        upcoming_events: upcomingList.map((e: any) => ({
+          event_id: e.event_id, event_name: e.event_name, event_category: e.event_category,
+          date: e.date, club_name: e.club_name, campus_location: e.campus_location,
+          has_free_food: e.has_free_food ?? false, virtual: e.virtual ?? false,
+        })),
+        trending_events: trendingList.map((e: any) => ({
+          event_id: e.event_id, event_name: e.event_name, event_category: e.event_category,
+          date: e.date, club_name: e.club_name, campus_location: e.campus_location,
+          has_free_food: e.has_free_food ?? false, virtual: e.virtual ?? false,
+        })),
+        recommendations: (Array.isArray(recsRaw) ? recsRaw : []).slice(0, 5).map((r: any) => ({
+          id: r.id, name: r.name, major: r.major, year: r.year ?? null,
+          score: r.score ?? 0,
+          shared_clubs: Array.isArray(r.sharedClubs) ? r.sharedClubs : Array.isArray(r.shared_clubs) ? r.shared_clubs : [],
+          shared_interests: Array.isArray(r.sharedInterests) ? r.sharedInterests : Array.isArray(r.shared_interests) ? r.shared_interests : [],
+          shared_skills: Array.isArray(r.sharedSkills) ? r.sharedSkills : Array.isArray(r.shared_skills) ? r.shared_skills : [],
+          looking_for: Array.isArray(r.lookingFor) ? r.lookingFor : Array.isArray(r.looking_for) ? r.looking_for : [],
+        })),
+      };
+
+      cachedContextRef.current = { fetchedAt: Date.now(), data };
+      contextIncludesAuthRef.current = Boolean(token);
+      return data;
+    })();
+
+    contextRequestRef.current = request;
+    try {
+      return await request;
+    } finally {
+      contextRequestRef.current = null;
+    }
   }
+
+  const hasToken = Boolean(token);
+
+  useEffect(() => {
+    void fetchContext(hasToken).catch(() => {});
+  }, [hasToken]); // eslint-disable-line
 
   async function sendMessage(text: string) {
     if (!text.trim() || loading) return;
@@ -327,7 +378,14 @@ export default function SandboxPage() {
     setLoading(true);
 
     try {
-      const context = isContextRelevant(text) ? await fetchContext() : emptyContext();
+      const cachedContext = getCachedContext();
+      const context = isContextRelevant(text)
+        ? (cachedContext ?? await fetchContext())
+        : (cachedContext ?? emptyContext());
+
+      if (isContextRelevant(text)) {
+        void fetchContext(true).catch(() => {});
+      }
       const history = messages.slice(-6).map(m => ({ role: m.role, content: m.content }));
 
       const profile: UserProfile = {
@@ -362,6 +420,7 @@ export default function SandboxPage() {
         context: {
           ...context,
           profile: {
+            user_id:         user?.id ?? null,
             name:            user?.name ?? "Student",
             major:           profile.major,
             year:            profile.year,
@@ -377,16 +436,17 @@ export default function SandboxPage() {
 
       const res = await fetch(`${EVENTS_API}/sandbox/chat/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body,
       });
 
       if (!res.ok || !res.body) throw new Error("Stream failed");
 
-      // Add empty assistant bubble we'll fill as tokens arrive
       const assistantId = crypto.randomUUID();
-      setMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", actions: [] }]);
-      setLoading(false); // hide typing indicator — we're streaming now
+      let assistantStarted = false;
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -404,17 +464,50 @@ export default function SandboxPage() {
           try {
             const event = JSON.parse(line.slice(6));
             if (event.type === "text") {
-              setMessages(prev => prev.map(m =>
-                m.id === assistantId ? { ...m, content: m.content + event.text } : m
-              ));
+              if (!assistantStarted) {
+                assistantStarted = true;
+                setMessages(prev => [...prev, {
+                  id: assistantId,
+                  role: "assistant",
+                  content: event.text,
+                  actions: [],
+                }]);
+                setLoading(false);
+              } else {
+                setMessages(prev => prev.map(m =>
+                  m.id === assistantId ? { ...m, content: m.content + event.text } : m
+                ));
+              }
             } else if (event.type === "done") {
-              setMessages(prev => prev.map(m =>
-                m.id === assistantId ? { ...m, actions: event.actions ?? [] } : m
-              ));
+              if (!assistantStarted) {
+                assistantStarted = true;
+                setMessages(prev => [...prev, {
+                  id: assistantId,
+                  role: "assistant",
+                  content: "",
+                  actions: event.actions ?? [],
+                }]);
+              } else {
+                setMessages(prev => prev.map(m =>
+                  m.id === assistantId ? { ...m, actions: event.actions ?? [] } : m
+                ));
+              }
+              setLoading(false);
             } else if (event.type === "error") {
-              setMessages(prev => prev.map(m =>
-                m.id === assistantId ? { ...m, content: `Error: ${event.message}`, error: true } : m
-              ));
+              if (!assistantStarted) {
+                assistantStarted = true;
+                setMessages(prev => [...prev, {
+                  id: assistantId,
+                  role: "assistant",
+                  content: `Error: ${event.message}`,
+                  error: true,
+                }]);
+              } else {
+                setMessages(prev => prev.map(m =>
+                  m.id === assistantId ? { ...m, content: `Error: ${event.message}`, error: true } : m
+                ));
+              }
+              setLoading(false);
             }
           } catch { /* malformed chunk */ }
         }
@@ -466,7 +559,7 @@ export default function SandboxPage() {
       await fetch(`${AUTH_API}/api/connections/request`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ targetUserId: action.user_id }),
+        body: JSON.stringify({ toUserId: action.user_id }),
       });
       setConnectedIds(prev => new Set([...prev, action.user_id!]));
     } finally {

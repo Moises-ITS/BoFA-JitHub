@@ -3,7 +3,6 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, OrbitControls, RoundedBox } from "@react-three/drei";
 import { motion, AnimatePresence } from "motion/react";
 import * as THREE from "three";
-import { useNavigate } from "react-router-dom";
 
 type Opportunity = { id: string; title: string; description: string; tags: string[]; requirement: string };
 type Building = { id: string; name: string; professor: string; position: [number, number, number]; size: [number, number, number]; opportunities: Opportunity[] };
@@ -231,7 +230,7 @@ function DistrictNode({ district, active, dimmed, onSelect }: { district: Distri
         <circleGeometry args={[district.ringScale * 0.9, 48]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} depthTest={false} />
       </mesh>
-      <Html position={[0, 2.05, -district.ringScale * 0.52]} center distanceFactor={11} style={{ pointerEvents: "none" }}>
+      <Html position={[0, 1.55, -district.ringScale * 0.52]} center distanceFactor={11} zIndexRange={[2, 0]} style={{ pointerEvents: "none" }}>
         <div className={`rounded-2xl border px-4 py-2 backdrop-blur-md transition-all duration-300 ${dimmed ? "opacity-35" : "opacity-100"} ${hovered || active ? "scale-105" : "scale-100"}`} style={{ borderColor: district.color, background: "rgba(5,10,24,0.72)", minWidth: 180 }}>
           <div className="text-[13px] font-semibold text-white">{district.name}</div><div className="mt-1 text-[11px] text-slate-300">{district.shortStat}</div>
         </div>
@@ -292,7 +291,7 @@ function BuildingNode({ district, building, selected, dimmed, onSelect }: { dist
   useFrame((state) => { if (!g.current) return; g.current.position.y = lerp(g.current.position.y, hovered || selected ? 0.12 : 0, 0.12); g.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.5 + building.position[0]) * 0.03; });
   return <group ref={g} position={[district.position[0] + building.position[0], building.position[1], district.position[2] + building.position[2]]} onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} onClick={() => onSelect(building)}>
     <RoundedBox args={building.size} radius={0.08} smoothness={4}><meshStandardMaterial color="#0f172a" roughness={0.28} metalness={0.85} emissive={district.color} emissiveIntensity={selected ? 1.4 : hovered ? 0.95 : 0.35} transparent opacity={dimmed ? 0.22 : 1} /></RoundedBox>
-    {(hovered || selected) && <Html position={[0, building.size[1] / 2 + 0.45, 0]} center distanceFactor={12}><div className="rounded-xl border border-white/15 bg-slate-950/85 px-3 py-2 text-center"><div className="text-xs font-semibold text-white">{building.name}</div><div className="mt-1 text-[11px] text-slate-300">{building.professor}</div></div></Html>}
+    {(hovered || selected) && <Html position={[0, building.size[1] / 2 + 0.35, 0]} center distanceFactor={12} zIndexRange={[2, 0]} style={{ pointerEvents: "none" }}><div className="rounded-xl border border-white/15 bg-slate-950/85 px-3 py-2 text-center"><div className="text-xs font-semibold text-white">{building.name}</div><div className="mt-1 text-[11px] text-slate-300">{building.professor}</div></div></Html>}
   </group>;
 }
 
@@ -319,15 +318,98 @@ function Scene({ focusedDistrict, setFocusedDistrict, selectedBuilding, setSelec
 }
 
 export default function ResearchDistrictsScene() {
-  const navigate = useNavigate();
   const [focusedDistrict, setFocusedDistrict] = useState<District | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
-  const reset = () => { setFocusedDistrict(null); setSelectedBuilding(null); };
-  useEffect(() => { const onEsc = (e: KeyboardEvent) => e.key === "Escape" && reset(); window.addEventListener("keydown", onEsc); return () => window.removeEventListener("keydown", onEsc); }, []);
-  return <div className="relative h-screen w-full overflow-hidden bg-[#030712] text-white">
-    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.12),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(239,68,68,0.10),transparent_22%),radial-gradient(circle_at_50%_100%,rgba(139,92,246,0.10),transparent_30%)]" />
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between p-6"><motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="pointer-events-auto max-w-xl rounded-3xl border border-white/10 bg-slate-950/60 p-5 backdrop-blur-xl"><div className="text-[11px] uppercase tracking-[0.28em] text-sky-300">JitHub Research Explorer</div><h1 className="mt-2 text-3xl font-semibold text-white">Research Districts</h1></motion.div><div className="pointer-events-auto flex items-center gap-3"><motion.button type="button" onClick={() => { if (focusedDistrict) { reset(); } else { reset(); navigate("/home"); } }} whileHover={{ scale: 1.04, y: -1 }} whileTap={{ scale: 0.97 }} className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-slate-100 backdrop-blur-md">{focusedDistrict ? "Back to Research Districts" : "Go to JitHub Home"}</motion.button></div></div>
-    <Canvas camera={{ position: [0, 10, 16], fov: 48 }} dpr={[1, 1.75]} onPointerMissed={() => (selectedBuilding ? setSelectedBuilding(null) : focusedDistrict ? setFocusedDistrict(null) : null)}><Suspense fallback={null}><Scene focusedDistrict={focusedDistrict} setFocusedDistrict={setFocusedDistrict} selectedBuilding={selectedBuilding} setSelectedBuilding={setSelectedBuilding} /></Suspense></Canvas>
-    <AnimatePresence>{focusedDistrict && selectedBuilding && <motion.aside initial={{ x: 420, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 420, opacity: 0 }} className="absolute right-0 top-0 z-30 h-full w-full max-w-md border-l border-white/10 bg-slate-950/88 p-6"><h2 className="text-xl font-semibold text-white">{selectedBuilding.name}</h2><div className="mt-2 text-sm text-slate-300">{selectedBuilding.professor}</div><button onClick={() => setSelectedBuilding(null)} className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200">Close</button></motion.aside>}</AnimatePresence>
-  </div>;
+
+  const reset = () => {
+    setFocusedDistrict(null);
+    setSelectedBuilding(null);
+  };
+
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") reset();
+    };
+
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, []);
+
+  return (
+    <div className="relative flex h-[calc(100vh-112px)] w-full flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#030712] text-white">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.12),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(239,68,68,0.10),transparent_22%),radial-gradient(circle_at_50%_100%,rgba(139,92,246,0.10),transparent_30%)]" />
+
+      <div className="relative isolate z-[200] flex shrink-0 items-start justify-between gap-6 border-b border-white/10 bg-[#030712]/92 p-6 backdrop-blur-xl">
+        <motion.div
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-xl rounded-3xl border border-white/10 bg-slate-950/60 p-5 backdrop-blur-xl"
+        >
+          <div className="text-[11px] uppercase tracking-[0.28em] text-sky-300">JitHub Research Explorer</div>
+          <h1 className="mt-2 text-3xl font-semibold text-white">Research Districts</h1>
+        </motion.div>
+
+        <div className="relative z-[130] flex items-center gap-3">
+          {focusedDistrict && (
+            <motion.button
+              type="button"
+              onClick={reset}
+              whileHover={{ scale: 1.04, y: -1 }}
+              whileTap={{ scale: 0.97 }}
+              className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-slate-100 backdrop-blur-md"
+            >
+              Back to Research Districts
+            </motion.button>
+          )}
+
+          <a
+            href="/home"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            className="relative z-[999] rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm text-slate-100 backdrop-blur-md transition-transform hover:scale-[1.04]"
+            style={{ pointerEvents: "auto" }}
+          >
+            Go to JitHub Home
+          </a>
+        </div>
+      </div>
+
+      <div className="relative z-0 min-h-0 flex-1 overflow-hidden">
+        <Canvas
+          camera={{ position: [0, 10, 16], fov: 48 }}
+          dpr={[1, 1.75]}
+          onPointerMissed={() => (selectedBuilding ? setSelectedBuilding(null) : focusedDistrict ? setFocusedDistrict(null) : null)}
+        >
+          <Suspense fallback={null}>
+            <Scene
+              focusedDistrict={focusedDistrict}
+              setFocusedDistrict={setFocusedDistrict}
+              selectedBuilding={selectedBuilding}
+              setSelectedBuilding={setSelectedBuilding}
+            />
+          </Suspense>
+        </Canvas>
+      </div>
+
+      <AnimatePresence>
+        {focusedDistrict && selectedBuilding && (
+          <motion.aside
+            initial={{ x: 420, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 420, opacity: 0 }}
+            className="absolute right-0 top-0 z-30 h-full w-full max-w-md border-l border-white/10 bg-slate-950/88 p-6"
+          >
+            <h2 className="text-xl font-semibold text-white">{selectedBuilding.name}</h2>
+            <div className="mt-2 text-sm text-slate-300">{selectedBuilding.professor}</div>
+            <button
+              onClick={() => setSelectedBuilding(null)}
+              className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200"
+            >
+              Close
+            </button>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }

@@ -5,6 +5,39 @@ import { createConnectionInNeo4j, removeConnectionFromNeo4j, getRecommendations 
 
 const router = Router()
 
+const TOPIC_STOP_WORDS = new Set([
+  "a", "an", "and", "are", "be", "can", "could", "for", "from", "help",
+  "helping", "how", "i", "in", "is", "it", "me", "my", "of", "on", "or",
+  "someone", "something", "that", "the", "these", "those", "to", "want",
+  "who", "with", "would", "you",
+])
+
+function normalizeClubText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "")
+}
+
+function tokenizeTopic(value: string | null | undefined) {
+  return new Set(
+    (value ?? "")
+      .toLowerCase()
+      .match(/[a-z0-9+#]+/g)?.filter((token) => token.length >= 3 && !TOPIC_STOP_WORDS.has(token)) ?? []
+  )
+}
+
+function memberMatchesClub(userClubs: string[], clubTerms: string[]) {
+  const normalizedTerms = clubTerms.map(normalizeClubText).filter(Boolean)
+  return userClubs.some((club) => {
+    const normalizedClub = normalizeClubText(club)
+    return normalizedTerms.some((term) =>
+      normalizedClub === term || normalizedClub.includes(term) || term.includes(normalizedClub)
+    )
+  })
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+}
+
 // All connection routes require auth
 router.use(requireAuth)
 
@@ -86,6 +119,161 @@ router.get("/recommendations", async (req: AuthRequest, res: Response) => {
     res.json(enriched)
   } catch (err) {
     console.error("Recommendations error:", err)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+router.post("/club-members", async (req: AuthRequest, res: Response) => {
+  const rawClubName = typeof req.body?.clubName === "string" ? req.body.clubName.trim() : ""
+  const clubTerms = Array.isArray(req.body?.clubTerms)
+    ? req.body.clubTerms.filter((term: unknown): term is string => typeof term === "string" && term.trim().length > 0)
+    : []
+  const topic = typeof req.body?.topic === "string" ? req.body.topic.trim() : ""
+  const limit = Math.min(Math.max(Number(req.body?.limit) || 5, 1), 8)
+
+  if (!rawClubName) {
+    res.status(400).json({ error: "clubName is required" })
+    return
+  }
+
+  const allClubTerms = Array.from(new Set([rawClubName, ...clubTerms]))
+  const topicTokens = tokenizeTopic(topic)
+
+  try {
+    const [meResult, candidatesResult, statusResult] = await Promise.all([
+      db.query(
+        `SELECT id, major, clubs, interests, skills
+         FROM users
+         WHERE id = $1`,
+        [req.userId]
+      ),
+      db.query(
+        `SELECT id, name, major, year, graduation_year, bio, clubs, interests, skills, looking_for
+         FROM users
+         WHERE id <> $1 AND array_length(clubs, 1) > 0`,
+        [req.userId]
+      ),
+      db.query(
+        `SELECT from_user_id, to_user_id, status
+         FROM connection_requests
+         WHERE from_user_id = $1 OR to_user_id = $1`,
+        [req.userId]
+      ),
+    ])
+
+    const me = meResult.rows[0] ?? { major: null, clubs: [], interests: [], skills: [] }
+    const statusMap = new Map<string, { status: string; direction: string }>()
+    for (const row of statusResult.rows) {
+      const otherId = row.from_user_id === req.userId ? row.to_user_id : row.from_user_id
+      statusMap.set(otherId, {
+        status: row.status as string,
+        direction: row.from_user_id === req.userId ? "sent" : "received",
+      })
+    }
+
+    const members = candidatesResult.rows
+      .map((row) => {
+        const clubs = toStringArray(row.clubs)
+        if (!memberMatchesClub(clubs, allClubTerms)) {
+          return null
+        }
+
+        const interests = toStringArray(row.interests)
+        const skills = toStringArray(row.skills)
+        const lookingFor = toStringArray(row.looking_for)
+        const reasons: string[] = []
+        let score = 1
+
+        const skillMatches = skills.filter((skill) => {
+          const tokens = tokenizeTopic(skill)
+          return Array.from(topicTokens).some((token) => tokens.has(token))
+        })
+        if (skillMatches.length > 0) {
+          score += 4 + Math.min(skillMatches.length, 2)
+          reasons.push(`skills: ${skillMatches.slice(0, 2).join(", ")}`)
+        }
+
+        const interestMatches = interests.filter((interest) => {
+          const tokens = tokenizeTopic(interest)
+          return Array.from(topicTokens).some((token) => tokens.has(token))
+        })
+        if (interestMatches.length > 0) {
+          score += 2 + Math.min(interestMatches.length, 2)
+          reasons.push(`interests: ${interestMatches.slice(0, 2).join(", ")}`)
+        }
+
+        const lookingForMatches = lookingFor.filter((item) => {
+          const tokens = tokenizeTopic(item)
+          return Array.from(topicTokens).some((token) => tokens.has(token))
+        })
+        if (lookingForMatches.length > 0) {
+          score += 2
+          reasons.push(`also looking for: ${lookingForMatches.slice(0, 2).join(", ")}`)
+        }
+
+        if (me.major && row.major && String(me.major).trim().toLowerCase() === String(row.major).trim().toLowerCase()) {
+          score += 2
+          reasons.push(`same major: ${row.major}`)
+        }
+
+        const sharedInterests = interests.filter((interest) => toStringArray(me.interests).includes(interest))
+        if (sharedInterests.length > 0) {
+          score += 2
+          reasons.push(`shared interests: ${sharedInterests.slice(0, 2).join(", ")}`)
+        }
+
+        const sharedSkills = skills.filter((skill) => toStringArray(me.skills).includes(skill))
+        if (sharedSkills.length > 0) {
+          score += 2
+          reasons.push(`shared skills: ${sharedSkills.slice(0, 2).join(", ")}`)
+        }
+
+        const sharedOtherClubs = clubs.filter((club) =>
+          toStringArray(me.clubs).includes(club) && normalizeClubText(club) !== normalizeClubText(rawClubName)
+        )
+        if (sharedOtherClubs.length > 0) {
+          score += 1
+          reasons.push(`shared clubs: ${sharedOtherClubs.slice(0, 2).join(", ")}`)
+        }
+
+        const connection = statusMap.get(row.id)
+        return {
+          user_id: row.id,
+          name: row.name,
+          major: row.major,
+          year: row.year,
+          graduation_year: row.graduation_year,
+          clubs,
+          interests,
+          skills,
+          looking_for: lookingFor,
+          bio: row.bio ?? "",
+          score,
+          match_reasons: reasons,
+          connection_status: connection?.status ?? null,
+          connection_direction: connection?.direction ?? null,
+        }
+      })
+      .filter((member): member is NonNullable<typeof member> => member !== null)
+      .sort((a, b) => {
+        const aConnected = a.connection_status === "accepted" ? 1 : 0
+        const bConnected = b.connection_status === "accepted" ? 1 : 0
+        if (aConnected !== bConnected) return aConnected - bConnected
+        const aPending = a.connection_status === "pending" ? 1 : 0
+        const bPending = b.connection_status === "pending" ? 1 : 0
+        if (aPending !== bPending) return aPending - bPending
+        if (a.score !== b.score) return b.score - a.score
+        return (a.name ?? "").localeCompare(b.name ?? "")
+      })
+      .slice(0, limit)
+
+    res.json({
+      club_name: rawClubName,
+      topic: topic || null,
+      members,
+    })
+  } catch (err) {
+    console.error("Club members lookup error:", err)
     res.status(500).json({ error: "Internal server error" })
   }
 })

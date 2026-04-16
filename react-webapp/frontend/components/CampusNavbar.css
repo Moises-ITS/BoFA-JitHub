@@ -4,10 +4,12 @@
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-default);
-  padding: 10px 32px;
+  padding: 8px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
   flex-shrink: 0;
   box-shadow: 0 1px 0 rgba(255,255,255,0.04), var(--shadow-elevated);
   z-index: 100;
@@ -16,6 +18,15 @@
 .navLogo {
   display: flex; align-items: center; gap: 10px;
   font-weight: 700; font-size: 1.1rem;
+  appearance: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1.05;
   background: linear-gradient(90deg, var(--text-primary) 0%, var(--text-muted) 100%);
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -25,6 +36,7 @@
   text-shadow: 0 0 20px rgba(255,107,53,0.3);
 }
 .navTagline {
+  display: block;
   font-size: 0.68rem; color: var(--text-subtle); font-weight: 400;
   -webkit-text-fill-color: var(--text-subtle);
   background: none;

@@ -20,18 +20,7 @@ import HoverCard                          from "./components/HoverCard";
 import { useAuth }                        from "../../context/AuthContext";
 import { NetworkIntro }                   from "../../components/NetworkTransition";
 import CampusNavbar                       from "../../components/CampusNavbar";
-import { TYPE_COLOR } from "./constants/maps";
-import { getNodeId } from "./utils/getNodeId";
-import { useGraphData } from "./hooks/useGraphData";
-import SidePanel from "./components/SidePanel";
-import FilterBar from "./components/FilterBar";
-import SearchBar from "./components/SearchBar";
-import Legend from "./components/Legend";
-import TopConnected from "./components/TopConnected";
-import HoverCard from "./components/HoverCard";
 import Graph3DGlobeView from "./components/Graph3DGlobeView";
-import { useAuth } from "../../context/AuthContext";
-import { NetworkIntro } from "../../components/NetworkTransition";
 import "./CampusGraph.css";
 
 const API = import.meta.env.VITE_API_URL ?? "";
@@ -203,15 +192,6 @@ export default function CampusGraph() {
   const [visibleCount,        setVisibleCount]        = useState(0);
   const [hoverCard,           setHoverCard]           = useState<{ node: GraphNode; x: number; y: number } | null>(null);
   const [d3Ready,             setD3Ready]             = useState(false);
-  const [mode, setMode] = useState<GraphMode>("free");
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
-  const [hiddenTypes, setHiddenTypes] = useState<Set<NodeType>>(new Set());
-  const [searchQuery, setSearchQuery] = useState("");
-  const [companyQuery, setCompanyQuery] = useState("");
-  const [pathNodeIds, setPathNodeIds] = useState<string[]>([]);
-  const [pathStatus, setPathStatus] = useState<"idle" | "searching" | "found" | "notfound">("idle");
-  const [hoverCard, setHoverCard] = useState<{ node: GraphNode; x: number; y: number } | null>(null);
-  const [d3Ready, setD3Ready] = useState(false);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
   const [demoMode, setDemoMode] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
@@ -277,17 +257,10 @@ export default function CampusGraph() {
   useEffect(() => { modeRef.current       = mode;   }, [mode]);
   useEffect(() => { nodesRef.current      = nodes;  }, [nodes]);
   useEffect(() => { linksRef.current      = links;  }, [links]);
-  const modeRef = useRef<GraphMode>("free");
-  const selectedIdRef = useRef<string | null>(null);
-  const nodesRef = useRef(nodes);
-  const linksRef = useRef(links);
   const hoveredNodeIdRef = useRef<string | null>(null);
   const searchActiveRef = useRef(false);
   const currentZoomKRef = useRef(1);
   const flickerTimeRef = useRef(0);
-  useEffect(() => { modeRef.current = mode; }, [mode]);
-  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
-  useEffect(() => { linksRef.current = links; }, [links]);
   useEffect(() => { hiddenTypesRef.current = hiddenTypes; }, [hiddenTypes]);
   useEffect(() => {
     introLandingFixRef.current = false;
@@ -316,9 +289,14 @@ export default function CampusGraph() {
   const getGraphViewportDims = useCallback(() => {
     const svgNode = svgRef.current;
     if (!svgNode) return dimsRef.current;
-    const w = Math.max(1, svgNode.clientWidth || dimsRef.current.w);
-    const h = Math.max(1, svgNode.clientHeight || dimsRef.current.h);
+    const parent = svgNode.parentElement;
+    const w = Math.max(1, parent?.clientWidth || svgNode.clientWidth || dimsRef.current.w);
+    const h = Math.max(1, parent?.clientHeight || svgNode.clientHeight || dimsRef.current.h);
     dimsRef.current = { w, h };
+    svgNode.setAttribute("width", String(w));
+    svgNode.setAttribute("height", String(h));
+    svgNode.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svgNode.setAttribute("preserveAspectRatio", "xMidYMid meet");
     return dimsRef.current;
   }, []);
 
@@ -737,8 +715,8 @@ export default function CampusGraph() {
     if (loading || error || !svgRef.current || nodes.length === 0) return;
 
     const svg = d3.select(svgRef.current);
-    const width = svgRef.current.clientWidth;
-    const height = svgRef.current.clientHeight;
+    svg.selectAll("*").remove();
+    const { w: width, h: height } = getGraphViewportDims();
     dimsRef.current = { w: width, h: height };
 
     // ── SVG defs (glow filters) ────────────────────────────────────────────
@@ -1655,7 +1633,7 @@ export default function CampusGraph() {
       sim.stop();
       svg.selectAll("*").remove();
     };
-  }, [nodes, links, loading, error, user, getGraphViewportDims]); // eslint-disable-line
+  }, [nodes, links, loading, error, user?.id, getGraphViewportDims]); // eslint-disable-line
 
   // ── Path Mode Effect ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -2455,10 +2433,12 @@ export default function CampusGraph() {
 
       {/* Main */}
       <div className="main">
-        <div className="bgGlow" />
-        <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} />
         <div className="bgGlow" ref={bgGlowRef} />
-        <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} className={viewMode === "3d" ? "graph2DHidden" : "graph2DVisible"} />
+        <svg
+          id="graph-svg"
+          ref={svgRef}
+          className={`graphSurface ${viewMode === "3d" ? "graph2DHidden" : "graph2DVisible"}`}
+        />
         <div className={`graph3DWrap${viewMode === "3d" ? " graph3DWrap--active" : ""}`}>
           <Graph3DGlobeView
             active={viewMode === "3d"}
@@ -2498,13 +2478,6 @@ export default function CampusGraph() {
           nodes={nodes}
           links={links}
           onClose={deselectAll}
-          onSelectNode={id => { const n = nodes.find(x => x.id === id); if (n) selectNodeFn(n); }}
-        />
-        <Legend />
-        <TopConnected
-          nodes={nodes}
-          links={links}
-          currentUserId={user?.id ?? ""}
           onSelectNode={id => { const n = nodes.find(x => x.id === id); if (n) selectNodeFn(n); }}
         />
         {!walkthroughLayout2D && (
@@ -2595,4 +2568,3 @@ export default function CampusGraph() {
     </div>
   );
 }
-

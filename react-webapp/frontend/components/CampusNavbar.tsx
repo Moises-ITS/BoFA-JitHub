@@ -31,7 +31,12 @@ export default function CampusNavbar({
 
   return (
     <nav className="navbar">
-      <div className="navLogo">
+      <button
+        type="button"
+        className="navLogo"
+        onClick={() => navigate("/", { replace: true })}
+        aria-label="Go to main page"
+      >
         <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
           <rect width="36" height="36" rx="9" fill="#FF6B35" />
           <line x1="18" y1="18" x2="18" y2="6.5"  stroke="white" strokeWidth="2.2" strokeLinecap="round" />
@@ -52,7 +57,7 @@ export default function CampusNavbar({
           <span className="navLogoText">JitHub</span>
           <span className="navTagline">Map your network · Discover your opportunities</span>
         </div>
-      </div>
+      </button>
       <div className="navRight">
         <div className="navStats">
           <span className={`modeBadge mode-${mode}`}>{modeBadge}</span>

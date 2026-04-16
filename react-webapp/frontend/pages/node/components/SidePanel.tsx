@@ -1,8 +1,10 @@
-/// <reference types="vite/client" />
-// ─────────────────────────────────────────────────────────────────────────────
+﻿/// <reference types="vite/client" />
+// 
 // components/SidePanel.tsx
-// Shows node details, Add Connection button, and Recommended Connections
+// Shows node details and connection status (view-only on own node)
 // ─────────────────────────────────────────────────────────────────────────────
+// Shows node details, Add Connection button, and Recommended Connections
+// 
 
 import { useState, useEffect } from "react";
 import type { GraphNode, GraphLink } from "../types/graphNodes";
@@ -11,16 +13,6 @@ import { getNodeId } from "../utils/getNodeId";
 import { useAuth } from "../../../context/AuthContext";
 
 const API = import.meta.env.VITE_API_URL ?? "";
-
-interface Recommendation {
-  id:              string;
-  name:            string;
-  major:           string;
-  sharedClubs:     number;
-  sharedInterests: number;
-  sameMajor:       boolean;
-  score:           number;
-}
 
 type ConnStatus = "none" | "pending-sent" | "pending-received" | "connected";
 
@@ -44,15 +36,29 @@ interface SidePanelProps {
   onSelectNode: (id: string) => void;
 }
 
+// Minimal recommendation type returned by the recommendations API
+interface Recommendation {
+  id: string;
+  name: string;
+  score: number;
+  sameMajor?: boolean;
+  major?: string;
+  sharedInterests?: number;
+  sharedClubs?: number;
+}
+
 export default function SidePanel({ node, nodes, links, onClose, onSelectNode }: SidePanelProps) {
   const { user, token } = useAuth();
   const isOwnNode = node?.id === user?.id;
 
   // ── Connection status state ───────────────────────────────────────────────
-  const [connStatus,  setConnStatus]  = useState<ConnStatus>("none");
-  const [connLoading, setConnLoading] = useState(false);
+  const [connStatus,    setConnStatus]    = useState<ConnStatus>("none");
+  const [connLoading,   setConnLoading]   = useState(false);
+  const [connExpanded,  setConnExpanded]  = useState(false);
+  //  Connection status state 
+  
 
-  // ── Recommendations (shown on own node) ───────────────────────────────────
+  //  Recommendations (shown on own node) 
   const [recs, setRecs] = useState<Recommendation[]>([]);
 
   // Fetch connection status whenever the selected node changes
@@ -72,6 +78,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       .catch(() => setConnStatus("none"));
   }, [node?.id, user, isOwnNode]); // eslint-disable-line
 
+  // ── Connection actions ────────────────────────────────────────────────────
   // Fetch recommendations when viewing own node
   useEffect(() => {
     if (!isOwnNode || !user) { setRecs([]); return; }
@@ -81,7 +88,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       .catch(() => setRecs([]));
   }, [isOwnNode, user]);
 
-  // ── Connection actions ────────────────────────────────────────────────────
+  //  Connection actions 
   const sendRequest = async () => {
     if (!node || !user) return;
     setConnLoading(true);
@@ -96,6 +103,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     setConnLoading(false);
   };
 
+  // ── Early return ──────────────────────────────────────────────────────────
   const acceptRequest = async () => {
     if (!node || !user) return;
     setConnLoading(true);
@@ -137,7 +145,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     setConnLoading(false);
   };
 
-  // ── Early return ──────────────────────────────────────────────────────────
+  //  Early return 
   if (!node) return null;
 
   const connLinks = links.filter(l =>
@@ -157,7 +165,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       {/* Header */}
       <div className="panelHeader">
         <span className="panelHeaderLabel">Node Details</span>
-        <button className="closeBtn" onClick={onClose}>✕</button>
+        <button className="closeBtn" onClick={onClose}>x</button>
       </div>
 
       {/* Avatar + Name */}
@@ -171,7 +179,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
           )}
           {node.details?.linkedinUrl && (
             <a href={node.details.linkedinUrl as string} target="_blank" rel="noopener noreferrer" className="panelLinkedin">
-              LinkedIn ↗
+              LinkedIn {"->"}
             </a>
           )}
         </div>
@@ -182,37 +190,43 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
         {TYPE_EMOJI[node.type]} {node.type.charAt(0).toUpperCase() + node.type.slice(1)}
       </span>
 
-      {/* ── Add Connection ─────────────────────────────────────────────────── */}
+      {/*  Add Connection  */}
       {node.type === "student" && !isOwnNode && (
         <div className="connectSection">
           {connStatus === "none" && (
             <button className="connectBtn" onClick={sendRequest} disabled={connLoading}>
-              {connLoading ? "Sending…" : "+ Add Connection"}
+              {connLoading ? "Sending..." : "+ Add Connection"}
             </button>
           )}
           {connStatus === "pending-sent" && (
             <span className="connectChip connectChip--pending">Request Sent</span>
           )}
           {connStatus === "pending-received" && (
-            <div className="connectIncoming">
-              <span className="connectChip connectChip--incoming">Wants to connect</span>
-              <div className="connectActions">
-                <button className="connectBtn connectBtn--accept"   onClick={acceptRequest} disabled={connLoading}>Accept</button>
-                <button className="connectBtn connectBtn--decline"  onClick={rejectRequest} disabled={connLoading}>Decline</button>
-              </div>
-            </div>
+            <span className="connectChip connectChip--incoming">Wants to connect with you</span>
           )}
           {connStatus === "connected" && (
             <div className="connectIncoming">
-              <span className="connectChip connectChip--connected">✓ Connected</span>
+              <span className="connectChip connectChip--connected">Connected</span>
               <div className="connectActions">
                 <button className="connectBtn connectBtn--decline" onClick={removeConnection} disabled={connLoading}>
-                  {connLoading ? "Removing…" : "Remove"}
+                  {connLoading ? "Removing..." : "Remove"}
                 </button>
               </div>
             </div>
           )}
+          {node.details?.linkedinUrl && (
+            <a href={node.details.linkedinUrl as string} target="_blank" rel="noopener noreferrer" className="panelLinkedin">
+              LinkedIn ↗
+            </a>
+          )}
         </div>
+      )}
+
+      {/* LinkedIn for own node or non-student nodes */}
+      {(isOwnNode || node.type !== "student") && node.details?.linkedinUrl && (
+        <a href={node.details.linkedinUrl as string} target="_blank" rel="noopener noreferrer" className="panelLinkedin" style={{ margin: "6px 16px 0" }}>
+          LinkedIn ↗
+        </a>
       )}
 
       {/* Details */}
@@ -222,7 +236,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
           .filter(([k]) => !HIDDEN_DETAIL_KEYS.has(k))
           .map(([k, v]) => (
             <div key={k} className="detailRow">
-              <span className="detailIcon">{DETAIL_ICONS[k] || "•"}</span>
+              <span className="detailIcon">{DETAIL_ICONS[k] || "-"}</span>
               <div>
                 <div className="detailLabel">{k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</div>
                 <div className="detailVal">{v as string}</div>
@@ -234,7 +248,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       {/* Connections */}
       <div className="section">
         <h4 className="sectionTitle">Connections ({connLinks.length})</h4>
-        {connLinks.map((l, i) => {
+        {(connExpanded ? connLinks : connLinks.slice(0, 5)).map((l, i) => {
           const otherId = getNodeId(l.source) === node.id ? getNodeId(l.target) : getNodeId(l.source);
           const other   = nodes.find(n => n.id === otherId);
           if (!other) return null;
@@ -248,25 +262,52 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
             </div>
           );
         })}
+        {connLinks.length > 5 && (
+          <button
+            className="connExpandBtn"
+            onClick={() => setConnExpanded(e => !e)}
+          >
+            {connExpanded ? "← Show less" : `Show ${connLinks.length - 5} more →`}
+          </button>
+        )}
       </div>
 
-      {/* ── Recommended Connections (own profile only) ─────────────────────── */}
+      {/*  Recommended Connections (own profile only)  */}
       {isOwnNode && recs.length > 0 && (
-        <div className="section">
+        <div className="section recSection">
           <h4 className="sectionTitle">Recommended for You</h4>
           {recs.map(rec => {
             const reasons: string[] = [];
-            if (rec.sameMajor)          reasons.push(`Same major (${rec.major})`);
-            if (rec.sharedInterests > 0) reasons.push(`${rec.sharedInterests} shared interest${rec.sharedInterests > 1 ? "s" : ""}`);
-            if (rec.sharedClubs > 0)     reasons.push(`${rec.sharedClubs} shared club${rec.sharedClubs > 1 ? "s" : ""}`);
+            if (rec.sameMajor) reasons.push(`Same major (${rec.major})`);
+            if ((rec.sharedInterests ?? 0) > 0) reasons.push(`${rec.sharedInterests} shared interest${(rec.sharedInterests ?? 0) > 1 ? "s" : ""}`);
+            if ((rec.sharedClubs ?? 0) > 0) reasons.push(`${rec.sharedClubs} shared club${(rec.sharedClubs ?? 0) > 1 ? "s" : ""}`);
             return (
               <div key={rec.id} className="recItem" onClick={() => onSelectNode(rec.id)}>
-                <div className="recAvatar" style={{ background: TYPE_COLOR.student }}>
-                  {rec.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                  <div className="recAvatar" style={{ background: TYPE_COLOR.student }}>
+                  {rec.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
                 </div>
                 <div className="recInfo">
-                  <div className="recName">{rec.name}</div>
-                  <div className="recReason">{reasons.join(" · ")}</div>
+                  <div className="recRowTop">
+                    <div className="recName">{rec.name}</div>
+                    <span className="recScore">Match {Math.min(99, Math.round(rec.score * 11 + 38))}%</span>
+                  </div>
+                  <div className="recReason">{reasons.join(" | ")}</div>
+                  <div className="recActions">
+                    <button
+                      type="button"
+                      className="recBtn recBtn--ghost"
+                      onClick={(e) => { e.stopPropagation(); onSelectNode(rec.id); }}
+                    >
+                      View Profile
+                    </button>
+                    <button
+                      type="button"
+                      className="recBtn recBtn--accent"
+                      onClick={(e) => { e.stopPropagation(); onSelectNode(rec.id); }}
+                    >
+                      Connect
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -277,3 +318,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     </div>
   );
 }
+
+
+
+

@@ -19,6 +19,10 @@ const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 // Lazy-load heavy pages to keep the initial bundle small.
 const CampusGraph = lazy(() => import("./pages/node/CampusGraph"))
 const SandboxPage = lazy(() => import("./pages/sandbox/SandboxPage"))
+const DigitalTwin = lazy(() => import("./pages/map/DigitalTwin"))
+const CampusView = lazy(() => import("./pages/campus/CampusView"))
+const GlbInspector = lazy(() => import("./pages/campus/GlbInspector"))
+const ResearchDistricts = lazy(() => import("./pages/districts/ResearchDistricts"))
 
 function MissingClerkConfigScreen() {
   return (
@@ -130,11 +134,41 @@ export default function App() {
             <Route path="/setup" element={<ProfileSetupPage />} />
 
             <Route element={<ProtectedRoute />}>
+              {/* Full-screen routes — no Layout shell */}
+              <Route path="/map" element={
+                <ErrorBoundary>
+                  <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0f1117", color:"#718096" }}>Loading Digital Twin…</div>}>
+                    <DigitalTwin />
+                  </Suspense>
+                </ErrorBoundary>
+              } />
+              <Route path="/campus" element={
+                <ErrorBoundary>
+                  <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0f1117", color:"#718096" }}>Loading Campus…</div>}>
+                    <CampusView />
+                  </Suspense>
+                </ErrorBoundary>
+              } />
+              <Route path="/inspect" element={
+                <ErrorBoundary>
+                  <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0f1117", color:"#718096" }}>Loading Inspector…</div>}>
+                    <GlbInspector />
+                  </Suspense>
+                </ErrorBoundary>
+              } />
+
               <Route element={<Layout />}>
                 <Route path="/home" element={<Home />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/events" element={<EventsPage />} />
                 <Route path="/opportunities" element={<OpportunitiesPage />} />
+                <Route path="/research" element={
+                  <ErrorBoundary>
+                    <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"calc(100vh - 64px)", background:"#0a0b10", color:"#718096", margin: "-24px" }}>Loading Research Districts…</div>}>
+                      <ResearchDistricts />
+                    </Suspense>
+                  </ErrorBoundary>
+                } />
                 <Route
                   path="/network"
                   element={

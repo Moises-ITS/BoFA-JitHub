@@ -10,8 +10,22 @@
 | Backend       | Node.js, Express, TypeScript (via `tsx`)        | Express 4        |
 | Graph DB      | Neo4j AuraDB                                    | Driver v5        |
 | Relational DB | PostgreSQL (hosted on Railway)                  | Driver v8        |
-| Auth          | JWT (`jsonwebtoken`) + `bcryptjs`               | JWT v9           |
+| Cache         | Redis (optional cache + smoke-tested)           | redis v5         |
+| Auth          | Clerk (`@clerk/clerk-react` + `@clerk/backend`) | Clerk v5/Core 2  |
 | Hosting       | Vercel (frontend) + Railway (backend)           |                  |
+
+---
+
+## Updates (2026-04-09)
+
+| Area | Update |
+|------|--------|
+| Frontend graph | Skill Tree mode removed |
+| Frontend graph | 2.5D Isometric mode removed; supported modes are 2D and 3D |
+| Backend startup | `src/index.ts` refactored to a single bootstrap flow |
+| Redis | Added robust Redis config parsing and optional startup connect |
+| Redis | Added `npm run redis:smoke` for connect + set/get/delete verification |
+| CI | `react-webapp/.github/workflows/ci.yml` now uses explicit working directories and optional Redis smoke test |
 
 ---
 
@@ -30,7 +44,8 @@ Install these before anything else:
 You also need credentials from a teammate for:
 - Neo4j AuraDB (URI, username, password)
 - Railway PostgreSQL (host, port, user, password, database name)
-- A `JWT_SECRET` string (any long random string, 32+ characters)
+- Clerk keys (`CLERK_SECRET_KEY`, `CLERK_JWT_PUBLIC_KEY`, frontend publishable key)
+- Redis connection URL (`redis://` or `rediss://`) if cache features are enabled
 
 ---
 
@@ -139,8 +154,17 @@ DB_USER=<user>
 DB_PASSWORD=<password>
 DB_NAME=<database>
 
-# Auth — use any long random string (32+ chars)
-JWT_SECRET=<your-random-secret>
+# Clerk auth
+CLERK_SECRET_KEY=sk_test_...
+CLERK_JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
+<paste PEM key here>
+-----END PUBLIC KEY-----"
+
+# Redis cache (optional but recommended)
+# Must be redis:// or rediss:// (not postgresql://)
+REDIS_URL=rediss://default:<password>@<host>:<port>
+# Optional: multiple instances for smoke test
+# REDIS_URLS=rediss://... , rediss://...
 ```
 
 ### 6. Run the database migration
@@ -210,6 +234,7 @@ Open **http://localhost:5173** — you will be redirected to `/login`.
 | `npm run dev`                    | Start Express with hot-reload via tsx     |
 | `npm run build`                  | Compile TypeScript to `dist/`             |
 | `npm run start`                  | Run compiled `dist/index.js` (production) |
+| `npm run redis:smoke`            | Redis connect + set/get/delete smoke test |
 | `npx tsx src/db/migrate.ts`      | Run pending SQL migrations                |
 
 ---
@@ -225,7 +250,8 @@ Open **http://localhost:5173** — you will be redirected to `/login`.
 | `dotenv`         | Load `.env` files                              |
 | `pg`             | PostgreSQL client                              |
 | `neo4j-driver`   | Neo4j database driver                          |
-| `jsonwebtoken`   | Sign and verify JWT tokens                     |
+| `@clerk/backend` | Verify Clerk session tokens in backend routes  |
+| `redis`          | Redis client for cache-backed features         |
 | `bcryptjs`       | Hash and compare passwords                     |
 | `uuid`           | Generate unique user IDs                       |
 | `express-rate-limit` | Rate limiting middleware                  |
@@ -285,7 +311,8 @@ Open **http://localhost:5173** — you will be redirected to `/login`.
 |------------------|----------|------------------------------------------------------|
 | `PORT`           | No       | Express listen port. Defaults to `3001`              |
 | `FRONTEND_URL`   | Yes      | CORS allowed origin. `http://localhost:5173` locally |
-| `JWT_SECRET`     | Yes      | Secret used to sign JWT tokens (keep private)        |
+| `CLERK_SECRET_KEY` | Yes    | Clerk backend secret key                             |
+| `CLERK_JWT_PUBLIC_KEY` | Yes | Clerk JWT public key PEM (quoted, multi-line)      |
 | `NEO4J_URI`      | Yes      | Neo4j AuraDB connection URI (`neo4j+s://...`)        |
 | `NEO4J_USER`     | Yes      | Neo4j username                                       |
 | `NEO4J_PASSWORD` | Yes      | Neo4j password                                       |
@@ -295,6 +322,8 @@ Open **http://localhost:5173** — you will be redirected to `/login`.
 | `DB_USER`        | Yes      | PostgreSQL username                                  |
 | `DB_PASSWORD`    | Yes      | PostgreSQL password                                  |
 | `DB_NAME`        | Yes      | PostgreSQL database name                             |
+| `REDIS_URL`      | No       | Primary Redis URI (`redis://` or `rediss://`)        |
+| `REDIS_URLS`     | No       | Comma-separated Redis URIs for multi-instance checks |
 
 ---
 
@@ -423,12 +452,16 @@ Variables tab:
 ```
 PORT=3001
 FRONTEND_URL=https://your-app.vercel.app
-JWT_SECRET=<same secret you use locally>
+CLERK_SECRET_KEY=...
+CLERK_JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY----- ... -----END PUBLIC KEY-----"
 NEO4J_URI=...
 NEO4J_USER=...
 NEO4J_PASSWORD=...
 DATABASE_URL=...  (Railway sets this automatically if using Railway Postgres)
+REDIS_URL=rediss://...  (public endpoint for local/CI checks)
 ```
+
+If you use Railway private hostnames like `redis.railway.internal`, they resolve only inside Railway network and will fail from local machines/CI runners.
 
 After deploying to Railway for the first time, run the migration once:
 ```bash

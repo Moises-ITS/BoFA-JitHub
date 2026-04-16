@@ -5,6 +5,7 @@ import { db } from "../config/postgres"
 import { requireAuth, AuthRequest } from "../middlewear/auth"
 import { createStudentNode, updateStudentNode } from "../services/graphService"
 import { verifyClerkSessionToken } from "../utils/clerkToken"
+import { syncRateLimiter, profileUpdateRateLimiter } from "../middlewear/authRateLimit"
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
@@ -72,9 +73,10 @@ function toNullableInt(value: unknown): number | null {
   return Number.isNaN(parsed) ? null : parsed
 }
 
+
 const router = Router()
 
-router.post("/sync", async (req: Request, res: Response) => {
+router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
   const token = req.headers.authorization?.slice(7)
   if (!token) {
     res.status(401).json({ error: "Unauthorized" })
@@ -136,6 +138,14 @@ router.post("/sync", async (req: Request, res: Response) => {
       return
     }
 
+    // Legacy user reclaim handled above
+
+    // Brand-new user — name is required; major/year can be filled in later
+    if (!name) {
+      res.status(400).json({ error: "name is required" }); return
+    }
+
+    // Brand-new user
     const id = uuidv4()
     const majorValue = typeof major === "string" ? major.trim() : ""
     const gpaValue = toNullableNumber(gpa)
@@ -238,7 +248,7 @@ router.get("/interests", async (_req: Request, res: Response) => {
   }
 })
 
-router.put("/profile", requireAuth, async (req: AuthRequest, res: Response) => {
+router.put("/profile", requireAuth, profileUpdateRateLimiter, async (req: AuthRequest, res: Response) => {
   const { gpa, major, graduationYear, bio, clubs, companies, interests, linkedinUrl, skills, looking_for, year } = req.body
 
   if (!major || !graduationYear) {

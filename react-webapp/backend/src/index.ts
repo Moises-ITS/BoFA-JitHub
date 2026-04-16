@@ -1,97 +1,125 @@
 import { fileURLToPath } from "url"
 import path from "path"
-import dotenv from "dotenv"
 import fs from "fs"
+import dotenv from "dotenv"
 
 const __filename = fileURLToPath(import.meta.url)
-const __dirname  = path.dirname(__filename)
+const __dirname = path.dirname(__filename)
 dotenv.config({ path: path.resolve(__dirname, "../.env") })
 
-// Dynamic imports ensure dotenv runs before any module that reads process.env
-const [
-  expressModule,
-  { default: cors },
-  { db },
-  ,
-  graphMod,
-  authMod,
-  connMod,
-  oppMod,
-  chatMemMod,
-  { startScheduler },
-  { runMigrations },
-  { ensureNodeIds },
-] = await Promise.all([
-  import("express"),
-  import("cors"),
-  import("./config/postgres.js"),
-  import("./config/neo4j.js"),
-  import("./routes/graph.js"),
-  import("./routes/auth.js"),
-  import("./routes/connections.js"),
-  import("./routes/opportunities.js"),
-  import("./routes/chatMemory.js"),
-  import("./scrapers/runner.js"),
-  import("./db/migrate.js"),
-  import("./services/graphService.js"),
-])
+const PORT = Number(process.env.PORT ?? 3001)
+const FRONTEND_ORIGIN = process.env.FRONTEND_URL ?? "http://localhost:5173"
 
-try {
-  await runMigrations()
-  await ensureNodeIds()
-} catch (err: unknown) {
-  const msg = err instanceof Error ? err.message : String(err)
-  console.error("Startup migration/setup failed:", msg)
-}
+const EXTRA_SQL_MIGRATIONS = [
+  "db/migrations/003_opportunities.sql",
+]
 
-// Run the opportunities migration on startup
-try {
-  const migrationPath = path.resolve(__dirname, "db/migrations/003_opportunities.sql")
-  const sql = fs.readFileSync(migrationPath, "utf8")
-  await db.query(sql)
-  console.log("Migration 003_opportunities applied")
-} catch (err: unknown) {
-  const msg = err instanceof Error ? err.message : String(err)
-  if (!msg.includes("already exists")) {
-    console.error("Migration 003 failed:", msg)
+async function applySqlMigrations(db: { query: (sql: string) => Promise<unknown> }) {
+  for (const relPath of EXTRA_SQL_MIGRATIONS) {
+    const filePath = path.resolve(__dirname, relPath)
+    const migrationName = path.basename(relPath)
+    try {
+      const sql = fs.readFileSync(filePath, "utf8")
+      await db.query(sql)
+      console.log(`Migration ${migrationName} applied`)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`Migration ${migrationName} failed:`, msg)
+      throw err
+    }
   }
 }
 
-const express = expressModule.default
-const app = express()
+async function connectRedisIfConfigured() {
+  const { connectRedis, isRedisConfigured } = await import("./lib/redis.js")
+  if (!isRedisConfigured()) {
+    console.warn("Redis is not configured. Continuing without Redis.")
+    return
+  }
+  await connectRedis()
+}
 
-const configuredFrontendOrigin = process.env.FRONTEND_URL || "http://localhost:5173"
-const allowedOrigins = new Set<string>([
-  configuredFrontendOrigin,
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-])
+async function bootstrap() {
+  // Dynamic imports ensure dotenv runs before any module that reads process.env.
+  const [
+    expressModule,
+    { default: cors },
+    { db },
+    ,
+    graphMod,
+    authMod,
+    connMod,
+    oppMod,
+    chatMemMod,
+    buildingsMod,
+    { startScheduler },
+    { runMigrations },
+    { ensureNodeIds },
+  ] = await Promise.all([
+    import("express"),
+    import("cors"),
+    import("./config/postgres.js"),
+    import("./config/neo4j.js"),
+    import("./routes/graph.js"),
+    import("./routes/auth.js"),
+    import("./routes/connections.js"),
+    import("./routes/opportunities.js"),
+    import("./routes/chatMemory.js"),
+    import("./routes/buildings.js"),
+    import("./scrapers/runner.js"),
+    import("./db/migrate.js"),
+    import("./services/graphService.js"),
+  ])
 
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || allowedOrigins.has(origin)) {
-      callback(null, true)
-      return
-    }
+  await runMigrations()
+  await ensureNodeIds()
+  await applySqlMigrations(db)
+  await connectRedisIfConfigured()
 
-    callback(new Error(`CORS blocked for origin ${origin}`))
-  },
-}))
-app.use(express.json())
+  const express = expressModule.default
+  const app = express()
 
-app.use("/api/graph", graphMod.default)
-app.use("/api/auth", authMod.default)
-app.use("/api/connections", connMod.default)
-app.use("/api/opportunities", oppMod.default)
-app.use("/api/chat-memory", chatMemMod.default)
+  const allowedOrigins = new Set<string>([
+    FRONTEND_ORIGIN,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+  ])
 
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok" })
-})
+  app.use(cors({
+    origin(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+      if (!origin || allowedOrigins.has(origin)) {
+        callback(null, true)
+        return
+      }
+      callback(new Error(`CORS blocked for origin ${origin}`))
+    },
+  }))
+  app.use(express.json())
 
-const PORT = process.env.PORT || 3001
-app.listen(PORT, () => {
-  console.log(`Backend running on port ${PORT}`)
-  // Kick off scrapers after the server is listening
-  startScheduler()
+  const routes: Array<[string, unknown]> = [
+    ["/api/graph", graphMod.default],
+    ["/api/auth", authMod.default],
+    ["/api/connections", connMod.default],
+    ["/api/opportunities", oppMod.default],
+    ["/api/chat-memory", chatMemMod.default],
+    ["/api/buildings", buildingsMod.default],
+  ]
+  for (const [mountPath, router] of routes) {
+    app.use(mountPath, router as Parameters<typeof app.use>[1])
+  }
+
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok" })
+  })
+
+  app.listen(PORT, () => {
+    console.log(`Backend running on port ${PORT}`)
+    startScheduler()
+  })
+}
+
+bootstrap().catch((err: unknown) => {
+  const msg = err instanceof Error ? err.message : String(err)
+  console.error("Backend startup failed:", msg)
+  process.exit(1)
 })

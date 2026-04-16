@@ -24,6 +24,67 @@
   border-radius: 24px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
 }
+.root::before {
+  content: "";
+  position: absolute;
+  inset: -22%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 28% 24%, rgba(86, 130, 242, 0.07), transparent 36%),
+    radial-gradient(circle at 74% 76%, rgba(236, 72, 153, 0.06), transparent 38%);
+  animation: ambientDrift 26s ease-in-out infinite alternate;
+}
+/* Motion-tier guardrails: keep premium feel while reducing repaint cost under load */
+.root.perf-balanced .graphEnergyField--density { filter: blur(20px) saturate(1.08); }
+.root.perf-balanced .graphEnergyField--core { filter: blur(16px) saturate(1.12); }
+.root.perf-balanced .graphAmbientGrain { opacity: 0.08; }
+.root.perf-balanced .graphAmbientLayer--far { opacity: 0.22; }
+.root.perf-balanced .graphAmbientLayer--mid { opacity: 0.3; }
+.root.perf-balanced .graphAmbientLayer--near { opacity: 0.36; }
+.root.perf-balanced .graphAmbientSpecks { opacity: 0.4; }
+.root.perf-balanced .link-hover-energized { animation-duration: 1.3s; }
+.root.perf-balanced .flow-particle { filter: drop-shadow(0 0 5px rgba(168, 219, 255, 0.78)); }
+
+.root.perf-performance .graphEnergyField--density { filter: blur(14px) saturate(1.02); }
+.root.perf-performance .graphEnergyField--core { filter: blur(12px) saturate(1.05); }
+.root.perf-performance .graphAmbientFog { opacity: 0.12; }
+.root.perf-performance .graphAmbientGrain { opacity: 0.05; }
+.root.perf-performance .graphAmbientLayer--far { opacity: 0.16; }
+.root.perf-performance .graphAmbientLayer--mid { opacity: 0.21; }
+.root.perf-performance .graphAmbientLayer--near { opacity: 0.26; }
+.root.perf-performance .graphAmbientSpecks { opacity: 0.3; animation-duration: 34s; }
+.root.perf-performance .graphSpeck--twinkle { animation-duration: 8.2s; }
+.root.perf-performance .cluster-aura-layer .cluster-aura { opacity: 0.7; }
+.root.perf-performance .node-aura-halo { filter: blur(3px); }
+.root.perf-performance .link-hover-energized { animation-duration: 1.5s; filter: drop-shadow(0 0 5px rgba(156, 214, 255, 0.52)); }
+.root.perf-performance .flow-particle { filter: drop-shadow(0 0 4px rgba(168, 219, 255, 0.62)); }
+.root.perf-performance .graphHeader,
+.root.perf-performance .toolbar,
+.root.perf-performance .modeHint { backdrop-filter: blur(7px); }
+
+.root.perf-interacting .graphAmbientLayer,
+.root.perf-interacting .graphAmbientSpecks,
+.root.perf-interacting .graphAmbientFog,
+.root.perf-interacting .graphAmbientGrain {
+  opacity: 0.12 !important;
+  animation-play-state: paused;
+}
+.root.perf-interacting .graphEnergyField {
+  transition-duration: 0.2s;
+}
+.root.perf-interacting .flow-particle,
+.root.perf-interacting .link-hover-energized {
+  filter: none !important;
+}
+.root.perf-interacting .node text {
+  transition-duration: 0.1s;
+}
+@keyframes ambientDrift {
+  0%   { transform: translate(-1.2%, -0.9%) scale(1); opacity: 0.9; }
+  50%  { transform: translate(1.1%, 1.3%) scale(1.02); opacity: 1; }
+  100% { transform: translate(-0.6%, 0.4%) scale(1.01); opacity: 0.88; }
+}
 
 .graphHeader {
   position: relative;
@@ -96,6 +157,13 @@
   font-size: 0.72rem;
   font-weight: 500;
   backdrop-filter: blur(10px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.graphModeBadge:hover,
+.graphHeaderChip:hover {
+  border-color: rgba(255,255,255,0.18);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.04) inset, 0 8px 22px rgba(0,0,0,0.25);
+  transform: translateY(-1px);
 }
 
 .graphModeBadge {
@@ -147,7 +215,7 @@
   font-weight: 700;
   font-family: inherit;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 }
 
 .graphExitBtn:hover {
@@ -155,26 +223,86 @@
   border-color: rgba(215, 25, 32, 0.45);
   box-shadow: 0 10px 24px rgba(168, 14, 19, 0.22);
 }
+.graphDemoBtn,
+.graphClearBtn {
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(92, 136, 201, 0.28);
+  background: rgba(20, 31, 55, 0.66);
+  color: #c8ddff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.graphDemoBtn:hover,
+.graphClearBtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(120, 173, 255, 0.5);
+  box-shadow: 0 8px 20px rgba(9, 20, 46, 0.45);
+}
+.graphDemoBtn--active {
+  border-color: rgba(244, 114, 182, 0.45);
+  color: #ffd9ee;
+  background: rgba(66, 24, 58, 0.65);
+}
+.viewModeToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(7, 11, 18, 0.72);
+  backdrop-filter: blur(10px);
+}
+.viewModeBtn {
+  min-height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #9fb2cc;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+.viewModeBtn:hover {
+  color: #dbe7fb;
+}
+.viewModeBtn--active {
+  color: #f8fafc;
+  background: linear-gradient(135deg, rgba(30, 64, 175, 0.42), rgba(30, 58, 138, 0.82));
+  box-shadow: 0 6px 14px rgba(7, 18, 42, 0.38);
+}
 
 /* ── Toolbar ── */
 .toolbar {
-  background: rgba(8, 12, 20, 0.86);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,0.05), 0 8px 32px 0 rgba(0, 0, 0, 0.45);
   padding: 6px 14px;
   display: flex; align-items: center; gap: 8px;
   flex-shrink: 0; flex-wrap: wrap;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(28px) saturate(180%);
 }
 
 .searchWrap {
   display: flex; align-items: center; gap: 8px;
   background: #1A1A1A; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
   padding: 5px 11px; min-width: 180px;
-  transition: border-color 0.15s;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 .searchWrap:focus-within {
   border-color: rgba(192, 57, 43, 0.4);
   box-shadow: 0 0 0 2px rgba(192, 57, 43, 0.1);
+  transform: translateY(-1px);
 }
 .searchInput {
   background: none; border: none; color: #e2e8f0;
@@ -186,11 +314,12 @@
   display: flex; align-items: center; gap: 6px;
   background: #1A1A1A; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
   padding: 4px 6px 4px 11px; min-width: 230px;
-  transition: border-color 0.15s;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 .pathSearchWrap:focus-within {
   border-color: rgba(192, 57, 43, 0.4);
   box-shadow: 0 0 0 2px rgba(192, 57, 43, 0.1);
+  transform: translateY(-1px);
 }
 .pathSearchInput {
   background: none; border: none; color: #e2e8f0;
@@ -208,10 +337,11 @@
 .pathSearchBtn {
   background: linear-gradient(135deg, #C0392B, #E74C3C); border: none; color: #fff;
   padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 700;
-  cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.15s;
+  cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.16s ease;
   box-shadow: 0 2px 8px rgba(192, 57, 43, 0.3);
 }
-.pathSearchBtn:hover    { box-shadow: 0 2px 12px rgba(192, 57, 43, 0.5); transform: translateY(-1px); }
+.pathSearchBtn:hover    { box-shadow: 0 6px 16px rgba(192, 57, 43, 0.45); transform: translateY(-1px); }
+.pathSearchBtn:active   { transform: translateY(0) scale(0.985); }
 .pathSearchBtn:disabled { opacity: 0.5; cursor: default; transform: none; }
 .pathMsg       { font-size: 0.73rem; white-space: nowrap; }
 .pathMsg--ok   { color: #34d399; }
@@ -223,14 +353,199 @@
   display: flex; align-items: center; gap: 6px;
   padding: 4px 10px; border-radius: 20px; border: 1px solid;
   font-size: 0.75rem; font-weight: 600; cursor: pointer;
-  transition: all 0.15s; font-family: inherit; user-select: none;
+  transition: transform 0.14s ease, box-shadow 0.16s ease, border-color 0.16s ease, opacity 0.16s ease;
+  font-family: inherit; user-select: none;
+  box-shadow: 0 0 0 0 rgba(255,255,255,0);
 }
+.toggle:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(0,0,0,0.26); }
+.toggle:active { transform: translateY(0) scale(0.985); }
+.toggle[data-active="true"] { box-shadow: 0 0 0 1px rgba(255,255,255,0.05) inset, 0 8px 20px rgba(0,0,0,0.24); }
 
 .toolbarStats { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.72rem; color: #718096; }
 .toolbarStats b { color: #e2e8f0; }
 
 /* ── Main ── */
 .main { flex: 1; min-height: 0; display: flex; overflow: hidden; position: relative; }
+.graphAmbientFx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transition: opacity 0.36s ease;
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+}
+.graphEnergyField {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  will-change: transform, opacity, filter;
+}
+
+.graphEnergyField--density {
+  background: radial-gradient(circle at 30% 40%, rgba(16, 185, 129, 0.15) 0%, transparent 40%),
+              radial-gradient(circle at 70% 60%, rgba(245, 158, 11, 0.1) 0%, transparent 40%);
+  filter: blur(80px) saturate(1.8);
+}
+
+.graphEnergyField--core {
+  background: radial-gradient(circle at 50% 50%, rgba(192, 57, 43, 0.08) 0%, transparent 60%);
+  filter: blur(120px);
+}
+
+[data-heatmap="true"] .graphEnergyField {
+  opacity: 1;
+}
+
+[data-heatmap="true"] .graphEnergyField--density {
+  animation: heatFlow 20s infinite alternate ease-in-out;
+}
+
+@keyframes heatFlow {
+  0% { transform: scale(1) rotate(0deg) translate(0, 0); }
+  50% { transform: scale(1.1) rotate(5deg) translate(5%, 2%); }
+  100% { transform: scale(1.05) rotate(-3deg) translate(-2%, 5%); }
+}
+.graphAmbientLayer--far {
+  opacity: 0.32;
+}
+.graphAmbientLayer--mid {
+  opacity: 0.4;
+}
+.graphAmbientLayer--near {
+  opacity: 0.5;
+}
+.graphSpeck {
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(177, 220, 255, 0.88);
+  filter: drop-shadow(0 0 4px rgba(145, 214, 255, 0.55));
+  transform: translate(-50%, -50%);
+}
+.graphSpeck--mid {
+  background: rgba(157, 203, 255, 0.95);
+  filter: drop-shadow(0 0 5px rgba(129, 202, 255, 0.62));
+}
+.graphSpeck--near {
+  background: rgba(201, 231, 255, 0.98);
+  filter: drop-shadow(0 0 6px rgba(161, 221, 255, 0.74));
+}
+.graphSpeck--twinkle {
+  animation: graphSpeckTwinkle 4.8s ease-in-out infinite;
+}
+@keyframes graphSpeckTwinkle {
+  0%, 100% { opacity: 0.42; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.92; transform: translate(-50%, -50%) scale(1.25); }
+}
+.graphAmbientFx--systemPulse {
+  animation: ambientSystemPulse 0.72s ease-out;
+}
+@keyframes ambientSystemPulse {
+  0% { opacity: 0.9; filter: saturate(1.1); }
+  45% { opacity: 1; filter: saturate(1.28); }
+  100% { opacity: 0.94; filter: saturate(1); }
+}
+.graphAmbientFx--hidden {
+  opacity: 0;
+}
+.graphAmbientSpecks {
+  position: absolute;
+  inset: 0;
+  opacity: 0.52;
+  background-image:
+    radial-gradient(circle at 16% 22%, rgba(186, 219, 255, 0.46) 0, transparent 1.2px),
+    radial-gradient(circle at 73% 34%, rgba(156, 194, 245, 0.35) 0, transparent 1.1px),
+    radial-gradient(circle at 42% 68%, rgba(178, 231, 255, 0.24) 0, transparent 1px),
+    radial-gradient(circle at 84% 79%, rgba(171, 182, 255, 0.18) 0, transparent 1px);
+  background-size: 280px 230px, 320px 270px, 240px 220px, 360px 330px;
+  animation: speckDrift 24s linear infinite;
+}
+.graphAmbientFog {
+  position: absolute;
+  inset: -8%;
+  pointer-events: none;
+  opacity: 0.2;
+  mix-blend-mode: screen;
+}
+.graphAmbientFog--core {
+  background:
+    radial-gradient(ellipse at 48% 46%, rgba(86, 150, 255, 0.22) 0%, rgba(41, 97, 186, 0.16) 26%, rgba(14, 31, 61, 0) 63%);
+  animation: graphFogDriftA 19s ease-in-out infinite alternate;
+}
+.graphAmbientFog--secondary {
+  background:
+    radial-gradient(ellipse at 66% 58%, rgba(109, 205, 255, 0.12) 0%, rgba(45, 124, 179, 0.08) 30%, rgba(13, 33, 56, 0) 66%);
+  opacity: 0.16;
+  animation: graphFogDriftB 24s ease-in-out infinite alternate;
+}
+.graphAmbientGrain {
+  position: absolute;
+  inset: -20%;
+  opacity: 0.11;
+  mix-blend-mode: soft-light;
+  background-image:
+    radial-gradient(circle at 30% 40%, rgba(255, 255, 255, 0.13) 0, transparent 1px),
+    radial-gradient(circle at 70% 62%, rgba(255, 255, 255, 0.09) 0, transparent 1px),
+    radial-gradient(circle at 55% 23%, rgba(255, 255, 255, 0.08) 0, transparent 1px);
+  background-size: 3px 3px, 4px 4px, 5px 5px;
+  animation: graphGrainDrift 15s linear infinite;
+}
+.graphEnergyField {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.45s ease, transform 0.5s ease;
+}
+.graphEnergyField--density {
+  filter: blur(26px) saturate(1.16);
+  will-change: transform, opacity;
+}
+.graphEnergyField--core {
+  filter: blur(22px) saturate(1.22);
+  will-change: transform, opacity;
+}
+@keyframes speckDrift {
+  0% { transform: translate3d(0, 0, 0); opacity: 0.18; }
+  50% { transform: translate3d(-6px, 4px, 0); opacity: 0.34; }
+  100% { transform: translate3d(0, 0, 0); opacity: 0.2; }
+}
+@keyframes graphFogDriftA {
+  0% { transform: translate3d(-4px, -2px, 0) scale(1); opacity: 0.16; }
+  100% { transform: translate3d(6px, 5px, 0) scale(1.04); opacity: 0.24; }
+}
+@keyframes graphFogDriftB {
+  0% { transform: translate3d(5px, -5px, 0) scale(1); opacity: 0.11; }
+  100% { transform: translate3d(-6px, 4px, 0) scale(1.05); opacity: 0.19; }
+}
+@keyframes graphGrainDrift {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-12px, 10px, 0); }
+}
+.graphScanSweep {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(
+    108deg,
+    transparent 36%,
+    rgba(121, 168, 228, 0.03) 49%,
+    rgba(162, 212, 255, 0.06) 51%,
+    transparent 64%
+  );
+  transform: translateX(-115%);
+}
+.graphScanSweep--active {
+  animation: graphScanSweep 3.2s ease-out;
+}
+@keyframes graphScanSweep {
+  0% { opacity: 0; transform: translateX(-115%); }
+  12% { opacity: 0.32; }
+  56% { opacity: 0.18; }
+  100% { opacity: 0; transform: translateX(120%); }
+}
 
 /* ── Graph SVG ── */
 #graph-svg {
@@ -241,8 +556,210 @@
     radial-gradient(ellipse at 25% 15%, rgba(20,35,70,0.55) 0%, transparent 55%),
     radial-gradient(ellipse at 75% 85%, rgba(15,25,50,0.55) 0%, transparent 55%),
     radial-gradient(ellipse at 50% 40%, #0e1524 0%, #060810 70%);
+  background-size: auto, auto, 140% 140%, 145% 145%, 100% 100%;
+  animation: graphGridDrift 38s linear infinite;
 }
 #graph-svg:active { cursor: grabbing; }
+.graph2DVisible {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 0.45s ease, transform 0.55s ease;
+}
+.graph2DHidden {
+  opacity: 0;
+  transform: scale(0.985);
+  pointer-events: none;
+  transition: opacity 0.42s ease, transform 0.52s ease;
+}
+.graph3DWrap {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  transform: scale(1.02);
+  pointer-events: none;
+  transition: opacity 0.5s ease, transform 0.62s ease;
+}
+.graph3DWrap--active {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: all;
+}
+.graph3DCanvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 25% 18%, rgba(96, 165, 250, 0.08), transparent 38%),
+    radial-gradient(circle at 72% 78%, rgba(244, 114, 182, 0.07), transparent 40%),
+    linear-gradient(180deg, #05070d 0%, #04060c 100%);
+}
+.graph3DCanvas--spatial {
+  background:
+    radial-gradient(120% 88% at 50% 102%, rgba(33, 49, 82, 0.42), transparent 54%),
+    radial-gradient(circle at 26% 20%, rgba(96, 165, 250, 0.11), transparent 42%),
+    radial-gradient(circle at 78% 74%, rgba(236, 72, 153, 0.08), transparent 44%),
+    linear-gradient(180deg, #05070d 0%, #04060c 100%);
+}
+.graph3DViewport {
+  position: absolute;
+  inset: 0;
+}
+.spatialHud {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  border: 1px solid rgba(127, 158, 199, 0.26);
+  border-radius: 12px;
+  background: rgba(5, 10, 19, 0.72);
+  backdrop-filter: blur(8px);
+  color: #9cb4d7;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+.spatialHud--compass {
+  left: 18px;
+  top: 16px;
+  width: 74px;
+  height: 74px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.spatialHudLabel {
+  position: absolute;
+  top: 7px;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-weight: 700;
+  color: #8fb8f2;
+}
+.spatialCompassArrow {
+  display: inline-block;
+  width: 1px;
+  height: 32px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(117, 185, 255, 0.12), #9ac9ff);
+  position: relative;
+}
+.spatialCompassArrow::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -8px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid #8fc4ff;
+}
+.spatialHud--legend {
+  top: 16px;
+  right: 18px;
+  padding: 8px 10px;
+  min-width: 138px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.spatialRoadmap {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 12px;
+  z-index: 4;
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(210, 130, 231, 0.28);
+  background: rgba(20, 11, 29, 0.58);
+  backdrop-filter: blur(8px);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.spatialRoadmapStep {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 0.66rem;
+  color: #e9d7ff;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(71, 32, 84, 0.52);
+  border: 1px solid rgba(234, 179, 255, 0.2);
+}
+.spatialRoadmapStep b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(244, 114, 182, 0.25);
+  color: #fce7f3;
+  font-size: 0.64rem;
+}
+.spatialMinimap {
+  position: absolute;
+  right: 18px;
+  bottom: 14px;
+  z-index: 4;
+  width: 142px;
+  border-radius: 12px;
+  border: 1px solid rgba(92, 136, 201, 0.26);
+  background: rgba(6, 11, 20, 0.72);
+  backdrop-filter: blur(8px);
+  padding: 8px;
+  pointer-events: none;
+}
+.spatialMinimapTitle {
+  font-size: 0.57rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #8ca5ca;
+  margin-bottom: 4px;
+}
+.spatialMinimapSvg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.spatialMinimapRing {
+  fill: none;
+  stroke: rgba(103, 139, 193, 0.28);
+  stroke-width: 0.9;
+}
+.spatialMinimapRing--outer {
+  stroke: rgba(103, 139, 193, 0.18);
+  stroke-dasharray: 2 2;
+}
+.spatialMinimapNode {
+  fill: rgba(156, 196, 247, 0.48);
+}
+.spatialMinimapNode--path {
+  fill: rgba(244, 114, 182, 0.78);
+}
+.spatialMinimapNode--selected {
+  fill: #fdf2f8;
+}
+.spatialMinimapPath {
+  fill: none;
+  stroke: rgba(244, 114, 182, 0.76);
+  stroke-width: 1.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@keyframes graphGridDrift {
+  0%   { background-position: 0 0, 0 0, 0% 0%, 100% 100%, 0 0; }
+  50%  { background-position: 10px 6px, -12px -8px, 4% 6%, 96% 94%, 0 0; }
+  100% { background-position: 0 0, 0 0, 8% 10%, 92% 90%, 0 0; }
+}
 
 /* ── Community Halos ── */
 .halo-group { pointer-events: none; }
@@ -252,11 +769,24 @@
 .link {
   fill: none;
   stroke-linecap: round;
+  transition: stroke-opacity 0.22s ease, stroke-width 0.2s ease, filter 0.28s ease;
 }
-.link-t1 { stroke: #60a5fa; }
-.link-t2 { stroke: #3d6080; }
-.link-t3 { stroke: #253448; }
-.link-dashed { stroke-dasharray: 5,4; }
+.link-depth-foreground {
+  filter: drop-shadow(0 0 4px rgba(145, 205, 255, 0.32));
+}
+.link-depth-mid {
+  filter: drop-shadow(0 0 2px rgba(133, 188, 242, 0.18));
+}
+.link-depth-background {
+  filter: drop-shadow(0 0 1px rgba(112, 157, 206, 0.12));
+}
+@keyframes flowParticle {
+  to { stroke-dashoffset: -40; }
+}
+.link-t1 { stroke: #60a5fa; stroke-dasharray: 4 20; animation: flowParticle 2s linear infinite; }
+.link-t2 { stroke: #3d6080; stroke-dasharray: 3 30; animation: flowParticle 3.5s linear infinite; }
+.link-t3 { stroke: #253448; stroke-dasharray: 2 40; animation: flowParticle 5s linear infinite; }
+.link-dashed { stroke-dasharray: 5,4 !important; animation: none; }
 
 /* Student↔student CONNECTED_TO edges — traveling light-ball effect */
 @keyframes flowBall {
@@ -272,11 +802,139 @@
 
 /* Path pulse — JS applies color + filter; class marks membership */
 .link.path-pulse { stroke: #e879f9; }
+.link-multi-focus { stroke: #93c5fd !important; }
+@keyframes compareSharedPulse {
+  0%, 100% { stroke-opacity: 0.8; filter: drop-shadow(0 0 3px rgba(125, 211, 252, 0.55)); }
+  50% { stroke-opacity: 1; filter: drop-shadow(0 0 8px rgba(125, 211, 252, 0.95)); }
+}
+@keyframes compareLaneFlow {
+  to { stroke-dashoffset: -26; }
+}
+.link.link-compare-shared {
+  stroke: #7dd3fc !important;
+  stroke-width: 3.1px;
+  animation: compareSharedPulse 1.8s ease-in-out infinite;
+}
+.link.link-compare-a {
+  stroke: #f59e0b !important;
+  stroke-width: 2.5px;
+  stroke-dasharray: 6 8;
+  animation: compareLaneFlow 1.5s linear infinite;
+}
+.link.link-compare-b {
+  stroke: #22d3ee !important;
+  stroke-width: 2.5px;
+  stroke-dasharray: 6 8;
+  animation: compareLaneFlow 1.5s linear infinite reverse;
+}
+
+/* Edge pulse dots — soft glow, no pointer events */
+.edge-pulse-layer circle {
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgba(147, 197, 253, 0.7));
+}
+.flow-particle {
+  pointer-events: none;
+  filter: drop-shadow(0 0 7px rgba(168, 219, 255, 0.96));
+}
+.link-hover-energized {
+  stroke-dasharray: 8 7;
+  animation: hoverEdgeCurrent 1.08s linear infinite;
+  filter: drop-shadow(0 0 8px rgba(156, 214, 255, 0.72));
+}
+@keyframes hoverEdgeCurrent {
+  to { stroke-dashoffset: -22; }
+}
+.node-ripple-layer .node-ripple {
+  stroke: rgba(167, 139, 250, 0.75);
+  stroke-width: 1.5px;
+  fill: rgba(167, 139, 250, 0.18);
+}
+.node-ripple-layer .system-pulse-ring {
+  stroke: rgba(152, 211, 255, 0.74);
+  stroke-width: 1.4px;
+  fill: rgba(128, 190, 255, 0.12);
+}
+.node-ripple-layer .opportunity-burst-ring {
+  stroke: rgba(245, 158, 11, 0.9);
+  stroke-width: 1.6px;
+  fill: rgba(245, 158, 11, 0.22);
+}
+.node-ripple-layer .node-ripple--burst {
+  stroke: rgba(184, 226, 255, 0.95);
+  fill: rgba(147, 197, 253, 0.2);
+}
+.node-ripple-layer .node-hover-ring {
+  stroke: rgba(147, 197, 253, 0.7);
+  stroke-width: 1.3px;
+  fill: none;
+}
 
 .node { cursor: pointer; }
 .node circle:hover { filter: brightness(1.25); }
 .node.dimmed circle { opacity: 0.07; }
 .node.dimmed text   { opacity: 0.04; }
+.node text { transition: opacity 0.22s ease; will-change: opacity; }
+.node-depth-foreground circle.main-circle {
+  transform-origin: center;
+  filter: drop-shadow(0 0 12px rgba(173, 228, 255, 0.46));
+}
+.node-depth-mid circle.main-circle {
+  filter: drop-shadow(0 0 8px rgba(140, 193, 244, 0.2));
+}
+.node-depth-background circle.main-circle {
+  opacity: 0.86;
+  filter: drop-shadow(0 0 4px rgba(123, 173, 221, 0.16));
+}
+.node-depth-background circle.node-aura-halo {
+  opacity: 0.78;
+}
+.node-important circle.main-circle {
+  filter: drop-shadow(0 0 10px rgba(157, 214, 255, 0.28));
+}
+.node-aura-ring,
+.node-aura-halo {
+  pointer-events: none;
+  transition: opacity 0.18s ease, r 0.18s ease;
+}
+.node-aura-halo {
+  filter: blur(5px);
+}
+.node-aura-halo--company {
+  filter: blur(4px);
+}
+.node-selected-anchor circle.main-circle {
+  stroke: #f8fbff;
+  filter: drop-shadow(0 0 14px rgba(188, 225, 255, 0.86));
+}
+.node-selected-neighbor circle.main-circle {
+  filter: drop-shadow(0 0 9px rgba(147, 197, 253, 0.5));
+}
+.node-multi-selected circle.main-circle {
+  stroke: #dbeafe;
+  stroke-width: 3.2px;
+  filter: drop-shadow(0 0 10px rgba(147, 197, 253, 0.85));
+}
+.node-compare-shared circle.main-circle {
+  stroke: #7dd3fc;
+  stroke-width: 2.5px;
+  filter: drop-shadow(0 0 8px rgba(125, 211, 252, 0.72));
+}
+.node-compare-a circle.main-circle {
+  stroke: #f59e0b;
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.72));
+}
+.node-compare-b circle.main-circle {
+  stroke: #22d3ee;
+  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.72));
+}
+
+@keyframes ambientNodeGlow {
+  0%, 100% { filter: saturate(1) brightness(1); }
+  50% { filter: saturate(1.06) brightness(1.08); }
+}
+.ambient-glow { animation: ambientNodeGlow 4.4s ease-in-out infinite; }
+.ambient-glow--hi { animation-duration: 3.2s; }
 
 /* Selected node: breathing glow animation */
 @keyframes breathe {
@@ -307,6 +965,29 @@
 }
 
 .company-ring { pointer-events: none; }
+.cluster-aura-layer .cluster-aura {
+  mix-blend-mode: screen;
+  transition: opacity 0.45s ease;
+}
+.cluster-aura--student {
+  fill: rgba(102, 168, 255, 0.14);
+}
+.cluster-aura--company {
+  fill: rgba(147, 197, 253, 0.18);
+}
+.cluster-aura--club {
+  fill: rgba(251, 191, 36, 0.13);
+}
+.cluster-aura--interest {
+  fill: rgba(167, 139, 250, 0.12);
+}
+.cluster-aura--professor {
+  fill: rgba(110, 231, 183, 0.1);
+}
+.node-satellite-layer .node-satellite {
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px rgba(191, 232, 255, 0.85));
+}
 
 /* ── Mode Hint overlay ── */
 .modeHint {
@@ -317,13 +998,72 @@
   white-space: nowrap; z-index: 10;
 }
 .modeHint span      { color: #4a5568; }
-.modeHint--path     { border-color: #6b21a8; color: #d8b4fe; }
+.modeHint--lockedShift {
+  left: calc(55% - 120px);
+}
+.modeHint--path     {
+  border-color: #6b21a8;
+  color: #d8b4fe;
+  top: 14px;
+  left: 50%;
+  bottom: auto;
+  transform: translateX(-50%);
+  max-width: min(56vw, 620px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .modeHint--path b   { color: #f0abfc; }
+.modeHint--demo     {
+  border-color: #1d4ed8;
+  color: #bfdbfe;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 36;
+}
+.modeHint--demoControls {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: min(78vw, 820px);
+  white-space: normal;
+  justify-content: center;
+}
+.modeHint--demoControls span {
+  color: #bfdbfe;
+  margin-right: 6px;
+}
+.modeHintBtn {
+  border: 1px solid rgba(147, 197, 253, 0.34);
+  background: rgba(15, 23, 42, 0.72);
+  color: #dbeafe;
+  border-radius: 999px;
+  font-size: 0.67rem;
+  font-weight: 700;
+  min-height: 26px;
+  padding: 3px 11px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(2, 6, 23, 0.42);
+}
+.modeHintBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.modeHintBtn--exit {
+  border-color: rgba(248, 113, 113, 0.34);
+  color: #fecaca;
+}
 
 /* ── Side Panel ── */
 .panel {
-  width: 280px; background: #0d1017;
-  border-left: 1px solid rgba(255,255,255,0.06); padding: 20px; overflow-y: auto; flex-shrink: 0;
+  width: 280px; 
+  background: rgba(255, 255, 255, 0.03); 
+  backdrop-filter: blur(28px) saturate(180%); 
+  box-shadow: inset 1px 0 0 rgba(255,255,255,0.05), -10px 0 40px rgba(0,0,0,0.5);
+  border-left: 1px solid rgba(255,255,255,0.12); 
+  padding: 20px; overflow-y: auto; flex-shrink: 0;
 }
 .panelHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .panelHeaderLabel { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px; color: #718096; font-weight: 600; }
@@ -355,11 +1095,101 @@
 .connExpandBtn { margin-top: 8px; background: none; border: none; color: #5b7bab; font-size: 0.75rem; cursor: pointer; padding: 0; transition: color 0.15s; }
 .connExpandBtn:hover { color: #a0bfdf; }
 
+.recSection {
+  margin-top: 8px;
+}
+.recItem {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.62), rgba(15, 23, 42, 0.36));
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+}
+.recItem:hover {
+  border-color: rgba(125, 211, 252, 0.42);
+  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.38);
+  transform: translateY(-1px);
+}
+.recAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f8fafc;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(219, 234, 254, 0.24) inset;
+}
+.recInfo {
+  flex: 1;
+  min-width: 0;
+}
+.recRowTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+.recName {
+  font-size: 0.79rem;
+  color: #e2e8f0;
+  font-weight: 700;
+}
+.recScore {
+  font-size: 0.63rem;
+  color: #bfdbfe;
+  border: 1px solid rgba(147, 197, 253, 0.3);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.recReason {
+  font-size: 0.69rem;
+  color: #94a3b8;
+  line-height: 1.35;
+  margin-top: 3px;
+}
+.recActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.recBtn {
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.54);
+  color: #dbeafe;
+  font-size: 0.64rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.recBtn--accent {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(49, 46, 129, 0.62);
+}
+.recBtn--ghost {
+  color: #cbd5e1;
+}
+
 /* ── Legend ── */
 .legend {
   position: absolute; bottom: 20px; left: 20px;
-  background: rgba(10,13,22,0.9); border: 1px solid #1a2030; border-radius: 10px;
-  padding: 12px 14px; backdrop-filter: blur(8px); pointer-events: none;
+  background: rgba(255, 255, 255, 0.03); 
+  border: 1px solid rgba(255,255,255,0.12); 
+  border-radius: 12px; 
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 40px rgba(0,0,0,0.5);
+  padding: 12px 14px; 
+  backdrop-filter: blur(28px) saturate(180%); 
+  pointer-events: none;
 }
 .legendTitle { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.5px; color: #718096; margin-bottom: 8px; font-weight: 600; }
 .legendItem  { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 0.78rem; }
@@ -367,8 +1197,13 @@
 /* ── Top Connected Inline Preview Card ── */
 .tcPreview {
   position: absolute; bottom: 20px; left: 158px;
-  background: rgba(10,13,22,0.9); border: 1px solid #1a2030; border-radius: 12px;
-  padding: 10px 14px; backdrop-filter: blur(8px); pointer-events: all;
+  background: rgba(255, 255, 255, 0.03); 
+  border: 1px solid rgba(255,255,255,0.12); 
+  border-radius: 12px; 
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 40px rgba(0,0,0,0.5);
+  padding: 10px 14px; 
+  backdrop-filter: blur(28px) saturate(180%); 
+  pointer-events: all;
   min-width: 195px; color: #e2e8f0; transition: border-color 0.2s;
 }
 .tcPreview:hover { border-color: rgba(255,215,0,0.25); }
@@ -391,6 +1226,187 @@
   position: absolute; inset: 0; pointer-events: none; z-index: 0;
   background: radial-gradient(ellipse at 50% 45%, rgba(124,58,237,0.07) 0%, transparent 60%);
   animation: depthPulse 9s ease-in-out infinite;
+  transition: transform 0.22s ease-out;
+  animation: depthPulse 8.4s ease-in-out infinite;
+}
+
+.minimap {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: 190px;
+  height: 130px;
+  z-index: 24;
+  background: rgba(8, 12, 20, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 10px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.34);
+  overflow: hidden;
+  pointer-events: all;
+}
+.minimap--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.minimap-viewport {
+  fill: rgba(147, 197, 253, 0.08);
+  stroke: rgba(147, 197, 253, 0.72);
+  stroke-width: 1.2px;
+  cursor: move;
+}
+.walkthroughMiniPanel {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: 190px;
+  min-height: 130px;
+  z-index: 26;
+  border-radius: 10px;
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  background: rgba(8, 12, 20, 0.9);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(10px);
+  padding: 10px 11px;
+}
+.walkthroughMiniTitle {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #d8b4fe;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+.walkthroughMiniLine {
+  font-size: 0.72rem;
+  color: #c6d4ea;
+  line-height: 1.45;
+  margin-bottom: 5px;
+}
+.walkthroughMiniLine b {
+  color: #f8fafc;
+}
+
+.insightCard {
+  position: absolute;
+  right: 304px;
+  bottom: 20px;
+  width: min(320px, calc(100% - 360px));
+  background: rgba(8, 12, 20, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 10px 12px;
+  backdrop-filter: blur(10px);
+  z-index: 12;
+}
+.insightCard--multi {
+  border-color: rgba(99, 102, 241, 0.35);
+}
+.insightTitle {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #93a7c6;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+.insightLine {
+  font-size: 0.76rem;
+  color: #c8d5ea;
+  line-height: 1.45;
+}
+.insightLine--accent {
+  color: #a5b4fc;
+  margin-top: 4px;
+}
+.compareDock {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+  z-index: 13;
+  max-width: min(74vw, 780px);
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(8, 12, 20, 0.7);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+.compareDockTitle {
+  font-size: 0.7rem;
+  color: #dbe7fb;
+  margin-bottom: 6px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.compareGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.compareChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.compareChip--shared {
+  border-color: rgba(125, 211, 252, 0.42);
+  color: #c5efff;
+}
+.compareChip--a {
+  border-color: rgba(245, 158, 11, 0.42);
+  color: #ffd9a6;
+}
+.compareChip--b {
+  border-color: rgba(34, 211, 238, 0.42);
+  color: #b7f5ff;
+}
+.compareSwatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+  flex-shrink: 0;
+}
+.compareSwatch--shared { color: #7dd3fc; background: #7dd3fc; }
+.compareSwatch--a { color: #f59e0b; background: #f59e0b; }
+.compareSwatch--b { color: #22d3ee; background: #22d3ee; }
+
+.edgeExplainCard {
+  position: fixed;
+  z-index: 240;
+  min-width: 220px;
+  max-width: 320px;
+  border-radius: 10px;
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  background: rgba(9, 13, 22, 0.96);
+  backdrop-filter: blur(14px);
+  padding: 10px 12px;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.42);
+}
+.edgeExplainTitle {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #bfdbfe;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+.edgeExplainLine {
+  font-size: 0.78rem;
+  color: #dbe7fb;
+  line-height: 1.35;
 }
 
 /* ── Connection UI (SidePanel) ── */
@@ -480,16 +1496,29 @@
 .hoverCard {
   position: fixed;
   z-index: 200;
-  background: rgba(13, 16, 23, 0.96);
-  border: 1px solid #1e2a42;
-  border-radius: 10px;
+  background: rgba(20, 20, 25, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
   padding: 10px 13px;
   min-width: 160px;
   max-width: 200px;
   pointer-events: none;
-  backdrop-filter: blur(14px);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(34px) saturate(200%) contrast(1.1);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,0.12), inset 0 0 16px rgba(255, 255, 255, 0.05), 0 18px 40px rgba(0, 0, 0, 0.6);
   animation: hoverCardIn 0.14s ease-out;
+  overflow: hidden;
+}
+.hoverCard.holographic::before {
+  content: "";
+  position: absolute;
+  top: 0; left: -100%; width: 200%; height: 100%;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.15) 45%, transparent 60%);
+  pointer-events: none;
+  animation: hologramGlare 3s infinite linear;
+}
+@keyframes hologramGlare {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(50%); }
 }
 @keyframes hoverCardIn {
   from { opacity: 0; transform: translateY(5px); }
@@ -536,4 +1565,66 @@
     min-width: min(255px, 100%);
     flex: 1 1 260px;
   }
+
+  .insightCard {
+    right: 12px;
+    left: 12px;
+    width: auto;
+    bottom: 76px;
+  }
+  .compareDock {
+    left: 12px;
+    right: 12px;
+    transform: none;
+    max-width: none;
+  }
+  .compareGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .minimap {
+    width: 150px;
+    height: 104px;
+    right: 12px !important;
+    bottom: 12px;
+  }
+  .walkthroughMiniPanel {
+    width: 172px;
+    min-height: 112px;
+    right: 12px;
+    bottom: 12px;
+    padding: 9px 10px;
+  }
+  .modeHint--lockedShift {
+    left: 50%;
+  }
+}
+
+#graph-svg {
+  transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), filter 0.8s ease;
+}
+
+/* ── Neural Echo Interaction ── */
+.neuralEchoShockwave {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+  z-index: 50;
+  will-change: transform, opacity;
+  animation: neuralShock 0.8s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes neuralShock {
+  0% { transform: translate(-50%, -50%) scale(0.1); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(4); opacity: 0; }
+}
+
+.graphHeader, .toolbar {
+  transition: filter 0.2s ease, transform 0.2s cubic-bezier(0.1, 0.8, 0.2, 1);
+}
+
+.uiPulse {
+  filter: blur(2px);
+  transform: translateY(-2px);
 }

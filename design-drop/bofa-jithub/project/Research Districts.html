@@ -1,0 +1,1804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JitHub — Research Districts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #07090f; overflow: hidden; width: 100vw; height: 100dvh; font-family: 'Inter', system-ui, sans-serif; }
+
+/* Canvas */
+#cv { position: absolute; inset: 0; display: block; }
+#cv.can-hover { cursor: pointer; }
+
+/* Top-right controls */
+#controls {
+  position: absolute; top: 20px;
+  display: flex; flex-direction: column; gap: 8px; z-index: 40;
+  transition: right 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+.ctrl-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: rgba(14,22,38,0.9); backdrop-filter: blur(6px);
+  border: 1px solid rgba(185,215,255,0.14);
+  color: rgba(185,215,255,0.6); font-size: 15px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+.ctrl-btn:hover { background: rgba(22,36,58,0.95); color: rgba(220,240,255,0.9); }
+.ctrl-btn svg { width: 16px; height: 16px; }
+.ctrl-divider { height: 1px; background: rgba(185,215,255,0.1); margin: 4px 6px; }
+.rot-indicator {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: rgba(14,22,38,0.6); border: 1px solid rgba(185,215,255,0.1);
+  color: rgba(185,215,255,0.55);
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.rot-indicator svg { width: 22px; height: 22px; transition: transform 0.4s cubic-bezier(0.16,1,0.3,1); }
+
+/* Hint */
+#hint {
+  position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%);
+  color: rgba(185,215,255,0.38); font-size: 13px; letter-spacing: 0.05em;
+  pointer-events: none; z-index: 40; white-space: nowrap;
+  transition: opacity 0.5s; font-weight: 300;
+}
+#hint.gone { opacity: 0; }
+
+/* Right sidebar */
+#sidebar {
+  position: absolute; right: 0; top: 0; bottom: 0; width: 280px;
+  background: #07090f; border-left: 1px solid rgba(185,215,255,0.07);
+  z-index: 30; display: flex; flex-direction: column; overflow: hidden;
+  transition: transform 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+#sb-top { padding: 24px 22px 14px; flex-shrink: 0; border-bottom: 1px solid rgba(185,215,255,0.06); }
+.sb-label { font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase; color: rgba(185,215,255,0.28); }
+.sb-head  { font-size: 15px; font-weight: 500; color: rgba(210,235,255,0.82); margin-top: 6px; letter-spacing: 0.04em; }
+
+/* Search */
+#sb-search-wrap {
+  margin-top: 16px; position: relative;
+  border: 1px solid rgba(185,215,255,0.12);
+  border-radius: 3px; background: rgba(185,215,255,0.03);
+  display: flex; align-items: center; padding: 0 10px;
+  transition: border-color 0.18s, background 0.18s;
+}
+#sb-search-wrap:focus-within { border-color: rgba(185,215,255,0.35); background: rgba(185,215,255,0.05); }
+#sb-search-wrap svg { width: 12px; height: 12px; color: rgba(185,215,255,0.4); flex-shrink: 0; }
+#sb-search {
+  flex: 1; background: none; border: none; outline: none;
+  color: rgba(230,245,255,0.92); font-family: inherit;
+  font-size: 12px; letter-spacing: 0.04em; padding: 9px 8px;
+}
+#sb-search::placeholder { color: rgba(185,215,255,0.3); letter-spacing: 0.08em; }
+#sb-search-clear {
+  background: none; border: none; cursor: pointer;
+  color: rgba(185,215,255,0.4); font-size: 14px; line-height: 1;
+  padding: 4px 2px; display: none;
+}
+#sb-search-clear.on { display: block; }
+#sb-search-clear:hover { color: rgba(220,240,255,0.9); }
+
+/* Top positions */
+.sb-section-hdr {
+  padding: 18px 22px 10px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 8px; letter-spacing: 0.28em; text-transform: uppercase;
+}
+.sb-section-hdr .dot {
+  width: 4px; height: 4px; border-radius: 50%; background: currentColor;
+}
+.sb-topfor { color: rgba(255,200,120,0.7); }
+.sb-topfor-sub { padding: 0 22px 4px; font-size: 10px; color: rgba(185,215,255,0.32); letter-spacing: 0.02em; font-weight: 300; }
+
+.top-pos {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; font-family: inherit; cursor: pointer;
+  padding: 10px 22px; position: relative;
+  border-top: 1px solid rgba(185,215,255,0.04);
+  transition: background 0.18s;
+}
+.top-pos:first-of-type { border-top: none; }
+.top-pos:hover { background: rgba(255,200,120,0.04); }
+.top-pos-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.top-pos-title { font-size: 12px; color: rgba(230,245,255,0.9); font-weight: 500; letter-spacing: 0.01em; line-height: 1.35; }
+.top-pos-match { font-size: 9px; color: rgba(255,200,120,0.85); font-weight: 600; letter-spacing: 0.08em; flex-shrink: 0; }
+.top-pos-meta { display: flex; align-items: center; gap: 8px; margin-top: 5px; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(185,215,255,0.38); }
+.top-pos-meta .diff-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+.top-pos-why { font-size: 10px; color: rgba(185,215,255,0.48); margin-top: 5px; font-weight: 300; font-style: italic; letter-spacing: 0.02em; }
+
+.sb-empty {
+  padding: 24px 22px; font-size: 11px; color: rgba(185,215,255,0.38);
+  text-align: center; font-weight: 300; letter-spacing: 0.04em;
+}
+.sb-item.match-opp {
+  padding-top: 8px; padding-bottom: 8px;
+}
+.sb-item .opp-hit {
+  display: block; margin-top: 4px; font-size: 9px; color: rgba(185,215,255,0.3);
+  text-transform: none; letter-spacing: 0.03em; font-weight: 300;
+}
+mark.hl { background: rgba(255,200,120,0.22); color: rgba(255,230,190,0.98); padding: 0 1px; border-radius: 1px; }
+#sb-scroll { flex: 1; overflow-y: auto; scrollbar-width: none; }
+#sb-scroll::-webkit-scrollbar { display: none; }
+.sb-district-hdr {
+  padding: 20px 28px 6px;
+  font-size: 8px; letter-spacing: 0.28em; text-transform: uppercase;
+  color: rgba(185,215,255,0.22);
+}
+.sb-item {
+  display: block; padding: 11px 28px; cursor: pointer; position: relative;
+  font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 400;
+  color: rgba(185,215,255,0.38); transition: color 0.18s, background 0.18s;
+  border: none; background: none; width: 100%; text-align: left;
+}
+.sb-item::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  background: transparent; transition: background 0.18s;
+}
+.sb-item:hover { color: rgba(210,235,255,0.75); background: rgba(185,215,255,0.03); }
+.sb-item.active { color: rgba(230,245,255,0.92); background: rgba(185,215,255,0.06); }
+.sb-item.active::before { background: rgba(185,215,255,0.55); }
+
+/* Detail panel — slides in over sidebar */
+#detail {
+  position: absolute; right: 0; top: 0; bottom: 0; width: 380px;
+  background: #07090f; border-left: 1px solid rgba(185,215,255,0.10);
+  z-index: 50; display: flex; flex-direction: column; overflow: hidden;
+  transform: translateX(100%); transition: transform 0.42s cubic-bezier(0.16,1,0.3,1);
+}
+#detail.open { transform: translateX(0); }
+
+#det-top { flex-shrink: 0; padding: 0 0 0 0; border-bottom: 1px solid rgba(185,215,255,0.07); }
+#det-nav {
+  display: flex; align-items: center; padding: 16px 20px;
+  border-bottom: 1px solid rgba(185,215,255,0.06);
+}
+#det-back {
+  background: none; border: none; color: rgba(185,215,255,0.38);
+  font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; cursor: pointer;
+  padding: 0; font-family: inherit; display: flex; align-items: center; gap: 6px;
+  transition: color 0.18s;
+}
+#det-back:hover { color: rgba(210,235,255,0.75); }
+#det-back svg { width: 10px; height: 10px; }
+#det-district { font-size: 8px; letter-spacing: 0.26em; text-transform: uppercase; margin-left: auto; }
+#det-body { padding: 22px 24px 16px; }
+#det-name { font-size: 18px; font-weight: 500; color: rgba(230,245,255,0.92); letter-spacing: 0.02em; line-height: 1.3; }
+#det-pi   { font-size: 11px; color: rgba(185,215,255,0.38); margin-top: 6px; letter-spacing: 0.04em; }
+.det-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+.det-tag  { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; padding: 3px 10px; border-radius: 2px; border: 1px solid rgba(185,215,255,0.14); color: rgba(185,215,255,0.45); }
+
+#det-opps { flex: 1; overflow-y: auto; padding: 16px 24px 40px; scrollbar-width: none; }
+#det-opps::-webkit-scrollbar { display: none; }
+.det-opps-lbl { font-size: 8px; letter-spacing: 0.26em; text-transform: uppercase; color: rgba(185,215,255,0.25); margin-bottom: 14px; }
+.opp-card {
+  border: 1px solid rgba(185,215,255,0.09); border-radius: 4px;
+  padding: 14px 16px; margin-bottom: 8px; position: relative; overflow: hidden;
+  background: rgba(185,215,255,0.016); cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+}
+.opp-card:hover { border-color: rgba(185,215,255,0.2); background: rgba(185,215,255,0.03); }
+.opp-rail { position: absolute; left: 0; top: 0; bottom: 0; width: 2px; }
+.opp-row  { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding-left: 8px; }
+.opp-title { font-size: 12px; font-weight: 500; color: rgba(220,240,255,0.88); line-height: 1.4; letter-spacing: 0.01em; }
+.opp-diff  { flex-shrink: 0; font-size: 8px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; border: 1px solid; }
+.opp-desc  { font-size: 11px; color: rgba(185,215,255,0.4); margin-top: 8px; line-height: 1.65; padding-left: 8px; font-weight: 300; }
+.opp-skills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; padding-left: 8px; }
+.opp-skill  { font-size: 9px; background: rgba(185,215,255,0.06); color: rgba(185,215,255,0.45); padding: 2px 8px; border-radius: 2px; letter-spacing: 0.06em; }
+.opp-foot  { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-left: 8px; }
+.opp-meta  { font-size: 10px; color: rgba(185,215,255,0.28); display: flex; gap: 12px; }
+.apply-btn {
+  background: none; border: 1px solid rgba(185,215,255,0.18);
+  color: rgba(185,215,255,0.55); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+  padding: 6px 14px; cursor: pointer; border-radius: 2px; font-family: inherit;
+  transition: all 0.18s;
+}
+.apply-btn:hover { background: rgba(185,215,255,0.08); color: rgba(220,240,255,0.9); border-color: rgba(185,215,255,0.35); }
+
+/* Tweaks panel */
+#tweaks {
+  position: absolute; bottom: 20px; z-index: 60;
+  background: rgba(10,14,24,0.95); border: 1px solid rgba(185,215,255,0.1);
+  border-radius: 4px; padding: 14px 16px; width: 210px;
+  backdrop-filter: blur(12px); display: none;
+  transition: right 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+#tweaks.on { display: block; }
+.tw-hd  { font-size: 8px; letter-spacing: 0.24em; text-transform: uppercase; color: rgba(185,215,255,0.28); margin-bottom: 12px; }
+.tw-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+.tw-lbl { font-size: 11px; color: rgba(185,215,255,0.55); }
+.tw-sel { font-size: 11px; background: rgba(185,215,255,0.06); border: 1px solid rgba(185,215,255,0.12); border-radius: 3px; padding: 3px 8px; color: rgba(185,215,255,0.7); cursor: pointer; font-family: inherit; }
+</style>
+</head>
+<body>
+
+<canvas id="cv"></canvas>
+
+<div id="controls">
+  <button class="ctrl-btn" id="btn-zoomin" title="Zoom in">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M11 8v6M8 11h6M21 21l-4.35-4.35"/></svg>
+  </button>
+  <button class="ctrl-btn" id="btn-zoomout" title="Zoom out">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M21 21l-4.35-4.35"/></svg>
+  </button>
+  <button class="ctrl-btn" id="btn-reset" title="Reset view">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+  </button>
+  <div class="ctrl-divider"></div>
+  <button class="ctrl-btn" id="btn-rot-ccw" title="Rotate campus counter-clockwise">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+  </button>
+  <button class="ctrl-btn" id="btn-rot-cw" title="Rotate campus clockwise">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+  </button>
+  <div class="rot-indicator" id="rot-indicator" title="Camera orientation">
+    <svg viewBox="-12 -12 24 24"><g id="rot-arrow-g"><path d="M0 -7 L4 4 L0 2 L-4 4 Z" fill="currentColor"/></g><circle cx="0" cy="0" r="10" fill="none" stroke="currentColor" stroke-opacity="0.25" stroke-width="1"/></svg>
+  </div>
+</div>
+
+<div id="hint">Click to select · Drag to pan · <b style="color:rgba(230,245,255,0.65)">Ctrl+drag</b> to rotate · <b style="color:rgba(230,245,255,0.65)">R</b> to step</div>
+
+<!-- Sidebar -->
+<div id="sidebar">
+  <div id="sb-top">
+    <div class="sb-label">JitHub Research</div>
+    <div class="sb-head">Research Districts</div>
+    <div id="sb-search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input id="sb-search" type="text" placeholder="SEARCH LABS, SKILLS, POSITIONS…" autocomplete="off" spellcheck="false">
+      <button id="sb-search-clear" title="Clear">×</button>
+    </div>
+  </div>
+  <div id="sb-scroll"></div>
+</div>
+
+<!-- Detail panel -->
+<div id="detail">
+  <div id="det-top">
+    <div id="det-nav">
+      <button id="det-back" onclick="closeDetail()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Back
+      </button>
+      <span id="det-district"></span>
+    </div>
+    <div id="det-body">
+      <div id="det-name"></div>
+      <div id="det-pi"></div>
+      <div class="det-tags" id="det-tags"></div>
+    </div>
+  </div>
+  <div id="det-opps"></div>
+</div>
+
+<!-- Tweaks -->
+<div id="tweaks">
+  <div class="tw-hd">Tweaks</div>
+  <div class="tw-row">
+    <span class="tw-lbl">Glow intensity</span>
+    <select class="tw-sel" id="tw-glow" onchange="applyTweaks()">
+      <option value="medium" selected>Medium</option>
+      <option value="subtle">Subtle</option>
+      <option value="vivid">Vivid</option>
+    </select>
+  </div>
+  <div class="tw-row">
+    <span class="tw-lbl">Floor lines</span>
+    <select class="tw-sel" id="tw-floors" onchange="applyTweaks()">
+      <option value="on" selected>On</option>
+      <option value="off">Off</option>
+    </select>
+  </div>
+  <div class="tw-row">
+    <span class="tw-lbl">Camera height</span>
+    <select class="tw-sel" id="tw-cam" onchange="applyTweaks()">
+      <option value="steep" selected>Steep</option>
+      <option value="standard">Standard</option>
+      <option value="low">Low</option>
+    </select>
+  </div>
+</div>
+
+<script src="research/data.js"></script>
+<script>
+'use strict';
+
+// ── Tweaks ─────────────────────────────────────────────────────────────────
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "glow": "medium",
+  "floors": "on",
+  "camera": "steep"
+}/*EDITMODE-END*/;
+let tweaks = Object.assign({}, TWEAK_DEFAULTS);
+
+window.addEventListener('message', e => {
+  if (e.data?.type === '__activate_edit_mode')   document.getElementById('tweaks').classList.add('on');
+  if (e.data?.type === '__deactivate_edit_mode') document.getElementById('tweaks').classList.remove('on');
+});
+window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+
+function applyTweaks() {
+  tweaks.glow   = document.getElementById('tw-glow').value;
+  tweaks.floors = document.getElementById('tw-floors').value;
+  tweaks.camera = document.getElementById('tw-cam').value;
+  window.parent.postMessage({ type: '__edit_mode_set_keys', edits: tweaks }, '*');
+  const camMap = { steep: 18, standard: 24, low: 30 };
+  TY = camMap[tweaks.camera] || 18;
+  needsRedraw = true;
+}
+
+// ── Isometric parameters ──────────────────────────────────────────────────
+const TX = 46;         // column half-width (px)
+let   TY = 18;         // row half-height — controls camera steepness
+const TH = 26;         // px per height unit
+let   zoom = 1.0;      // view zoom (1 = default)
+const ZMIN = 0.35, ZMAX = 3.0;
+
+// ── Rotation (0..3: N, E, S, W) — rotates (col,row) around campus pivot ──
+let rotation = 0;
+let rotAnim  = 0;         // animated rotation value (for smooth transitions)
+let rotTarget = 0;        // target rotation (in continuous units, may exceed [0,3])
+const ROT_PIVOT = { col: 9, row: 6 }; // approx center of the grid layout
+
+function rotateColRow(col, row, rot = rotAnim) {
+  // Rotate by rot * 90° around ROT_PIVOT. rot is continuous for animation.
+  const dx = col - ROT_PIVOT.col;
+  const dy = row - ROT_PIVOT.row;
+  const a  = rot * Math.PI / 2;
+  const c  = Math.cos(a), s = Math.sin(a);
+  return {
+    col: ROT_PIVOT.col + dx * c - dy * s,
+    row: ROT_PIVOT.row + dx * s + dy * c,
+  };
+}
+
+// ── District & building data ──────────────────────────────────────────────
+// Maps canvas buildings to data.js buildings
+const DIST_META = {
+  nce:  { name: 'Newark College of Engineering',         short: 'NCE',  color: '#ef4444' },
+  ywcc: { name: 'Ying Wu College of Computing',          short: 'YWCC', color: '#3b82f6' },
+  csla: { name: 'College of Science & Liberal Arts',     short: 'CSLA', color: '#8b5cf6' },
+  hcad: { name: 'Hillier College of Architecture',       short: 'HCAD', color: '#14b8a6' },
+  mtsm: { name: 'Martin Tuchman School of Management',  short: 'MTSM', color: '#f59e0b' },
+};
+
+// Isometric grid buildings — sorted by col+row (painter's algorithm)
+// Districts are separated by multi-cell road gaps (green space / streets).
+// Heights and footprints tuned to approximate the real campus silhouettes.
+const BLDGS = [
+  // ── CSLA cluster ────────────────────────────────────────── (col 0-3, row 0-4)
+  { id:'cullimore',         dist:'csla', col:0, row:0, w:2, d:1, h:6,  style:{ mat:'stone-gray',      feat:'ribbon'       } },
+  { id:'king',              dist:'csla', col:0, row:2, w:3, d:2, h:7,  style:{ mat:'gothic',          feat:'gothic-pavilion' } },
+  { id:'life-sci',          dist:'csla', col:0, row:5, w:2, d:2, h:8,  style:{ mat:'modern-mix',      feat:'atrium-cyl'   } },
+  { id:'tiernan',           dist:'csla', col:3, row:0, w:1, d:1, h:5,  style:{ mat:'glass-blue',      feat:'curtain-wall' } },
+  { id:'kupfrian',          dist:'csla', col:3, row:5, w:1, d:1, h:3,  style:{ mat:'low-brick',       feat:'none'         } },
+
+  // ── NCE cluster ───────────────────────── (col 7-12, row 0-3) — cols 4-6 = big gap
+  { id:'fenster',           dist:'nce',  col:7,  row:0, w:2, d:1, h:9,  style:{ mat:'tan-stone',       feat:'setback'      } },
+  { id:'colton',            dist:'nce',  col:7,  row:2, w:1, d:1, h:5,  style:{ mat:'industrial-brick',feat:'parapet'      } },
+  { id:'york',              dist:'nce',  col:9,  row:2, w:1, d:1, h:5,  style:{ mat:'red-brick',       feat:'parapet'      } },
+  { id:'faculty-memorial',  dist:'nce',  col:8,  row:1, w:1, d:1, h:4,  style:{ mat:'red-brick',       feat:'none'         } },
+  { id:'ece-ctr',           dist:'nce',  col:11, row:0, w:2, d:2, h:14, style:{ mat:'modern-mix',      feat:'setback'      } },
+  { id:'mechanical',        dist:'nce',  col:11, row:2, w:2, d:1, h:8,  style:{ mat:'industrial-brick',feat:'parapet'      } },
+  { id:'microelectronics',  dist:'nce',  col:10, row:2, w:1, d:1, h:4,  style:{ mat:'tan-stone',       feat:'none'         } },
+
+  // ── YWCC cluster ────────────────────── (col 16-18, row 0-2) — cols 13-15 = big gap
+  { id:'gitc',              dist:'ywcc', col:16, row:0, w:2, d:2, h:20, style:{ mat:'glass-blue',      feat:'tower-crown'  } },
+
+  // ── MTSM cluster ───────────────────────────── (col 0-3, row 8-10) — rows 6-7 = big gap
+  { id:'eberhardt',         dist:'mtsm', col:0, row:8, w:3, d:2, h:5,  style:{ mat:'gothic',          feat:'spire'        } },
+  { id:'central-ave',       dist:'mtsm', col:0, row:11, w:2, d:1, h:6,  style:{ mat:'tan-stone',       feat:'setback'      } },
+
+  // ── HCAD cluster ────────────────────────── (col 6-10, row 8-11) — col 4-5 = gap
+  { id:'weston',            dist:'hcad', col:6,  row:8,  w:2, d:2, h:6,  style:{ mat:'modern-mix',      feat:'setback'      } },
+  { id:'campbell',          dist:'hcad', col:9,  row:8,  w:1, d:2, h:4,  style:{ mat:'red-brick',       feat:'parapet'      } },
+  { id:'specht',            dist:'hcad', col:6,  row:11, w:2, d:1, h:4,  style:{ mat:'red-brick',       feat:'parapet'      } },
+];
+
+// Link to data.js
+BLDGS.forEach(cb => {
+  const distObj = DISTRICTS?.find(d => d.id === cb.dist);
+  if (distObj) {
+    cb.distObj = distObj;
+    cb.bldgObj = distObj.buildings.find(b => b.id === cb.id);
+  }
+});
+
+// ── Canvas setup ───────────────────────────────────────────────────────────
+const canvas = document.getElementById('cv');
+const ctx    = canvas.getContext('2d');
+let W, H, panX, panY;
+let isDragging = false, dragSx, dragSy, startPX, startPY;
+let hovered = null, selected = null;
+let needsRedraw = true;
+let sidebarW = 280;
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  resetView(false);
+  positionChrome();
+  needsRedraw = true;
+}
+
+function positionChrome() {
+  const det = document.getElementById('detail');
+  const open = det.classList.contains('open');
+  const rightEdge = open ? 380 : sidebarW;
+  document.getElementById('controls').style.right = (rightEdge + 12) + 'px';
+  document.getElementById('tweaks').style.right   = (rightEdge + 12) + 'px';
+}
+
+function resetView(redraw = true) {
+  zoom = 1.0;
+  // Scene center from grid layout
+  const aw = W - sidebarW;
+  // Approximate scene bounds
+  const minSX = (0 - 13) * TX;  // leftmost (col 0, row 13)
+  const maxSX = 18 * TX;        // rightmost (GITC col 18)
+  const minSY = -20 * TH;       // GITC top (h=20)
+  const maxSY = 30 * TY;        // bottom corners (col+row up to 30)
+  panX = (aw - (maxSX - minSX)) / 2 - minSX + aw * 0.04;
+  panY = (H  - (maxSY - minSY)) / 2 - minSY - H * 0.04;
+  clampPan();
+  if (redraw) needsRedraw = true;
+}
+
+// Zoom toward a screen-space point (keeps that point stationary)
+function zoomAt(sx, sy, factor) {
+  const newZoom = Math.max(ZMIN, Math.min(ZMAX, zoom * factor));
+  if (newZoom === zoom) return;
+  const k = newZoom / zoom;
+  panX = sx - (sx - panX) * k;
+  panY = sy - (sy - panY) * k;
+  zoom = newZoom;
+  clampPan();
+  needsRedraw = true;
+}
+
+// ── Pan clamping ──────────────────────────────────────────────────────────
+// Compute the screen-space bounding box of the campus and clamp (panX, panY)
+// so that the campus never scrolls completely offscreen. We allow a small
+// overshoot so the user can put the scene edge at any viewport edge, but
+// prevent it from disappearing into empty space.
+function sceneScreenBounds() {
+  // All relevant grid corners of the scene + some ground margin
+  const corners = [
+    [-3, -3, 0], [22, -3, 0], [22, 15, 0], [-3, 15, 0],
+    // include tallest tower top for vertical extent (GITC col 16-18, h 20)
+    [16, 0, 20], [18, 0, 20], [18, 2, 20], [16, 2, 20],
+  ];
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const [c, r, h] of corners) {
+    const p = iso(c, r, h);
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { minX, maxX, minY, maxY };
+}
+
+function clampPan() {
+  const b = sceneScreenBounds();
+  // Keep at least this many px of the scene visible inside the viewport
+  const margin = 120;
+  const viewL = 0, viewR = W - sidebarW;
+  const viewT = 0, viewB = H;
+  // Translate bounds by current pan offset was already applied via iso().
+  // We need to find the delta that would push the scene past the allowed zone
+  // and back it off.
+  let dx = 0, dy = 0;
+  if (b.maxX < viewL + margin) dx = (viewL + margin) - b.maxX;
+  else if (b.minX > viewR - margin) dx = (viewR - margin) - b.minX;
+  if (b.maxY < viewT + margin) dy = (viewT + margin) - b.maxY;
+  else if (b.minY > viewB - margin) dy = (viewB - margin) - b.minY;
+  panX += dx; panY += dy;
+}
+
+window.addEventListener('resize', resize);
+resize();
+document.getElementById('btn-reset').addEventListener('click', () => resetView());
+document.getElementById('btn-zoomin').addEventListener('click', () => zoomAt(W * 0.5, H * 0.5, 1.25));
+document.getElementById('btn-zoomout').addEventListener('click', () => zoomAt(W * 0.5, H * 0.5, 1 / 1.25));
+document.getElementById('btn-rot-cw').addEventListener('click',  () => rotateBy(+1));
+document.getElementById('btn-rot-ccw').addEventListener('click', () => rotateBy(-1));
+
+function rotateBy(delta) {
+  rotTarget += delta;
+  if (!rotRafOn) { rotRafOn = true; requestAnimationFrame(stepRotation); }
+  updateRotIndicator();
+}
+
+let rotRafOn = false;
+function stepRotation() {
+  const diff = rotTarget - rotAnim;
+  if (Math.abs(diff) < 0.002) {
+    rotAnim = rotTarget;
+    rotation = ((rotTarget % 4) + 4) % 4;
+    rotRafOn = false;
+    clampPan();
+  } else {
+    rotAnim += diff * 0.18;
+    clampPan();
+    requestAnimationFrame(stepRotation);
+  }
+  needsRedraw = true;
+}
+
+function updateRotIndicator() {
+  const g = document.getElementById('rot-arrow-g');
+  if (g) g.style.transform = `rotate(${rotTarget * 90}deg)`;
+}
+updateRotIndicator();
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+  const f = Math.pow(1.0015, -e.deltaY);
+  zoomAt(sx, sy, f);
+}, { passive: false });
+
+// ── Isometric math ────────────────────────────────────────────────────────
+function iso(col, row, gy = 0) {
+  const r = rotateColRow(col, row);
+  return {
+    x: panX + (r.col - r.row) * TX * zoom,
+    y: panY + (r.col + r.row) * TY * zoom - gy * TH * zoom,
+  };
+}
+
+// Painter-sort key that accounts for rotation. We sort by (col'+row') where
+// (col', row') is the rotated center of the building, so back-most boxes draw first.
+function sortKey(b) {
+  // Sort by the BACK-most corner of the rotated footprint (min col'+row'),
+  // tie-break by the FRONT-most corner (max col'+row'). Sorting by center
+  // breaks when footprints of different sizes overlap under rotation.
+  const corners = [
+    [b.col,       b.row      ],
+    [b.col + b.w, b.row      ],
+    [b.col + b.w, b.row + b.d],
+    [b.col,       b.row + b.d],
+  ];
+  let minK = Infinity, maxK = -Infinity;
+  for (const [c, r] of corners) {
+    const p = rotateColRow(c, r);
+    const k = p.col + p.row;
+    if (k < minK) minK = k;
+    if (k > maxK) maxK = k;
+  }
+  return minK * 1000 + maxK;
+}
+
+// ── Drawing helpers ───────────────────────────────────────────────────────
+function poly(pts, fill) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+}
+
+function edgeLine(p1, p2, col, w, glowAlpha) {
+  // Glow pass
+  ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+  ctx.strokeStyle = col.replace(/[\d.]+\)$/, `${glowAlpha})`);
+  ctx.lineWidth = w + 2.5;
+  ctx.stroke();
+  // Core line
+  ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+  ctx.strokeStyle = col;
+  ctx.lineWidth = w;
+  ctx.stroke();
+}
+
+function floorLines(pts) {
+  if (tweaks.floors === 'off') return;
+  ctx.save();
+  poly(pts);
+  ctx.clip();
+  const minY = Math.min(...pts.map(p => p.y));
+  const maxY = Math.max(...pts.map(p => p.y));
+  const minX = Math.min(...pts.map(p => p.x));
+  const maxX = Math.max(...pts.map(p => p.x));
+  ctx.strokeStyle = 'rgba(160,200,250,0.07)';
+  ctx.lineWidth = 0.4;
+  for (let y = minY + TH; y < maxY; y += TH) {
+    ctx.beginPath(); ctx.moveTo(minX - 2, y); ctx.lineTo(maxX + 2, y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ── Build one building ────────────────────────────────────────────────────
+const FACE_TOP   = '#19293c';
+const FACE_RIGHT = '#0d1a28';
+const FACE_FRONT = '#111e2c';
+
+// Per-material palette on the dark blueprint base. Each returns {top, right, front, accent, windowAlpha}
+// Kept moody/desaturated so the whole scene still reads as one cohesive blueprint.
+const MAT_PALETTE = {
+  'red-brick':        { top:'#2a1a1d', right:'#1d0f12', front:'#241518', accent:'rgba(220,120,110,0.35)' },
+  'industrial-brick': { top:'#321a18', right:'#220f0e', front:'#2a1513', accent:'rgba(235,120,90,0.40)'  },
+  'gothic':           { top:'#2d1a18', right:'#1e100f', front:'#261513', accent:'rgba(230,140,120,0.42)' },
+  'stone-gray':       { top:'#1e2530', right:'#10161e', front:'#171e28', accent:'rgba(180,200,220,0.30)' },
+  'tan-stone':        { top:'#2a2620', right:'#1a1814', front:'#231f1a', accent:'rgba(220,190,140,0.32)' },
+  'glass-blue':       { top:'#142638', right:'#081422', front:'#0d1b2c', accent:'rgba(120,190,255,0.55)' },
+  'modern-mix':       { top:'#1f2530', right:'#121720', front:'#181e28', accent:'rgba(200,180,160,0.34)' },
+  'low-brick':        { top:'#221a18', right:'#150f0e', front:'#1b1412', accent:'rgba(180,140,110,0.28)' },
+};
+
+function palette(b) {
+  return MAT_PALETTE[b.style?.mat] || { top:FACE_TOP, right:FACE_RIGHT, front:FACE_FRONT, accent:'rgba(185,215,255,0.3)' };
+}
+
+// Draw a small window-grid on a quadrilateral face. 4 corners: tl, tr, br, bl
+// (tl=top-left in building space, bl=bottom-left). Uses lerp to sample grid points,
+// so the grid correctly follows the isometric parallelogram.
+function windowGrid(tl, tr, br, bl, cols, rows, color) {
+  const lerp = (a, b, t) => ({ x:a.x + (b.x-a.x)*t, y:a.y + (b.y-a.y)*t });
+  ctx.fillStyle = color;
+  const padU = 0.14, padV = 0.10;
+  const winU = (1 - padU*2) / cols * 0.62;
+  const winV = (1 - padV*2) / rows * 0.62;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const u = padU + (c + 0.5) / cols * (1 - padU*2);
+      const v = padV + (r + 0.5) / rows * (1 - padV*2);
+      // bilinear interp
+      const top = lerp(tl, tr, u);
+      const bot = lerp(bl, br, u);
+      const cen = lerp(top, bot, v);
+      // window corners
+      const u0 = u - winU/2, u1 = u + winU/2;
+      const v0 = v - winV/2, v1 = v + winV/2;
+      const p00 = lerp(lerp(tl, tr, u0), lerp(bl, br, u0), v0);
+      const p10 = lerp(lerp(tl, tr, u1), lerp(bl, br, u1), v0);
+      const p11 = lerp(lerp(tl, tr, u1), lerp(bl, br, u1), v1);
+      const p01 = lerp(lerp(tl, tr, u0), lerp(bl, br, u0), v1);
+      ctx.beginPath();
+      ctx.moveTo(p00.x, p00.y); ctx.lineTo(p10.x, p10.y);
+      ctx.lineTo(p11.x, p11.y); ctx.lineTo(p01.x, p01.y);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+}
+
+// Draw vertical mullion stripes (for glass curtain-wall look)
+function curtainStripes(tl, tr, br, bl, cols, color) {
+  const lerp = (a, b, t) => ({ x:a.x + (b.x-a.x)*t, y:a.y + (b.y-a.y)*t });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.5;
+  for (let c = 1; c < cols; c++) {
+    const t = c / cols;
+    const p0 = lerp(tl, tr, t);
+    const p1 = lerp(bl, br, t);
+    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+  }
+}
+
+// Castellation notches along the top edge (tl -> tr)
+function castellate(tl, tr, color, notchCount = 6) {
+  const lerp = (a, b, t) => ({ x:a.x + (b.x-a.x)*t, y:a.y + (b.y-a.y)*t });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.9;
+  const notchH = 4;
+  for (let i = 0; i < notchCount; i++) {
+    if (i % 2 === 0) continue; // alternate
+    const t0 = i / notchCount;
+    const t1 = (i + 1) / notchCount;
+    const p0 = lerp(tl, tr, t0);
+    const p1 = lerp(tl, tr, t1);
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y - notchH);
+    ctx.lineTo(p0.x, p0.y);
+    ctx.lineTo(p1.x, p1.y);
+    ctx.lineTo(p1.x, p1.y - notchH);
+    ctx.stroke();
+  }
+}
+
+// Stroked lineart window frames (architectural drawing style)
+function windowFrames(tl, tr, br, bl, cols, rows, color, lw=0.5) {
+  const lerp = (a, b, t) => ({ x:a.x + (b.x-a.x)*t, y:a.y + (b.y-a.y)*t });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  const padU = 0.06, padV = 0.04;
+  const cellU = (1 - padU*2) / cols;
+  const cellV = (1 - padV*2) / rows;
+  const winU = cellU * 0.68;
+  const winV = cellV * 0.68;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const u = padU + (c + 0.5) * cellU;
+      const v = padV + (r + 0.5) * cellV;
+      const u0 = u - winU/2, u1 = u + winU/2;
+      const v0 = v - winV/2, v1 = v + winV/2;
+      const p00 = lerp(lerp(tl, tr, u0), lerp(bl, br, u0), v0);
+      const p10 = lerp(lerp(tl, tr, u1), lerp(bl, br, u1), v0);
+      const p11 = lerp(lerp(tl, tr, u1), lerp(bl, br, u1), v1);
+      const p01 = lerp(lerp(tl, tr, u0), lerp(bl, br, u0), v1);
+      ctx.beginPath();
+      ctx.moveTo(p00.x, p00.y); ctx.lineTo(p10.x, p10.y);
+      ctx.lineTo(p11.x, p11.y); ctx.lineTo(p01.x, p01.y);
+      ctx.closePath(); ctx.stroke();
+    }
+  }
+}
+
+// Horizontal band strokes on a face (floor divisions)
+function horizontalBands(tl, tr, br, bl, rows, color, lw=0.4) {
+  const lerp = (a, b, t) => ({ x:a.x + (b.x-a.x)*t, y:a.y + (b.y-a.y)*t });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  for (let r = 1; r < rows; r++) {
+    const t = r / rows;
+    const p0 = lerp(tl, bl, t);
+    const p1 = lerp(tr, br, t);
+    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+  }
+}
+
+// Vertical pier strokes on a face
+function verticalPiers(tl, tr, br, bl, cols, color, lw=0.4) {
+  const lerp = (a, b, t) => ({ x:a.x + (b.x-a.x)*t, y:a.y + (b.y-a.y)*t });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  for (let c = 1; c < cols; c++) {
+    const t = c / cols;
+    const p0 = lerp(tl, tr, t);
+    const p1 = lerp(bl, br, t);
+    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+  }
+}
+
+// Inset parapet line just below the top edge of a face
+function parapetLine(tl, tr, inset, color, lw=0.5) {
+  // No-op: parapet lines caused visible stubs sticking out past corners
+  // due to isometric projection. Silhouette edges alone read cleanly.
+  return;
+}
+
+function drawSubMass(part, edgeBase, detailCol, ew, glowA) {
+  const { col, row, w, d, h0 = 0, h1, kind } = part;
+  const tl  = iso(col,   row,   h1);
+  const tr  = iso(col+w, row,   h1);
+  const tfr = iso(col+w, row+d, h1);
+  const tf  = iso(col,   row+d, h1);
+  const bl  = iso(col,   row,   h0);
+  const br  = iso(col+w, row,   h0);
+  const bfr = iso(col+w, row+d, h0);
+  const bf  = iso(col,   row+d, h0);
+
+  poly([tl, tr, tfr, tf],   '#0d141e');
+  poly([tr, br, bfr, tfr],  '#070b11');
+  poly([tf, tfr, bfr, bf],  '#090e15');
+
+  const eg = edgeLine.bind(null);
+  eg(tl, tr,  edgeBase, ew, glowA);
+  eg(tr, tfr, edgeBase, ew, glowA);
+  eg(tfr, tf, edgeBase, ew, glowA);
+  eg(tf, tl,  edgeBase, ew, glowA);
+  eg(tr, br,  edgeBase, ew, glowA);
+  eg(tfr, bfr,edgeBase, ew, glowA);
+  eg(tf, bf,  edgeBase, ew, glowA);
+  if (h0 > 0.05) eg(tl, bl, edgeBase, ew, glowA);
+
+  parapetLine(tr, tfr, 2, detailCol, ew * 0.4);
+  parapetLine(tf, tfr, 2, detailCol, ew * 0.4);
+
+  const span = h1 - h0;
+  const pRows = Math.max(2, Math.round(span * 0.7));
+  const pwCols = Math.max(1, Math.round(w * 2.5));
+  const pdCols = Math.max(1, Math.round(d * 2.5));
+  // Skip window detail on small / thin parts (< ~1 unit volume per face)
+  const smallPart = (w < 0.6) || (d < 0.6) || (span < 1.5);
+  if (smallPart) {
+    // leave clean — just the silhouette edges + parapet
+  } else if (kind === 'glass') {
+    verticalPiers(tr, tfr, bfr, br, pdCols * 2, detailCol, ew * 0.32);
+    verticalPiers(tf, tfr, bfr, bf, pwCols * 2, detailCol, ew * 0.32);
+    horizontalBands(tr, tfr, bfr, br, Math.max(1, Math.round(pRows/2)), detailCol, ew * 0.3);
+  } else {
+    windowFrames(tr, tfr, bfr, br, pdCols, pRows, detailCol, ew * 0.32);
+    windowFrames(tf, tfr, bfr, bf, pwCols, pRows, detailCol, ew * 0.32);
+    if (kind === 'masonry') {
+      horizontalBands(tf, tfr, bfr, bf, pRows, detailCol, ew * 0.22);
+    }
+  }
+}
+
+function drawBuilding(b) {
+  const { col, row, w, d, h, dist } = b;
+  const isHov = hovered?.id === b.id;
+  const isSel = selected?.id === b.id;
+  const dc = DIST_META[dist]?.color || '#aaa';
+  const style = b.style || {};
+
+  // Glow params from tweak
+  const glowMap = { subtle: 0.04, medium: 0.10, vivid: 0.18 };
+  const glowA = glowMap[tweaks.glow] || 0.10;
+  const ew    = isSel ? 0.9 : isHov ? 0.75 : 0.55;
+
+  // Cool neutral line palette — like architectural pen on dark paper
+  const edgeBase = isSel ? 'rgba(240,250,255,1.0)'
+                 : isHov ? 'rgba(230,245,255,0.98)'
+                         : 'rgba(200,225,250,0.95)';
+  // Fainter detail-line color (windows, piers, bands) — visible even at rest
+  const detailCol = isSel ? 'rgba(230,245,255,0.95)'
+                  : isHov ? 'rgba(210,235,250,0.82)'
+                          : 'rgba(180,210,235,0.72)';
+
+  // ── District-color ground footprint outline (always visible — groups buildings by discipline)
+  const gpad = 0.12;
+  const gbl0 = iso(col - gpad, row - gpad, 0);
+  const gbr0 = iso(col + w + gpad, row - gpad, 0);
+  const gbfr0 = iso(col + w + gpad, row + d + gpad, 0);
+  const gbf0 = iso(col - gpad, row + d + gpad, 0);
+  ctx.save();
+  ctx.fillStyle = dc + '10';
+  ctx.strokeStyle = dc + (isSel ? 'cc' : isHov ? '88' : '55');
+  ctx.lineWidth = isSel ? 1.6 : 1.0;
+  ctx.beginPath();
+  ctx.moveTo(gbl0.x, gbl0.y);
+  ctx.lineTo(gbr0.x, gbr0.y);
+  ctx.lineTo(gbfr0.x, gbfr0.y);
+  ctx.lineTo(gbf0.x, gbf0.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  // The 8 box corners
+  const tl  = iso(col,   row,   h);
+  const tr  = iso(col+w, row,   h);
+  const tfr = iso(col+w, row+d, h);
+  const tf  = iso(col,   row+d, h);
+  const br  = iso(col+w, row,   0);
+  const bfr = iso(col+w, row+d, 0);
+  const bf  = iso(col,   row+d, 0);
+  const bl  = iso(col,   row,   0);
+
+  // Determine which 2 of the 4 side faces are currently front-facing (camera side)
+  // based on rotation. In iso, faces that are visible have centers that project
+  // to the LARGEST screen Y (bottom). Compute each side face's center in rotated
+  // grid space and pick the 2 with largest (col'+row').
+  const sides = [
+    { name:'right', tlC:tr, trC:br, brC:bfr, blC:tfr, key: rotateColRow(col+w, row+d/2) },
+    { name:'front', tlC:tf, trC:tfr, brC:bfr, blC:bf, key: rotateColRow(col+w/2, row+d) },
+    { name:'left',  tlC:tl, trC:tf, brC:bf,  blC:bl, key: rotateColRow(col,     row+d/2) },
+    { name:'back',  tlC:tl, trC:tr, brC:br,  blC:bl, key: rotateColRow(col+w/2, row    ) },
+  ];
+  // Sort back-to-front: smaller col'+row' first (drawn, then overdrawn by front faces)
+  sides.sort((a, b) => (a.key.col + a.key.row) - (b.key.col + b.key.row));
+  // Front 2 = the 2 visible faces
+  const visibleFaces = sides.slice(2);
+
+  // ── Face fills: uniform, near-black, only subtle tonal variation between faces
+  //    so the building reads as a dark silhouette against the background.
+  const topFill   = isSel ? '#162030' : isHov ? '#111a27' : '#0d141e';
+  const rightFill = isSel ? '#0c131d' : isHov ? '#090e16' : '#070b11';
+  const frontFill = isSel ? '#0f1823' : isHov ? '#0b1219' : '#090e15';
+
+  // Draw top
+  poly([tl, tr, tfr, tf], topFill);
+  // Draw visible side faces (back-to-front within the visible pair)
+  for (const f of visibleFaces) {
+    // Alternate fill shades between the two visible sides for depth
+    const fill = f === visibleFaces[0] ? rightFill : frontFill;
+    poly([f.tlC, f.trC, f.brC, f.blC], fill);
+  }
+
+  // ── Window / facade linework (pure stroke) ───────────────────────
+  const wCols = Math.max(2, Math.round(w * 3));
+  const dCols = Math.max(2, Math.round(d * 3));
+  const wRows = Math.max(3, Math.round(h * 0.7));
+
+  // Parapet ledge just below the roof edge (every building gets one — adds depth)
+  parapetLine(tr,  tfr, 2.5, detailCol, ew * 0.5);
+  parapetLine(tf,  tfr, 2.5, detailCol, ew * 0.5);
+
+  if (style.feat === 'curtain-wall' || style.feat === 'tower-crown') {
+    // Glass tower: dense vertical mullions + sparse horizontal bands
+    for (const f of visibleFaces) {
+      const cols = (f.name === 'right' || f.name === 'left') ? dCols : wCols;
+      verticalPiers(f.tlC, f.trC, f.brC, f.blC, cols * 2, detailCol, ew * 0.35);
+      horizontalBands(f.tlC, f.trC, f.brC, f.blC, Math.round(wRows / 2), detailCol, ew * 0.3);
+    }
+  } else if (style.mat === 'stone-gray') {
+    // Ribbon windows: tight horizontal banding
+    for (const f of visibleFaces) {
+      horizontalBands(f.tlC, f.trC, f.brC, f.blC, wRows, detailCol, ew * 0.45);
+      verticalPiers(f.tlC, f.trC, f.brC, f.blC, 2, detailCol, ew * 0.35);
+    }
+  } else if (style.mat === 'gothic' || style.mat === 'industrial-brick' || style.mat === 'red-brick') {
+    // Masonry building: punched windows as frames, plus floor bands + piers
+    for (const f of visibleFaces) {
+      const cols = (f.name === 'right' || f.name === 'left') ? dCols : wCols;
+      windowFrames(f.tlC, f.trC, f.brC, f.blC, cols, wRows, detailCol, ew * 0.35);
+      horizontalBands(f.tlC, f.trC, f.brC, f.blC, wRows, detailCol, ew * 0.25);
+    }
+  } else {
+    // Modern / tan stone: punched windows as frames, no floor bands
+    for (const f of visibleFaces) {
+      const cols = (f.name === 'right' || f.name === 'left') ? dCols : wCols;
+      windowFrames(f.tlC, f.trC, f.brC, f.blC, cols, wRows, detailCol, ew * 0.35);
+    }
+  }
+
+  // District color hint — ONLY a very subtle tint on top face when hovered/selected
+  if (isHov || isSel) {
+    ctx.save();
+    poly([tl, tr, tfr, tf]);
+    ctx.clip();
+    ctx.fillStyle = dc + (isSel ? '26' : '12');
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ── All edges (silhouette outline) ──────────────────────────────
+  const eg = edgeLine.bind(null);
+  // top edges
+  eg(tl, tr, edgeBase, ew, glowA);
+  eg(tr, tfr, edgeBase, ew, glowA);
+  eg(tfr, tf, edgeBase, ew, glowA);
+  eg(tf, tl, edgeBase, ew, glowA);
+  // vertical edges at each corner
+  eg(tr, br, edgeBase, ew, glowA);
+  eg(tfr, bfr, edgeBase, ew, glowA);
+  eg(tf, bf, edgeBase, ew, glowA);
+  eg(tl, bl, edgeBase, ew, glowA);
+  // bottom edges of visible faces only
+  for (const f of visibleFaces) {
+    eg(f.blC, f.brC, edgeBase, ew, glowA);
+  }
+
+  // ── Architectural features ──────────────────────────────────────
+  drawFeature(b, { tl, tr, tfr, tf, br, bfr, bf }, edgeBase, ew, glowA);
+
+  // ── Sub-masses (wings, podiums, penthouses for L-shape / step-back massing)
+  if (b.parts) {
+    for (const p of b.parts) drawSubMass(p, edgeBase, detailCol, ew, glowA);
+  }
+}
+
+// Convert #rrggbb to "r,g,b"
+function hexRGB(hex) {
+  const h = hex.replace('#','');
+  return `${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)}`;
+}
+
+// Draw distinctive architectural features on top of a building
+function drawFeature(b, c, edgeCol, ew, glowA) {
+  const { col, row, w, d, h } = b;
+  const feat = b.style?.feat;
+  if (!feat || feat === 'none') return;
+
+  // Neutral dark fills matching the main silhouette (no colored materials).
+  const topFill   = '#0d141e';
+  const rightFill = '#070b11';
+  const frontFill = '#090e15';
+  const detailCol = edgeCol.replace(/rgba\(([^)]+)\)/, (m, p) => {
+    const parts = p.split(',');
+    return `rgba(${parts[0]},${parts[1]},${parts[2]},0.42)`;
+  });
+
+  if (feat === 'castellated') {
+    // Crenellations on the top edges (ridge running along the front)
+    castellate(c.tl, c.tr, edgeCol, Math.max(5, Math.round(w * 4)));
+    castellate(c.tf, c.tfr, edgeCol, Math.max(5, Math.round(w * 4)));
+  }
+
+  if (feat === 'spire') {
+    // Eberhardt-style central castellated tower rising 40% above roof, centered
+    const cx = col + w * 0.5, cz = row + d * 0.5;
+    const tw = Math.min(w, d) * 0.35;
+    const tcol0 = cx - tw/2, tcol1 = cx + tw/2;
+    const trow0 = cz - tw/2, trow1 = cz + tw/2;
+    const th = h + 4; // spire height
+    const stl  = iso(tcol0, trow0, th);
+    const str  = iso(tcol1, trow0, th);
+    const stfr = iso(tcol1, trow1, th);
+    const stf  = iso(tcol0, trow1, th);
+    const sbl  = iso(tcol0, trow0, h);
+    const sbr  = iso(tcol1, trow0, h);
+    const sbfr = iso(tcol1, trow1, h);
+    const sbf  = iso(tcol0, trow1, h);
+    poly([stl, str, stfr, stf], topFill);
+    poly([str, sbr, sbfr, stfr], rightFill);
+    poly([stf, stfr, sbfr, sbf], frontFill);
+    // edges
+    const eg = edgeLine.bind(null);
+    eg(stl, str, edgeCol, ew, glowA);
+    eg(str, stfr, edgeCol, ew, glowA);
+    eg(stfr, stf, edgeCol, ew, glowA);
+    eg(stf, stl, edgeCol, ew, glowA);
+    eg(str, sbr, edgeCol, ew, glowA);
+    eg(stfr, sbfr, edgeCol, ew, glowA);
+    eg(stf, sbf, edgeCol, ew, glowA);
+    // castellations on top of the spire
+    castellate(stl, str, edgeCol, 4);
+    castellate(stf, stfr, edgeCol, 4);
+  }
+
+  if (feat === 'cylinder') {
+    // Cylindrical corner rotunda — placed AT the front-left corner so it visibly
+    // fuses with the building mass (half inside the footprint, half protruding).
+    const rad = Math.min(w, d) * 0.30;
+    const cxCol = col + rad * 0.6;
+    const cxRow = row + d - rad * 0.6;
+    const th = h + 1.2;
+    // Draw an ellipse approximating an iso circle at roof top and at shaft top
+    const topC  = iso(cxCol, cxRow, th);
+    const baseC = iso(cxCol, cxRow, 0);
+    const midC  = iso(cxCol, cxRow, h);
+    const rx = rad * TX;
+    const ry = rad * TY;
+    // Shaft: left + right sides (from baseC to topC)
+    ctx.save();
+    ctx.fillStyle = 'rgba(14,20,30,0.70)'; // light stone cylinder
+    ctx.beginPath();
+    ctx.moveTo(baseC.x - rx, baseC.y);
+    ctx.lineTo(topC.x - rx, topC.y);
+    ctx.ellipse(topC.x, topC.y, rx, ry, 0, Math.PI, 0, true);
+    ctx.lineTo(baseC.x + rx, baseC.y);
+    ctx.ellipse(baseC.x, baseC.y, rx, ry, 0, 0, Math.PI, false);
+    ctx.closePath();
+    ctx.fill();
+    // Outlines
+    ctx.strokeStyle = edgeCol;
+    ctx.lineWidth = ew * 0.9;
+    ctx.beginPath();
+    ctx.moveTo(baseC.x - rx, baseC.y); ctx.lineTo(topC.x - rx, topC.y); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(baseC.x + rx, baseC.y); ctx.lineTo(topC.x + rx, topC.y); ctx.stroke();
+    // Top ellipse
+    ctx.beginPath();
+    ctx.ellipse(topC.x, topC.y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (feat === 'atrium') {
+    // A glass atrium bolted onto the front face — Life Sciences signature glass cube
+    const aw = w * 0.45;
+    const acol = col + w * 0.5 - aw * 0.5;
+    const ah = h * 0.55;
+    const adepth = 0.35;
+    const aRow0 = row + d;           // front wall
+    const aRow1 = row + d + adepth;  // protrudes toward viewer
+    const atl  = iso(acol,      aRow0, ah);
+    const atr  = iso(acol + aw, aRow0, ah);
+    const atfr = iso(acol + aw, aRow1, ah);
+    const atf  = iso(acol,      aRow1, ah);
+    const abr  = iso(acol + aw, aRow0, 0);
+    const abfr = iso(acol + aw, aRow1, 0);
+    const abf  = iso(acol,      aRow1, 0);
+    const abl  = iso(acol,      aRow0, 0);
+    // Glass-tinted faces
+    poly([atl, atr, atfr, atf], 'rgba(20,28,40,0.75)');
+    poly([atr, abr, abfr, atfr], 'rgba(12,18,26,0.80)');
+    poly([atf, atfr, abfr, abf], 'rgba(14,22,32,0.80)');
+    curtainStripes(atr, atfr, abfr, abr, 3, 'rgba(140,170,200,0.40)');
+    curtainStripes(atf, atfr, abfr, abf, 4, 'rgba(140,170,200,0.40)');
+    // Edges
+    const eg = edgeLine.bind(null);
+    eg(atl, atr, edgeCol, ew * 0.85, glowA);
+    eg(atr, atfr, edgeCol, ew * 0.85, glowA);
+    eg(atfr, atf, edgeCol, ew * 0.85, glowA);
+    eg(atr, abr, edgeCol, ew * 0.85, glowA);
+    eg(atfr, abfr, edgeCol, ew * 0.85, glowA);
+    eg(atf, abf, edgeCol, ew * 0.85, glowA);
+    eg(abr, abfr, edgeCol, ew * 0.85, glowA);
+    eg(abfr, abf, edgeCol, ew * 0.85, glowA);
+  }
+
+  if (feat === 'setback') {
+    // A smaller penthouse block on the roof (GITC, Fenster mech top)
+    const sw = w * 0.55, sd = d * 0.55;
+    const scol = col + (w - sw) * 0.5;
+    const srow = row + (d - sd) * 0.5;
+    const sh = h + 1.2;
+    const stl  = iso(scol,      srow,      sh);
+    const str  = iso(scol + sw, srow,      sh);
+    const stfr = iso(scol + sw, srow + sd, sh);
+    const stf  = iso(scol,      srow + sd, sh);
+    const sbl  = iso(scol,      srow,      h);
+    const sbr  = iso(scol + sw, srow,      h);
+    const sbfr = iso(scol + sw, srow + sd, h);
+    const sbf  = iso(scol,      srow + sd, h);
+    poly([stl, str, stfr, stf], topFill);
+    poly([str, sbr, sbfr, stfr], rightFill);
+    poly([stf, stfr, sbfr, sbf], frontFill);
+    const eg = edgeLine.bind(null);
+    eg(stl, str, edgeCol, ew * 0.8, glowA);
+    eg(str, stfr, edgeCol, ew * 0.8, glowA);
+    eg(stfr, stf, edgeCol, ew * 0.8, glowA);
+    eg(stf, stl, edgeCol, ew * 0.8, glowA);
+    eg(str, sbr, edgeCol, ew * 0.8, glowA);
+    eg(stfr, sbfr, edgeCol, ew * 0.8, glowA);
+    eg(stf, sbf, edgeCol, ew * 0.8, glowA);
+  }
+
+  if (feat === 'parapet') {
+    // A raised decorative cap band at top edges (classic brick industrial)
+    // Thin extra stripe along the top front + top right edges
+    ctx.strokeStyle = edgeCol.replace(/[\d.]+\)$/, '0.55)');
+    ctx.lineWidth = ew * 0.6;
+    const lerp = (a, b, t) => ({ x:a.x + (b.x-a.x)*t, y:a.y + (b.y-a.y)*t });
+    // Draw 2 horizontal accent lines just below the top edge on front & right
+    for (let k = 0; k < 2; k++) {
+      const off = 3 + k * 2.5;
+      const pa = { x: c.tf.x, y: c.tf.y + off };
+      const pb = { x: c.tfr.x, y: c.tfr.y + off };
+      const pc = { x: c.tr.x, y: c.tr.y + off };
+      ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(pb.x, pb.y); ctx.lineTo(pc.x, pc.y); ctx.stroke();
+    }
+  }
+
+  if (feat === 'ribbon') {
+    // Horizontal ribbon windows (Cullimore stone panels w/ dark ribbon)
+    const lerp = (a, b, t) => ({ x:a.x + (b.x-a.x)*t, y:a.y + (b.y-a.y)*t });
+    ctx.strokeStyle = 'rgba(50,70,90,0.55)';
+    ctx.lineWidth = 1.4;
+    const rows = Math.max(2, Math.round(h * 0.5));
+    for (let r = 1; r < rows; r++) {
+      const t = r / rows;
+      const p0 = lerp(c.tf, c.bf, t);
+      const p1 = lerp(c.tfr, c.bfr, t);
+      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+      const q0 = lerp(c.tr, c.br, t);
+      const q1 = lerp(c.tfr, c.bfr, t);
+      ctx.beginPath(); ctx.moveTo(q0.x, q0.y); ctx.lineTo(q1.x, q1.y); ctx.stroke();
+    }
+  }
+
+  // ── NEW: signature features ────────────────────────────────────
+
+  if (feat === 'gothic-pavilion') {
+    // Central King Building: a much taller central pavilion rising out of the main
+    // mass, with crenellated top — the defining silhouette of CKB.
+    const cx = col + w * 0.5, cz = row + d * 0.5;
+    const pw = Math.min(w, 1.4), pd = Math.min(d, 1.4);
+    const pcol0 = cx - pw/2, pcol1 = cx + pw/2;
+    const prow0 = cz - pd/2, prow1 = cz + pd/2;
+    const ph = h + 4.5; // rises above main mass
+    const ptl  = iso(pcol0, prow0, ph);
+    const ptr  = iso(pcol1, prow0, ph);
+    const ptfr = iso(pcol1, prow1, ph);
+    const ptf  = iso(pcol0, prow1, ph);
+    const pbr  = iso(pcol1, prow0, h);
+    const pbfr = iso(pcol1, prow1, h);
+    const pbf  = iso(pcol0, prow1, h);
+    const pbl  = iso(pcol0, prow0, h);
+    poly([ptl, ptr, ptfr, ptf], topFill);
+    poly([ptr, pbr, pbfr, ptfr], rightFill);
+    poly([ptf, ptfr, pbfr, pbf], frontFill);
+    // window grid on pavilion
+    windowGrid(ptr, ptfr, pbfr, pbr, 2, 3, detailCol);
+    windowGrid(ptf, ptfr, pbfr, pbf, 2, 3, detailCol);
+    // edges
+    const eg = edgeLine.bind(null);
+    eg(ptl, ptr, edgeCol, ew, glowA);
+    eg(ptr, ptfr, edgeCol, ew, glowA);
+    eg(ptfr, ptf, edgeCol, ew, glowA);
+    eg(ptf, ptl, edgeCol, ew, glowA);
+    eg(ptr, pbr, edgeCol, ew, glowA);
+    eg(ptfr, pbfr, edgeCol, ew, glowA);
+    eg(ptf, pbf, edgeCol, ew, glowA);
+    // Castellate the pavilion top
+    castellate(ptl, ptr, edgeCol, 5);
+    castellate(ptf, ptfr, edgeCol, 5);
+    // Also castellate the base mass corners (the lower parts)
+    castellate(c.tl, c.tr, edgeCol, Math.max(6, Math.round(w * 3)));
+    castellate(c.tf, c.tfr, edgeCol, Math.max(6, Math.round(w * 3)));
+  }
+
+  if (feat === 'atrium-cyl') {
+    // Life Sciences: red brick mass + cylindrical stair tower on the left front
+    // + glass atrium cube in the center front.
+    // --- Cylinder (left front corner) ---
+    const cxCol = col + 0.2, cxRow = row + d - 0.1;
+    const rad = 0.3;
+    const cylH = h + 0.8;
+    const topC  = iso(cxCol, cxRow, cylH);
+    const baseC = iso(cxCol, cxRow, 0);
+    const rx = rad * TX, ry = rad * TY;
+    ctx.save();
+    ctx.fillStyle = 'rgba(14,20,30,0.70)'; // warm brick cylinder
+    ctx.beginPath();
+    ctx.moveTo(baseC.x - rx, baseC.y);
+    ctx.lineTo(topC.x - rx, topC.y);
+    ctx.ellipse(topC.x, topC.y, rx, ry, 0, Math.PI, 0, true);
+    ctx.lineTo(baseC.x + rx, baseC.y);
+    ctx.ellipse(baseC.x, baseC.y, rx, ry, 0, 0, Math.PI, false);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = edgeCol; ctx.lineWidth = ew * 0.9;
+    ctx.beginPath(); ctx.moveTo(baseC.x - rx, baseC.y); ctx.lineTo(topC.x - rx, topC.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(baseC.x + rx, baseC.y); ctx.lineTo(topC.x + rx, topC.y); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(topC.x, topC.y, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+    // --- Glass atrium cube (center front) ---
+    const aw = w * 0.5;
+    const acol = col + w * 0.5 - aw * 0.5;
+    const ah = h * 0.7;
+    const adepth = 0.4;
+    const aRow0 = row + d, aRow1 = row + d + adepth;
+    const atl  = iso(acol,      aRow0, ah);
+    const atr  = iso(acol + aw, aRow0, ah);
+    const atfr = iso(acol + aw, aRow1, ah);
+    const atf  = iso(acol,      aRow1, ah);
+    const abr  = iso(acol + aw, aRow0, 0);
+    const abfr = iso(acol + aw, aRow1, 0);
+    const abf  = iso(acol,      aRow1, 0);
+    poly([atl, atr, atfr, atf], 'rgba(20,28,40,0.75)');
+    poly([atr, abr, abfr, atfr], 'rgba(12,18,26,0.80)');
+    poly([atf, atfr, abfr, abf], 'rgba(14,22,32,0.80)');
+    curtainStripes(atr, atfr, abfr, abr, 3, 'rgba(160,185,215,0.45)');
+    curtainStripes(atf, atfr, abfr, abf, 5, 'rgba(160,185,215,0.45)');
+    const eg = edgeLine.bind(null);
+    eg(atl, atr, edgeCol, ew * 0.85, glowA);
+    eg(atr, atfr, edgeCol, ew * 0.85, glowA);
+    eg(atfr, atf, edgeCol, ew * 0.85, glowA);
+    eg(atr, abr, edgeCol, ew * 0.85, glowA);
+    eg(atfr, abfr, edgeCol, ew * 0.85, glowA);
+    eg(atf, abf, edgeCol, ew * 0.85, glowA);
+  }
+
+  if (feat === 'tower-crown') {
+    // GITC: tall tower with a glass-crown top (mechanical penthouse at the very top
+    // with a darker, more reflective glass treatment) + small setback at mid-height.
+    // Draw a glowing "crown" at the top quarter.
+    const lerp = (a, b, t) => ({ x:a.x + (b.x-a.x)*t, y:a.y + (b.y-a.y)*t });
+    const crownT = 0.78; // top 22% of tower
+    // on right face
+    ctx.save();
+    const rtl = c.tr, rbl = c.br, rtr = c.tfr, rbr = c.bfr;
+    const rt0 = lerp(rtl, rbl, 1 - crownT), rt1 = lerp(rtr, rbr, 1 - crownT);
+    poly([rtl, rtr, rt1, rt0], 'rgba(16,24,36,0.65)');
+    const ftl = c.tf, fbl = c.bf, ftr = c.tfr, fbr = c.bfr;
+    const ft0 = lerp(ftl, fbl, 1 - crownT), ft1 = lerp(ftr, fbr, 1 - crownT);
+    poly([ftl, ftr, ft1, ft0], 'rgba(18,26,38,0.65)');
+    // Horizontal accent stripe at the crown boundary
+    ctx.strokeStyle = 'rgba(180,200,225,0.55)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(rt0.x, rt0.y); ctx.lineTo(rt1.x, rt1.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ft0.x, ft0.y); ctx.lineTo(ft1.x, ft1.y); ctx.stroke();
+    ctx.restore();
+    // Small rooftop penthouse setback
+    const sw = w * 0.45, sd = d * 0.45;
+    const scol = col + (w - sw) * 0.5, srow = row + (d - sd) * 0.5;
+    const sh = h + 1.5;
+    const stl  = iso(scol,      srow,      sh);
+    const str  = iso(scol + sw, srow,      sh);
+    const stfr = iso(scol + sw, srow + sd, sh);
+    const stf  = iso(scol,      srow + sd, sh);
+    const sbr  = iso(scol + sw, srow,      h);
+    const sbfr = iso(scol + sw, srow + sd, h);
+    const sbf  = iso(scol,      srow + sd, h);
+    poly([stl, str, stfr, stf], topFill);
+    poly([str, sbr, sbfr, stfr], rightFill);
+    poly([stf, stfr, sbfr, sbf], frontFill);
+    const eg = edgeLine.bind(null);
+    eg(stl, str, edgeCol, ew * 0.8, glowA);
+    eg(str, stfr, edgeCol, ew * 0.8, glowA);
+    eg(stfr, stf, edgeCol, ew * 0.8, glowA);
+    eg(stf, stl, edgeCol, ew * 0.8, glowA);
+    eg(str, sbr, edgeCol, ew * 0.8, glowA);
+    eg(stfr, sbfr, edgeCol, ew * 0.8, glowA);
+    eg(stf, sbf, edgeCol, ew * 0.8, glowA);
+  }
+}
+
+// ── Building label ────────────────────────────────────────────────────────
+function drawLabel(b) {
+  const { col, row, w, d, h } = b;
+  const cx = col + w / 2, cz = row + d / 2;
+  const top = iso(cx, cz, h);
+  const lx = top.x, ly = top.y - 20;
+
+  const name = b.bldgObj?.name || b.id;
+  const label = (name.length > 22 ? name.slice(0, 20) + '…' : name).toUpperCase();
+
+  ctx.font = '500 10px "JetBrains Mono", "Inter", sans-serif';
+  ctx.letterSpacing = '1px';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const tw = ctx.measureText(label).width;
+  const pw = tw + 22, ph = 22;
+  const bx = lx - pw / 2, by = ly - ph;
+
+  // Connector line — thin, just a vertical hairline
+  ctx.beginPath();
+  ctx.moveTo(lx, top.y - 2);
+  ctx.lineTo(lx, by + ph);
+  ctx.strokeStyle = 'rgba(210,225,245,0.5)';
+  ctx.lineWidth = 0.7;
+  ctx.stroke();
+
+  // Box — deep black, crisp white hairline border
+  ctx.fillStyle = '#03060b';
+  ctx.strokeStyle = 'rgba(210,225,245,0.85)';
+  ctx.lineWidth = 0.8;
+  roundRect(bx, by, pw, ph, 1);
+  ctx.fill(); ctx.stroke();
+
+  // Text — clean white, centered
+  ctx.fillStyle = 'rgba(235,245,255,0.95)';
+  ctx.fillText(label, lx, by + ph / 2 + 0.5);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+// ── Render loop ────────────────────────────────────────────────────────────
+function render() {
+  if (!needsRedraw) return;
+  needsRedraw = false;
+
+  ctx.clearRect(0, 0, W, H);
+  // Background — very dark, slight blue tint
+  ctx.fillStyle = '#05070c';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle vignette
+  const vg = ctx.createRadialGradient(W * 0.42, H * 0.5, 0, W * 0.42, H * 0.5, W * 0.75);
+  vg.addColorStop(0, 'rgba(10,16,28,0)');
+  vg.addColorStop(1, 'rgba(2,3,8,0.85)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+
+  // Ground plane (big dark slab under the entire grid)
+  const gc = [ iso(-3, -3, 0), iso(22, -3, 0), iso(22, 15, 0), iso(-3, 15, 0) ];
+  ctx.fillStyle = '#080c14';
+  ctx.beginPath();
+  ctx.moveTo(gc[0].x, gc[0].y);
+  for (let i=1;i<4;i++) ctx.lineTo(gc[i].x, gc[i].y);
+  ctx.closePath(); ctx.fill();
+  // Ground grid lines — subtle architectural blueprint hatch
+  ctx.strokeStyle = 'rgba(140,170,200,0.08)';
+  ctx.lineWidth = 0.5;
+  for (let cc = -3; cc <= 22; cc++) {
+    const a = iso(cc, -3, 0), b = iso(cc, 15, 0);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+  for (let rr = -3; rr <= 15; rr++) {
+    const a = iso(-3, rr, 0), b = iso(22, rr, 0);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+
+  // Draw district ground plates (colored tiles under each cluster)
+  drawDistrictPlates();
+
+  // Draw all buildings (dynamically painter-sorted for current rotation)
+  const sortedBldgs = BLDGS.slice().sort((a, b) => sortKey(a) - sortKey(b));
+  for (const b of sortedBldgs) drawBuilding(b);
+
+  // Labels on top
+  if (hovered && hovered !== selected) drawLabel(hovered);
+  if (selected) drawLabel(selected);
+}
+
+function loop() { render(); requestAnimationFrame(loop); }
+loop();
+
+// ── District ground plates ────────────────────────────────────────────────
+// Compute bounding box per district in grid space, expand by 0.6 cells of padding,
+// draw a very subtle colored fill with district's color + a glowing outline.
+function districtBounds() {
+  const out = {};
+  for (const b of BLDGS) {
+    const bb = out[b.dist] || (out[b.dist] = { col0: Infinity, col1: -Infinity, row0: Infinity, row1: -Infinity });
+    bb.col0 = Math.min(bb.col0, b.col);
+    bb.col1 = Math.max(bb.col1, b.col + b.w);
+    bb.row0 = Math.min(bb.row0, b.row);
+    bb.row1 = Math.max(bb.row1, b.row + b.d);
+  }
+  return out;
+}
+
+var _districtBoundsCache = null;
+function _getDistrictBounds() {
+  if (!_districtBoundsCache) _districtBoundsCache = districtBounds();
+  return _districtBoundsCache;
+}
+
+function drawDistrictPlates() {
+  const pad = 0.6;
+  const _db = _getDistrictBounds();
+  for (const id in _db) {
+    const bb = _db[id];
+    const meta = DIST_META[id];
+    if (!meta) continue;
+    const c0 = bb.col0 - pad, c1 = bb.col1 + pad;
+    const r0 = bb.row0 - pad, r1 = bb.row1 + pad;
+    const p00 = iso(c0, r0, 0);
+    const p10 = iso(c1, r0, 0);
+    const p11 = iso(c1, r1, 0);
+    const p01 = iso(c0, r1, 0);
+    // Fill
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(p00.x, p00.y);
+    ctx.lineTo(p10.x, p10.y);
+    ctx.lineTo(p11.x, p11.y);
+    ctx.lineTo(p01.x, p01.y);
+    ctx.closePath();
+    ctx.fillStyle = meta.color + '18'; // ~9% alpha
+    ctx.fill();
+    // Glow outline
+    ctx.strokeStyle = meta.color + '55';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    // Inner dashed border
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = meta.color + '88';
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    // District label at the top-left of the plate
+    const labelAnchor = iso(c0 + 0.2, r0 + 0.2, 0);
+    ctx.font = '600 10px Inter, sans-serif';
+    ctx.fillStyle = meta.color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(meta.short, labelAnchor.x + 4, labelAnchor.y + 12);
+  }
+}
+
+// ── Hit testing ────────────────────────────────────────────────────────────
+function pip(px, py, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function hitTest(mx, my) {
+  const sorted = BLDGS.slice().sort((a, b) => sortKey(a) - sortKey(b));
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const b = sorted[i];
+    const { col, row, w, d, h } = b;
+    const tl  = iso(col,   row,   h), tr  = iso(col+w, row,   h);
+    const tfr = iso(col+w, row+d, h), tf  = iso(col,   row+d, h);
+    const br  = iso(col+w, row,   0), bfr = iso(col+w, row+d, 0);
+    const bf  = iso(col,   row+d, 0), bl  = iso(col,   row,   0);
+    if (pip(mx,my,[tl,tr,tfr,tf])  ||
+        pip(mx,my,[tr,br,bfr,tfr]) ||
+        pip(mx,my,[tf,tfr,bfr,bf]) ||
+        pip(mx,my,[tl,tr,br,bl])   ||
+        pip(mx,my,[tl,tf,bf,bl])) return b;
+  }
+  return null;
+}
+
+// ── Mouse events ───────────────────────────────────────────────────────────
+// Drag modes: 'pan' (default) | 'rotate' (when Ctrl/Cmd held on mousedown)
+let dragMode = 'pan';
+let rotStartAngle = 0;   // continuous-rotation value at drag start
+
+canvas.addEventListener('mousemove', e => {
+  if (isDragging) {
+    if (dragMode === 'rotate') {
+      // 360px horizontal drag = one full 360° turn (4 quarter-turns)
+      const dx = e.clientX - dragSx;
+      rotTarget = rotStartAngle + dx / 90;
+      rotAnim = rotTarget;          // no easing during live drag — feels direct
+      rotation = ((Math.round(rotTarget) % 4) + 4) % 4;
+      clampPan();
+      updateRotIndicator();
+      needsRedraw = true;
+    } else {
+      panX = startPX + (e.clientX - dragSx);
+      panY = startPY + (e.clientY - dragSy);
+      clampPan();
+      needsRedraw = true;
+    }
+    return;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top);
+  if (hit !== hovered) {
+    hovered = hit;
+    canvas.className = hit ? 'can-hover' : '';
+    needsRedraw = true;
+  }
+});
+
+canvas.addEventListener('mousedown', e => {
+  dragSx = e.clientX; dragSy = e.clientY;
+  startPX = panX; startPY = panY;
+  dragMode = (e.ctrlKey || e.metaKey || e.shiftKey) ? 'rotate' : 'pan';
+  rotStartAngle = rotTarget;
+  isDragging = true;
+  canvas.style.cursor = dragMode === 'rotate' ? 'grabbing' : '';
+});
+
+window.addEventListener('mouseup', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - dragSx, dy = e.clientY - dragSy;
+  const wasRotate = dragMode === 'rotate';
+  isDragging = false;
+  canvas.style.cursor = '';
+  if (wasRotate) {
+    // Snap to nearest quarter-turn with smooth easing
+    rotTarget = Math.round(rotTarget);
+    if (!rotRafOn) { rotRafOn = true; requestAnimationFrame(stepRotation); }
+    updateRotIndicator();
+    return;
+  }
+  if (Math.hypot(dx, dy) < 5) {
+    const rect = canvas.getBoundingClientRect();
+    const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top);
+    if (hit) selectBuilding(hit);
+    else { selected = null; closeDetail(); needsRedraw = true; }
+  }
+});
+
+// Visual hint: when Ctrl/Cmd is held, show "grab" cursor over the canvas
+window.addEventListener('keydown', e => {
+  if ((e.key === 'Control' || e.key === 'Meta' || e.key === 'Shift') && !isDragging) {
+    canvas.style.cursor = 'grab';
+  }
+});
+window.addEventListener('keyup', e => {
+  if ((e.key === 'Control' || e.key === 'Meta' || e.key === 'Shift') && !isDragging) {
+    canvas.style.cursor = '';
+  }
+});
+
+// ── Select & detail ────────────────────────────────────────────────────────
+function selectBuilding(b) {
+  selected = b;
+  needsRedraw = true;
+  document.getElementById('hint').classList.add('gone');
+  updateSidebar();
+  if (b.bldgObj && b.distObj) renderDetail(b);
+  else closeDetail();
+  try { localStorage.setItem('jithub_sel', b.id); } catch(e) {}
+}
+
+function closeDetail() {
+  document.getElementById('detail').classList.remove('open');
+  selected = null;
+  needsRedraw = true;
+  updateSidebar();
+  positionChrome();
+  try { localStorage.removeItem('jithub_sel'); } catch(e) {}
+}
+
+document.getElementById('detail').addEventListener('transitionend', positionChrome);
+
+const DIFF_COLORS = { Beginner: '#10B981', Intermediate: '#F59E0B', Advanced: '#EF4444' };
+
+function renderDetail(b) {
+  const dm = DIST_META[b.dist];
+  const d  = b.distObj, bld = b.bldgObj;
+  const dc = dm?.color || '#aaa';
+
+  // District chip
+  const distEl = document.getElementById('det-district');
+  distEl.textContent = dm?.short || '';
+  distEl.style.color = dc + 'aa';
+  distEl.style.fontSize = '8px';
+  distEl.style.letterSpacing = '0.26em';
+  distEl.style.textTransform = 'uppercase';
+
+  document.getElementById('det-name').textContent = bld.name;
+  document.getElementById('det-pi').textContent   = `Supervised by ${bld.pi}`;
+  document.getElementById('det-tags').innerHTML   = bld.tags.map(t => `<span class="det-tag">${t}</span>`).join('');
+
+  const oppsEl = document.getElementById('det-opps');
+  oppsEl.innerHTML = `<div class="det-opps-lbl">${bld.opportunities.length} Open Position${bld.opportunities.length !== 1 ? 's' : ''}</div>`;
+
+  bld.opportunities.forEach((opp, i) => {
+    const dfc = DIFF_COLORS[opp.difficulty] || '#888';
+    const card = document.createElement('div');
+    card.className = 'opp-card';
+    card.style.cssText = `opacity:0;transform:translateY(10px);transition:opacity .25s ${i*50}ms,transform .25s ${i*50}ms`;
+    card.innerHTML = `
+      <div class="opp-rail" style="background:${dfc}"></div>
+      <div class="opp-row">
+        <div class="opp-title">${opp.title}</div>
+        <span class="opp-diff" style="color:${dfc};border-color:${dfc}45;background:${dfc}14">${opp.difficulty}</span>
+      </div>
+      <p class="opp-desc">${opp.description}</p>
+      <div class="opp-skills">${opp.skills.map(s => `<span class="opp-skill">${s}</span>`).join('')}</div>
+      <div class="opp-foot">
+        <div class="opp-meta"><span>⏱ ${opp.commitment}</span><span>👥 ${opp.spots} spot${opp.spots !== 1 ? 's' : ''}</span></div>
+        <button class="apply-btn">Apply →</button>
+      </div>`;
+    oppsEl.appendChild(card);
+    requestAnimationFrame(() => requestAnimationFrame(() => { card.style.opacity = '1'; card.style.transform = 'none'; }));
+  });
+
+  oppsEl.scrollTop = 0;
+  document.getElementById('detail').classList.add('open');
+  positionChrome();
+}
+
+// ── Top Positions for You ──────────────────────────────────────────────────
+// Hand-picked recommendations surfaced before the district list. In a real
+// product these would be generated from user profile/skills. Here we simulate
+// with a stable set of 4 standout positions across different districts.
+const TOP_POSITION_IDS = [
+  { bldg: 'gitc',      opp: 'git-4', match: 94, why: 'Matches your UX research background' },
+  { bldg: 'life-sci',  opp: 'ls-3',  match: 89, why: 'Beginner-friendly — fits your availability' },
+  { bldg: 'ece-ctr',   opp: 'ece-4', match: 86, why: 'Aligns with your EM fundamentals coursework' },
+  { bldg: 'cullimore', opp: 'cul-2', match: 82, why: 'Recommended: quantum computing interest' },
+];
+
+function resolveTopPositions() {
+  return TOP_POSITION_IDS.map(tp => {
+    const cb = BLDGS.find(x => x.id === tp.bldg);
+    const opp = cb?.bldgObj?.opportunities.find(o => o.id === tp.opp);
+    if (!cb || !opp) return null;
+    return { cb, opp, match: tp.match, why: tp.why, dm: DIST_META[cb.dist] };
+  }).filter(Boolean);
+}
+
+// ── Search ─────────────────────────────────────────────────────────────────
+let searchQuery = '';
+const searchInput = document.getElementById('sb-search');
+const searchClear = document.getElementById('sb-search-clear');
+searchInput.addEventListener('input', e => {
+  searchQuery = e.target.value.trim().toLowerCase();
+  searchClear.classList.toggle('on', searchQuery.length > 0);
+  buildSidebar();
+});
+searchClear.addEventListener('click', () => {
+  searchInput.value = ''; searchQuery = '';
+  searchClear.classList.remove('on');
+  buildSidebar();
+});
+
+function highlight(text, q) {
+  if (!q) return escapeHtml(text);
+  const esc = escapeHtml(text);
+  const idx = text.toLowerCase().indexOf(q);
+  if (idx < 0) return esc;
+  const before = escapeHtml(text.slice(0, idx));
+  const mid    = escapeHtml(text.slice(idx, idx + q.length));
+  const after  = escapeHtml(text.slice(idx + q.length));
+  return `${before}<mark class="hl">${mid}</mark>${after}`;
+}
+function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function bldgMatches(bld, q) {
+  if (!q) return { match: true, oppHits: [] };
+  const name = bld.name.toLowerCase();
+  const pi   = (bld.pi || '').toLowerCase();
+  const tags = (bld.tags || []).join(' ').toLowerCase();
+  const bldgHit = name.includes(q) || pi.includes(q) || tags.includes(q);
+  const oppHits = (bld.opportunities || []).filter(op =>
+    op.title.toLowerCase().includes(q) ||
+    (op.skills || []).some(s => s.toLowerCase().includes(q)) ||
+    op.description.toLowerCase().includes(q) ||
+    op.difficulty.toLowerCase().includes(q)
+  );
+  return { match: bldgHit || oppHits.length > 0, oppHits };
+}
+
+// ── Sidebar ────────────────────────────────────────────────────────────────
+function buildSidebar() {
+  const scroll = document.getElementById('sb-scroll');
+  scroll.innerHTML = '';
+  const q = searchQuery;
+
+  // Top positions (only when not searching)
+  if (!q) {
+    const hdr = document.createElement('div');
+    hdr.className = 'sb-section-hdr sb-topfor';
+    hdr.innerHTML = '<span class="dot"></span>Top positions for you';
+    scroll.appendChild(hdr);
+    const sub = document.createElement('div');
+    sub.className = 'sb-topfor-sub';
+    sub.textContent = 'Curated from your profile and saved interests';
+    scroll.appendChild(sub);
+
+    resolveTopPositions().forEach(tp => {
+      const diffCol = DIFF_COLORS[tp.opp.difficulty] || '#888';
+      const btn = document.createElement('button');
+      btn.className = 'top-pos';
+      btn.innerHTML = `
+        <div class="top-pos-top">
+          <div class="top-pos-title">${escapeHtml(tp.opp.title)}</div>
+          <div class="top-pos-match">${tp.match}% MATCH</div>
+        </div>
+        <div class="top-pos-meta">
+          <span style="color:${tp.dm.color}">${tp.dm.short}</span>
+          <span>·</span>
+          <span><span class="diff-dot" style="background:${diffCol}"></span> ${tp.opp.difficulty}</span>
+          <span>·</span>
+          <span>${tp.opp.commitment}</span>
+        </div>
+        <div class="top-pos-why">${escapeHtml(tp.why)}</div>`;
+      btn.addEventListener('click', () => selectBuilding(tp.cb));
+      btn.addEventListener('mouseenter', () => { hovered = tp.cb; needsRedraw = true; });
+      btn.addEventListener('mouseleave', () => { hovered = null; needsRedraw = true; });
+      scroll.appendChild(btn);
+    });
+  }
+
+  // District list (filtered by search)
+  let anyMatch = false;
+  DISTRICTS?.forEach(d => {
+    const dm = DIST_META[d.id];
+    if (!dm) return;
+    const matching = d.buildings
+      .map(bld => ({ bld, ...bldgMatches(bld, q) }))
+      .filter(x => x.match);
+    if (q && matching.length === 0) return;
+    anyMatch = anyMatch || matching.length > 0;
+
+    const hdr = document.createElement('div');
+    hdr.className = 'sb-district-hdr';
+    hdr.textContent = dm.short;
+    hdr.style.color = dm.color + '88';
+    scroll.appendChild(hdr);
+
+    (q ? matching : d.buildings.map(bld => ({ bld, oppHits: [] }))).forEach(({ bld, oppHits }) => {
+      const cb = BLDGS.find(x => x.id === bld.id);
+      const btn = document.createElement('button');
+      btn.className = 'sb-item' + (oppHits.length ? ' match-opp' : '');
+      btn.id = `sbi-${bld.id}`;
+      let html = highlight(bld.name, q);
+      if (q && oppHits.length) {
+        const first = oppHits[0];
+        html += `<span class="opp-hit">→ ${highlight(first.title, q)}${oppHits.length > 1 ? ` +${oppHits.length - 1} more` : ''}</span>`;
+      }
+      btn.innerHTML = html;
+      btn.addEventListener('click', () => cb && selectBuilding(cb));
+      btn.addEventListener('mouseenter', () => { if (cb) { hovered = cb; needsRedraw = true; } });
+      btn.addEventListener('mouseleave', () => { hovered = null; needsRedraw = true; });
+      scroll.appendChild(btn);
+    });
+  });
+
+  if (q && !anyMatch) {
+    const empty = document.createElement('div');
+    empty.className = 'sb-empty';
+    empty.innerHTML = `No matches for <strong style="color:rgba(230,245,255,0.85)">“${escapeHtml(q)}”</strong>`;
+    scroll.appendChild(empty);
+  }
+
+  updateSidebar();
+}
+buildSidebar();
+
+function updateSidebar() {
+  document.querySelectorAll('.sb-item').forEach(el => el.classList.remove('active'));
+  if (selected) document.getElementById(`sbi-${selected.id}`)?.classList.add('active');
+}
+
+// ── Keyboard ───────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'Escape') closeDetail();
+  if (e.key === 'r' || e.key === 'R') rotateBy(+1);
+});
+
+// ── Restore ────────────────────────────────────────────────────────────────
+try {
+  const sid = localStorage.getItem('jithub_sel');
+  if (sid) { const b = BLDGS.find(x => x.id === sid); if (b) setTimeout(() => selectBuilding(b), 250); }
+} catch(e) {}
+</script>
+</body>
+</html>

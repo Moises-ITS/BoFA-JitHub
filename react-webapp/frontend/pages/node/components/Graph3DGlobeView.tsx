@@ -14,6 +14,7 @@ interface Graph3DGlobeViewProps {
   pathNodeIds: string[];
   focusNodeIds: string[];
   focusTriggerKey: string;
+  lastPulseTs: number;
   onSelectNode: (id: string) => void;
   onBackgroundClick: () => void;
 }
@@ -267,6 +268,7 @@ export default function Graph3DGlobeView({
   pathNodeIds,
   focusNodeIds,
   focusTriggerKey,
+  lastPulseTs,
   onSelectNode,
   onBackgroundClick,
 }: Graph3DGlobeViewProps) {
@@ -685,6 +687,52 @@ export default function Graph3DGlobeView({
     fg.linkDirectionalParticleWidth((l: GlobeLink) => (l.isPath ? 2.35 : 0.82));
     fg.linkDirectionalParticleSpeed((l: GlobeLink) => (l.isPath ? 0.016 + Math.max(0, l.pathStep) * 0.001 : 0.003 + l.weight * 0.003));
 
+    // Idea 3: Monoliths (Unique 3D geometries for landmark nodes)
+    fg.nodeThreeObject((node: GlobeNode) => {
+        // High degree nodes or path endpoints get "Monolith" status
+        const isLandmark = node.r > 15 || node.isPath || node.isSelected;
+        if (!isLandmark) return null; // Default to sphere if null
+
+        const THREE = (window as any).THREE;
+        if (!THREE) return null;
+
+        const group = new THREE.Group();
+        
+        // Base geometry based on type
+        let geometry;
+        if (node.type === "company") {
+            geometry = new THREE.BoxGeometry(node.r * 0.5, node.r * 1.8, node.r * 0.5);
+        } else if (node.type === "club") {
+            geometry = new THREE.OctahedronGeometry(node.r * 0.7);
+        } else {
+            geometry = new THREE.CylinderGeometry(node.r * 0.6, node.r * 0.6, node.r * 0.4, 6);
+        }
+
+        const material = new THREE.MeshStandardMaterial({
+            color: TYPE_COLOR[node.type],
+            emissive: TYPE_COLOR[node.type],
+            emissiveIntensity: node.isSelected ? 1.2 : 0.6,
+            transparent: true,
+            opacity: 0.9,
+            metalness: 0.8,
+            roughness: 0.2
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+        group.add(mesh);
+
+        // Add a "Halo" ring for landmarks
+        if (node.isSelected || node.isPath) {
+            const ringGeom = new THREE.TorusGeometry(node.r * 1.1, 0.4, 8, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
+            const ring = new THREE.Mesh(ringGeom, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            group.add(ring);
+        }
+
+        return group;
+    });
+
     if (selectedNodeId && focusedNodeRef.current !== selectedNodeId) {
       const liveNodes = (fg.graphData()?.nodes ?? []) as GlobeNode[];
       const target = liveNodes.find((n) => n.id === selectedNodeId) ?? graphData.nodes.find((n) => n.id === selectedNodeId);
@@ -699,6 +747,47 @@ export default function Graph3DGlobeView({
     }
     if (!selectedNodeId) focusedNodeRef.current = null;
   }, [active, fgReadyToken, graphData, graphVersion, searchQuery, selectedNodeId]);
+
+  // Idea 4: Market Pulse 3D Effect
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!active || !fg || lastPulseTs === 0) return;
+
+    const scene = fg.scene();
+    const THREE = (window as any).THREE;
+    if (!scene || !THREE) return;
+
+    // Create a large expanding shell for the pulse
+    const geom = new THREE.SphereGeometry(10, 32, 32);
+    const mat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.12,
+        side: THREE.BackSide,
+        depthWrite: false
+    });
+    const shell = new THREE.Mesh(geom, mat);
+    scene.add(shell);
+
+    const duration = 2000;
+    const startTime = performance.now();
+
+    const animate = (time: number) => {
+        const elapsed = time - startTime;
+        const progress = elapsed / duration;
+        if (progress < 1) {
+            shell.scale.setScalar(1 + progress * 150);
+            shell.material.opacity = 0.12 * (1 - progress);
+            requestAnimationFrame(animate);
+        } else {
+            scene.remove(shell);
+            geom.dispose();
+            mat.dispose();
+        }
+    };
+    requestAnimationFrame(animate);
+
+  }, [active, lastPulseTs]);
 
   return (
     <div className="graph3DCanvas graph3DCanvas--spatial">

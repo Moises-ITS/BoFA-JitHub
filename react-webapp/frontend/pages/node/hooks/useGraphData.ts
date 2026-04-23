@@ -4,9 +4,10 @@
 // Falls back to mock data when the backend is unavailable (local dev without API).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { GraphNode, GraphLink } from "../types/graphNodes";
 import { mockNodes, mockLinks } from "../data/mockGraphData";
+import { useAuth } from "../../../context/AuthContext";
 
 interface GraphData {
   nodes:   GraphNode[];
@@ -16,24 +17,39 @@ interface GraphData {
 }
 
 export function useGraphData(): GraphData {
+  const { token, user } = useAuth();
   const [nodes,   setNodes]   = useState<GraphNode[]>([]);
   const [links,   setLinks]   = useState<GraphLink[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error,   setError]   = useState<string | null>(null);
+  const fetchedForUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const API = import.meta.env.VITE_API_URL;
+    const userId = user?.id ?? null;
 
-    if (!API) {
+    if (!API || !token) {
       setNodes(mockNodes);
       setLinks(mockLinks);
       setLoading(false);
+      fetchedForUserIdRef.current = null;
       return;
     }
 
+    // Clerk rotates session tokens frequently; avoid refetch/rebuild churn unless user changed.
+    if (
+      userId &&
+      fetchedForUserIdRef.current === userId &&
+      nodes.length > 0 &&
+      links.length > 0
+    ) {
+      return;
+    }
+
+    const headers = { Authorization: `Bearer ${token}` };
     Promise.all([
-      fetch(`${API}/api/graph/nodes`),
-      fetch(`${API}/api/graph/links`),
+      fetch(`${API}/api/graph/nodes`, { headers }),
+      fetch(`${API}/api/graph/links`, { headers }),
     ])
       .then(async ([nodesRes, linksRes]) => {
         if (!nodesRes.ok) throw new Error(`Nodes fetch failed: ${nodesRes.status}`);
@@ -42,6 +58,7 @@ export function useGraphData(): GraphData {
         const linksData: GraphLink[] = await linksRes.json();
         setNodes(nodesData);
         setLinks(linksData);
+        fetchedForUserIdRef.current = userId;
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
@@ -49,9 +66,10 @@ export function useGraphData(): GraphData {
         setNodes(mockNodes);
         setLinks(mockLinks);
         setError(message);
+        fetchedForUserIdRef.current = null;
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [token, user?.id]); // token may rotate; guard above prevents unnecessary refetches
 
   return { nodes, links, loading, error };
 }

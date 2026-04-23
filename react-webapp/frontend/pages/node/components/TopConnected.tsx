@@ -73,7 +73,6 @@ export default function TopConnected({ nodes, links, currentUserId, onSelectNode
 
     return nodes
       .filter(n => n.type === "student")
-      .map(n => ({ node: n, connCount: degree[n.id] || 0 }))
       .map(n => ({ node: n, connCount: neighborsByStudent.get(n.id)?.size || 0 }))
       .sort((a, b) => b.connCount - a.connCount)
       .map((item, i) => ({ ...item, rank: i + 1 }));

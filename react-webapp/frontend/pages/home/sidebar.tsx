@@ -1,8 +1,9 @@
 import { NavLink } from "react-router-dom";
 import { motion } from "motion/react";
-import { Home, Calendar, Briefcase, FlaskConical, Network, User, Bot } from "lucide-react";
+import { Home, Calendar, Briefcase, FlaskConical, Network, User, Bot, Activity } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 
-const navItems = [
+const baseNavItems = [
   { icon: Home, label: "Home", path: "/home" },
   { icon: Calendar, label: "Events", path: "/events" },
   { icon: Briefcase, label: "Opportunities", path: "/opportunities" },
@@ -14,6 +15,10 @@ const navItems = [
 
 
 export function Sidebar() {
+  const { user } = useAuth();
+  const navItems = user?.is_eboard
+    ? [...baseNavItems, { icon: Activity, label: "EDEN", path: "/eden" }]
+    : baseNavItems;
   return (
     <aside
       className="fixed left-0 top-0 h-screen w-20 flex flex-col items-center py-6 z-50"

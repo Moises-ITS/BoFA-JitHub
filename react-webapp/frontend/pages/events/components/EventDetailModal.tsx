@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
+import AttendanceForm from "./AttendanceForm";
 
 export const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥", "🎨", "🏆", "💻", "🎪", "🌈"];
 
@@ -261,6 +262,14 @@ export function EventDetailModal({ event, attendees, connectionIds, rsvpStatus, 
             </p>
           )}
         </div>
+
+        {isPast && event.date && event.club_id != null && (
+          <AttendanceForm
+            eventId={event.event_id}
+            clubId={event.club_id}
+            eventDate={event.date}
+          />
+        )}
 
         {onRsvpToggle && !isPast && (
           <button onClick={() => onRsvpToggle(event.event_id)}

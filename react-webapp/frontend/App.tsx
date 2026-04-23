@@ -23,6 +23,7 @@ const DigitalTwin = lazy(() => import("./pages/map/DigitalTwin"))
 const CampusView = lazy(() => import("./pages/campus/CampusView"))
 const GlbInspector = lazy(() => import("./pages/campus/GlbInspector"))
 const ResearchDistricts = lazy(() => import("./pages/districts/ResearchDistricts"))
+const EdenPage = lazy(() => import("./pages/eden/EdenPage"))
 
 function MissingClerkConfigScreen() {
   return (
@@ -153,6 +154,13 @@ export default function App() {
                 <ErrorBoundary>
                   <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0f1117", color:"#718096" }}>Loading Inspector…</div>}>
                     <GlbInspector />
+                  </Suspense>
+                </ErrorBoundary>
+              } />
+              <Route path="/eden" element={
+                <ErrorBoundary>
+                  <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#07090f", color:"#4a5568", fontFamily:"'JetBrains Mono', monospace" }}>Loading EDEN…</div>}>
+                    <EdenPage />
                   </Suspense>
                 </ErrorBoundary>
               } />

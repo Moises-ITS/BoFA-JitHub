@@ -21,18 +21,7 @@ import HoverCard                          from "./components/HoverCard";
 import { useAuth }                        from "../../context/AuthContext";
 import { NetworkIntro }                   from "../../components/NetworkTransition";
 import CampusNavbar                       from "../../components/CampusNavbar";
-import { TYPE_COLOR } from "./constants/maps";
-import { getNodeId } from "./utils/getNodeId";
-import { useGraphData } from "./hooks/useGraphData";
-import SidePanel from "./components/SidePanel";
-import FilterBar from "./components/FilterBar";
-import SearchBar from "./components/SearchBar";
-import Legend from "./components/Legend";
-import TopConnected from "./components/TopConnected";
-import HoverCard from "./components/HoverCard";
-import Graph3DGlobeView from "./components/Graph3DGlobeView";
-import { useAuth } from "../../context/AuthContext";
-import { NetworkIntro } from "../../components/NetworkTransition";
+import Graph3DGlobeView                  from "./components/Graph3DGlobeView";
 import "./CampusGraph.css";
 
 const API = import.meta.env.VITE_API_URL ?? "";
@@ -406,15 +395,6 @@ export default function CampusGraph() {
   const [visibleCount,        setVisibleCount]        = useState(0);
   const [hoverCard,           setHoverCard]           = useState<{ node: GraphNode; x: number; y: number } | null>(null);
   const [d3Ready,             setD3Ready]             = useState(false);
-  const [mode, setMode] = useState<GraphMode>("free");
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
-  const [hiddenTypes, setHiddenTypes] = useState<Set<NodeType>>(new Set());
-  const [searchQuery, setSearchQuery] = useState("");
-  const [companyQuery, setCompanyQuery] = useState("");
-  const [pathNodeIds, setPathNodeIds] = useState<string[]>([]);
-  const [pathStatus, setPathStatus] = useState<"idle" | "searching" | "found" | "notfound">("idle");
-  const [hoverCard, setHoverCard] = useState<{ node: GraphNode; x: number; y: number } | null>(null);
-  const [d3Ready, setD3Ready] = useState(false);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
 
   // Fisheye Lens Mode
@@ -541,18 +521,11 @@ export default function CampusGraph() {
   useEffect(() => { modeRef.current       = mode;   }, [mode]);
   useEffect(() => { nodesRef.current      = nodes;  }, [nodes]);
   useEffect(() => { linksRef.current      = links;  }, [links]);
-  const modeRef = useRef<GraphMode>("free");
-  const selectedIdRef = useRef<string | null>(null);
-  const nodesRef = useRef(nodes);
-  const linksRef = useRef(links);
   const hoveredNodeIdRef = useRef<string | null>(null);
   const pathNodeIdsRef = useRef<string[]>([]);
   const searchActiveRef = useRef(false);
   const currentZoomKRef = useRef(1);
   const flickerTimeRef = useRef(0);
-  useEffect(() => { modeRef.current = mode; }, [mode]);
-  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
-  useEffect(() => { linksRef.current = links; }, [links]);
   useEffect(() => { pathNodeIdsRef.current = pathNodeIds; }, [pathNodeIds]);
   useEffect(() => { hiddenTypesRef.current = hiddenTypes; }, [hiddenTypes]);
   useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
@@ -1801,7 +1774,7 @@ export default function CampusGraph() {
       .attr("r", (d) => d.size)
       .attr("fill-opacity", 0);
     const nodePulseMeta = nodes.map((n: GraphNode, i: number) => {
-      const profile = GRAPH_MOTION.nodeTypeProfile[n.type];
+      const profile = GRAPH_MOTION.nodeTypeProfile[n.type] ?? GRAPH_MOTION.nodeTypeProfile.student;
       const period = GRAPH_MOTION.nodePulse.periodMsMin + Math.random() * (GRAPH_MOTION.nodePulse.periodMsMax - GRAPH_MOTION.nodePulse.periodMsMin);
       const cohort = i % GRAPH_MOTION.cohorts.nodeCount;
       return {
@@ -4285,9 +4258,6 @@ export default function CampusGraph() {
           <div className="graphAmbientSpecks" />
           <div className="graphScanSweep" ref={scanSweepRef} />
         </div>
-      <div className="main">
-        <div className="bgGlow" />
-        <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} />
         <div className="bgGlow" ref={bgGlowRef} />
         <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} className={viewMode === "3d" ? "graph2DHidden" : "graph2DVisible"} />
         <div className={`graph3DWrap${viewMode === "3d" ? " graph3DWrap--active" : ""}`}>

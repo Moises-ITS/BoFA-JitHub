@@ -52,6 +52,7 @@ async function bootstrap() {
     oppMod,
     chatMemMod,
     buildingsMod,
+    edenMod,
     { startScheduler },
     { runMigrations },
     { ensureNodeIds },
@@ -66,6 +67,7 @@ async function bootstrap() {
     import("./routes/opportunities.js"),
     import("./routes/chatMemory.js"),
     import("./routes/buildings.js"),
+    import("./routes/eden.js"),
     import("./scrapers/runner.js"),
     import("./db/migrate.js"),
     import("./services/graphService.js"),
@@ -103,6 +105,7 @@ async function bootstrap() {
     ["/api/opportunities", oppMod.default],
     ["/api/chat-memory", chatMemMod.default],
     ["/api/buildings", buildingsMod.default],
+    ["/api/eden", edenMod.default],
   ]
   for (const [mountPath, router] of routes) {
     app.use(mountPath, router as Parameters<typeof app.use>[1])

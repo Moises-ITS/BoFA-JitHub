@@ -134,6 +134,24 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       CREATE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_id);
     `,
   },
+  {
+    name: "010_eboard_attendance",
+    sql: `
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS is_eboard       BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS eboard_club_id  INTEGER;
+
+      CREATE TABLE IF NOT EXISTS event_attendance (
+        event_id    INTEGER PRIMARY KEY,
+        club_id     INTEGER NOT NULL,
+        headcount   INTEGER NOT NULL CHECK (headcount >= 0),
+        entered_by  VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+        entered_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+        notes       TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_event_attendance_club ON event_attendance(club_id);
+    `,
+  },
 ]
 
 export async function runMigrations() {

@@ -18,6 +18,8 @@ export interface User {
   skills: string[]
   looking_for: string[]
   year: string | null
+  is_eboard?: boolean
+  eboard_club_id?: number | null
 }
 
 export interface ProfileUpdate {
@@ -134,7 +136,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           headers: { Authorization: `Bearer ${t}` },
         })
         if (res.ok) {
-          setUser(await res.json()); setNeedsSetup(false)
+          const profile = await res.json()
+          try {
+            const statusRes = await fetch(`${API}/api/eden/status`, {
+              headers: { Authorization: `Bearer ${t}` },
+            })
+            if (statusRes.ok) {
+              const status = await statusRes.json()
+              profile.is_eboard = status.is_eboard
+              profile.eboard_club_id = status.eboard_club_id
+            }
+          } catch { /* ignore — eboard fields simply stay undefined */ }
+          setUser(profile); setNeedsSetup(false)
         } else if (res.status === 403) {
           const body = await res.json()
           if (body.code === "PROFILE_REQUIRED" && !autoSynced.current) {

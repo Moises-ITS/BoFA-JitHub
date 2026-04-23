@@ -12,30 +12,6 @@ export default function LoginPage() {
   // failed setup attempt), sign out so the login form actually shows.
   useEffect(() => {
     if (isLoaded && isSignedIn && !loading && !user) {
-      signOut()
-    }
-  }, [isLoaded, isSignedIn, loading, user, signOut])
-
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "center",
-      minHeight: "100vh", background: "#0f1117",
-    }}>
-      <SignIn
-        routing="path"
-        path="/login"
-        forceRedirectUrl="/home"
-        signUpUrl="/signup"
-        appearance={{
-          variables: {
-            colorPrimary: "#C0392B",
-            colorBackground: "#111827",
-            colorText: "#F0F0F0",
-          },
-        }}
-      />
-  useEffect(() => {
-    if (isLoaded && isSignedIn && !loading && !user) {
       void signOut()
     }
   }, [isLoaded, isSignedIn, loading, signOut, user])

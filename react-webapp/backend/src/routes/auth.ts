@@ -1,17 +1,17 @@
 import { Router, Request, Response } from "express"
 import { v4 as uuidv4 } from "uuid"
 import { createClerkClient } from "@clerk/backend"
-import { db } from "../config/postgres"
-import { requireAuth, AuthRequest } from "../middlewear/auth"
-import { createStudentNode, updateStudentNode } from "../services/graphService"
-import { verifyClerkSessionToken } from "../utils/clerkToken"
-import { syncRateLimiter, profileUpdateRateLimiter } from "../middlewear/authRateLimit"
+import { db } from "../config/postgres.js"
+import { requireAuth, AuthRequest } from "../middlewear/auth.js"
+import { createStudentNode, updateStudentNode } from "../services/graphService.js"
+import { verifyClerkSessionToken } from "../utils/clerkToken.js"
+import { syncRateLimiter, profileUpdateRateLimiter } from "../middlewear/authRateLimit.js"
 import {
   requireSafeId,
   sanitizeOptionalHttpsUrl,
   sanitizeStringArray,
   sanitizeText,
-} from "../middlewear/security"
+} from "../middlewear/security.js"
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 

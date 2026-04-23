@@ -1,9 +1,9 @@
 import { Router, Response } from "express"
-import { db } from "../config/postgres"
-import { requireAuth, AuthRequest } from "../middlewear/auth"
-import { createConnectionInNeo4j, removeConnectionFromNeo4j, getRecommendations } from "../services/graphService"
-import { connectionActionRateLimiter } from "../middlewear/authRateLimit"
-import { requireSafeId, toBoundedPositiveInt } from "../middlewear/security"
+import { db } from "../config/postgres.js"
+import { requireAuth, AuthRequest } from "../middlewear/auth.js"
+import { createConnectionInNeo4j, removeConnectionFromNeo4j, getRecommendations } from "../services/graphService.js"
+import { connectionActionRateLimiter } from "../middlewear/authRateLimit.js"
+import { requireSafeId, toBoundedPositiveInt } from "../middlewear/security.js"
 
 const router = Router()
 

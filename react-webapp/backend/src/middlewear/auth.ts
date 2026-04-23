@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express"
 import { createClerkClient } from "@clerk/backend"
-import { db } from "../config/postgres"
-import { verifyClerkSessionToken } from "../utils/clerkToken"
+import { db } from "../config/postgres.js"
+import { verifyClerkSessionToken } from "../utils/clerkToken.js"
 
 export interface AuthRequest extends Request {
   userId?: string

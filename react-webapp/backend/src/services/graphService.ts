@@ -1,4 +1,4 @@
-import { driver } from "../config/neo4j"
+import { driver } from "../config/neo4j.js"
 
 interface StudentInput {
   id: string

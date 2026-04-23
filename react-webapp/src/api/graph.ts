@@ -12,19 +12,55 @@ function resolveApiUrl(path: string): string {
     return path;
 }
 
+function toNodeId(value: unknown): string {
+    if (typeof value === "string") return value;
+    if (value && typeof value === "object" && "id" in value) {
+        const id = (value as { id?: unknown }).id;
+        return typeof id === "string" ? id : "";
+    }
+    return "";
+}
+
 // Fetch graph payload from Express.
 export async function fetchGraph(userId: string, limit = 50): Promise<GraphResponse> {
-    const url = new URL(resolveApiUrl("/api/graph"), window.location.origin);
-    url.searchParams.set("userId", userId);
-    url.searchParams.set("limit", String(limit));
+    const nodesUrl = new URL(resolveApiUrl("/api/graph/nodes"), window.location.origin);
+    const linksUrl = new URL(resolveApiUrl("/api/graph/links"), window.location.origin);
 
-    const response = await fetch(url.toString());
+    const [nodesRes, linksRes] = await Promise.all([
+        fetch(nodesUrl.toString()),
+        fetch(linksUrl.toString()),
+    ]);
 
-    if (!response.ok) {
-        throw new Error(`Failed to fetch graph: ${response.status}`);
+    if (!nodesRes.ok) {
+        throw new Error(`Failed to fetch graph nodes: ${nodesRes.status}`);
+    }
+    if (!linksRes.ok) {
+        throw new Error(`Failed to fetch graph links: ${linksRes.status}`);
     }
 
-    return response.json();
+    const rawNodes = await nodesRes.json();
+    const rawLinks = await linksRes.json();
+
+    const nodes = Array.isArray(rawNodes) ? rawNodes.slice(0, Math.max(1, limit)) : [];
+    const links = Array.isArray(rawLinks)
+        ? rawLinks.map((link) => ({
+            from: toNodeId((link as { from?: unknown; source?: unknown }).from ?? (link as { source?: unknown }).source),
+            to: toNodeId((link as { to?: unknown; target?: unknown }).to ?? (link as { target?: unknown }).target),
+            type: String((link as { type?: unknown; rel?: unknown }).type ?? (link as { rel?: unknown }).rel ?? "related_to"),
+        }))
+        : [];
+
+    const user = nodes.find((node) => {
+        const id = (node as { id?: unknown }).id;
+        return typeof id === "string" && id === userId;
+    }) ?? null;
+
+    return {
+        user,
+        nodes,
+        links,
+        generatedAt: new Date().toISOString(),
+    };
 }
 
 // Example mutation that updates a user interest and automatically

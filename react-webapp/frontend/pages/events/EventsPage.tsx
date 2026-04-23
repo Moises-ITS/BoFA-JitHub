@@ -665,7 +665,7 @@ export default function EventsPage() {
                 >
                   Submit Event
                 </button>
-              ))}
+              </div>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
@@ -740,7 +740,6 @@ export default function EventsPage() {
                 Submit Event
               </button>
             </div>
-          </div>
 
           {loading && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>}
           {!loading && displayEvents.length === 0 && (
@@ -757,20 +756,8 @@ export default function EventsPage() {
                     : "Check back soon."}
               </p>
             </div>
-
-            {loading && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>}
-            {!loading && displayEvents.length === 0 && (
-              <div className="text-center py-16" style={{ color: "var(--text-muted)" }}>
-                <p className="text-4xl mb-3">📅</p>
-                <p className="font-medium text-white">
-                  {view === "top-match" ? "Set up your profile to see matches" : "No events found"}
-                </p>
-                <p className="text-sm mt-1">
-                  {view === "top-match" ? "Add your major, interests, and clubs in your profile." : activeFilter ? "Try a different category." : "Check back soon."}
-                </p>
-              </div>
-            )}
-            {displayEvents.map((event, i) => (
+          )}
+          {displayEvents.map((event, i) => (
               <EventCard
                 key={event.event_id}
                 event={event}
@@ -839,19 +826,10 @@ export default function EventsPage() {
         open={submitOpen}
         submitting={submitLoading}
         categories={FILTERS}
+        clubs={clubOptions}
         onClose={() => setSubmitOpen(false)}
         onSubmit={handleCreateEvent}
       />
-    )}
-
-    <SubmitEventModal
-      open={submitOpen}
-      submitting={submitLoading}
-      categories={FILTERS}
-      clubs={clubOptions}
-      onClose={() => setSubmitOpen(false)}
-      onSubmit={handleCreateEvent}
-    />
     </>
   );
 }

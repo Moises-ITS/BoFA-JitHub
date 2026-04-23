@@ -15,9 +15,7 @@ function resolveApiUrl(path: string): string {
 function requireToken(token: string | null | undefined): string {
     const trimmed = (token ?? "").trim();
     if (!trimmed) {
-        throw new Error(
-            "Missing auth token. Set VITE_GRAPH_BEARER_TOKEN (or pass a session token) to call protected graph endpoints."
-        );
+        throw new Error("Missing auth token. Please sign in again.");
     }
     return trimmed;
 }
@@ -39,6 +37,7 @@ function toNodeId(value: unknown): string {
 }
 
 type AuthProfile = {
+    id?: string | null;
     gpa?: number | null;
     major?: string | null;
     graduationYear?: number | null;
@@ -51,6 +50,19 @@ type AuthProfile = {
     looking_for?: string[] | null;
     year?: string | null;
 };
+
+export async function fetchCurrentProfile(token?: string | null): Promise<AuthProfile> {
+    const bearer = requireToken(token);
+    const response = await fetch(resolveApiUrl("/api/auth/me"), {
+        headers: authHeaders(bearer),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch current profile: ${response.status}`);
+    }
+
+    return response.json() as Promise<AuthProfile>;
+}
 
 // Fetch graph payload from Express.
 export async function fetchGraph(userId: string, limit = 50, token?: string | null): Promise<GraphResponse> {
@@ -99,14 +111,7 @@ export async function fetchGraph(userId: string, limit = 50, token?: string | nu
 // causes backend cache invalidation.
 export async function addInterest(userId: string, interestName: string, token?: string | null) {
     const bearer = requireToken(token);
-    const meResponse = await fetch(resolveApiUrl("/api/auth/me"), {
-        headers: authHeaders(bearer),
-    });
-    if (!meResponse.ok) {
-        throw new Error(`Failed to fetch current profile: ${meResponse.status}`);
-    }
-
-    const me = (await meResponse.json()) as AuthProfile & { id?: string };
+    const me = await fetchCurrentProfile(bearer);
     if (me.id && me.id !== userId) {
         throw new Error("Authenticated user does not match the requested graph user.");
     }

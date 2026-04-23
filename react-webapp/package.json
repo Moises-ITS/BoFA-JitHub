@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.4",
     "@tailwindcss/vite": "^4.2.1",
     "3d-force-graph": "^1.79.1",
     "compression": "^1.8.1",

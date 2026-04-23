@@ -83,10 +83,8 @@ export function useGraphData(): GraphData {
     const userId = user?.id ?? null;
 
     if (!API || !token) {
-      setNodes(mockNodes);
-      setLinks(mockLinks);
-      setLoading(false);
-      fetchedForUserIdRef.current = null;
+      // Keep current graph state stable while auth/API initializes.
+      // This avoids brief mock-data swaps when token availability changes.
       return;
     }
 

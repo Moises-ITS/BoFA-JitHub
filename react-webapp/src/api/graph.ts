@@ -1,11 +1,20 @@
 import type { GraphResponse } from "../features/graph/types";
 
-// Put this in Vite env or similar in production.
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const RAW_API_BASE =
+    (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
+    (import.meta.env.VITE_API_URL as string | undefined) ||
+    "";
+
+const API_BASE = RAW_API_BASE.replace(/\/+$/, "");
+
+function resolveApiUrl(path: string): string {
+    if (API_BASE) return `${API_BASE}${path}`;
+    return path;
+}
 
 // Fetch graph payload from Express.
 export async function fetchGraph(userId: string, limit = 50): Promise<GraphResponse> {
-    const url = new URL(`${API_BASE}/api/graph`);
+    const url = new URL(resolveApiUrl("/api/graph"), window.location.origin);
     url.searchParams.set("userId", userId);
     url.searchParams.set("limit", String(limit));
 
@@ -21,7 +30,7 @@ export async function fetchGraph(userId: string, limit = 50): Promise<GraphRespo
 // Example mutation that updates a user interest and automatically
 // causes backend cache invalidation.
 export async function addInterest(userId: string, interestName: string) {
-    const response = await fetch(`${API_BASE}/api/user/${userId}/interests`, {
+    const response = await fetch(resolveApiUrl(`/api/user/${userId}/interests`), {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

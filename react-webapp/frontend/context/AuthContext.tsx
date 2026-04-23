@@ -164,9 +164,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         console.log("[AUTH] /me response status:", res.status)
         if (res.ok) {
-          const fetchedUser = await res.json()
-          cachedUserRef.current = fetchedUser
-          setUser(fetchedUser); setNeedsSetup(false)
           const data = await res.json()
           console.log("[AUTH] /me OK — user:", data?.name, data?.email)
           setUser(data); setNeedsSetup(false)

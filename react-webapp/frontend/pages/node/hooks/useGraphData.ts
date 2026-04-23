@@ -16,6 +16,60 @@ interface GraphData {
   error:   string | null;
 }
 
+const GRAPH_NODE_TYPES = new Set<GraphNode["type"]>([
+  "student",
+  "club",
+  "company",
+  "professor",
+  "interest",
+]);
+
+const GRAPH_LINK_STYLES = new Set<GraphLink["style"]>(["solid", "dashed", "direct"]);
+
+const asString = (value: unknown, fallback = ""): string => {
+  if (typeof value === "string") return value;
+  if (value == null) return fallback;
+  return String(value);
+};
+
+const asFiniteNumber = (value: unknown, fallback: number): number => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return fallback;
+};
+
+const normalizeNode = (raw: unknown, index: number): GraphNode => {
+  const node = (raw ?? {}) as Partial<GraphNode>;
+  const id = asString(node.id, `node-${index}`);
+  const label = asString(node.label, id);
+  const type = GRAPH_NODE_TYPES.has(node.type as GraphNode["type"]) ? (node.type as GraphNode["type"]) : "student";
+  const details = node.details && typeof node.details === "object" ? node.details : {};
+
+  return {
+    ...node,
+    id,
+    label,
+    type,
+    details,
+  };
+};
+
+const normalizeLink = (raw: unknown): GraphLink | null => {
+  const link = (raw ?? {}) as Partial<GraphLink>;
+  if (link.source == null || link.target == null) return null;
+
+  const style = GRAPH_LINK_STYLES.has(link.style as GraphLink["style"]) ? (link.style as GraphLink["style"]) : "solid";
+
+  return {
+    ...link,
+    source: link.source,
+    target: link.target,
+    rel: asString(link.rel, ""),
+    weight: asFiniteNumber(link.weight, 0),
+    opacity: asFiniteNumber(link.opacity, 1),
+    style,
+  };
+};
+
 export function useGraphData(): GraphData {
   const { token, user } = useAuth();
   const [nodes,   setNodes]   = useState<GraphNode[]>([]);
@@ -54,10 +108,18 @@ export function useGraphData(): GraphData {
       .then(async ([nodesRes, linksRes]) => {
         if (!nodesRes.ok) throw new Error(`Nodes fetch failed: ${nodesRes.status}`);
         if (!linksRes.ok) throw new Error(`Links fetch failed: ${linksRes.status}`);
-        const nodesData: GraphNode[] = await nodesRes.json();
-        const linksData: GraphLink[] = await linksRes.json();
-        setNodes(nodesData);
-        setLinks(linksData);
+        const nodesData = await nodesRes.json();
+        const linksData = await linksRes.json();
+
+        const normalizedNodes = Array.isArray(nodesData)
+          ? nodesData.map((node, index) => normalizeNode(node, index))
+          : [];
+        const normalizedLinks = Array.isArray(linksData)
+          ? linksData.map(normalizeLink).filter((link): link is GraphLink => link !== null)
+          : [];
+
+        setNodes(normalizedNodes);
+        setLinks(normalizedLinks);
         fetchedForUserIdRef.current = userId;
       })
       .catch((err: unknown) => {

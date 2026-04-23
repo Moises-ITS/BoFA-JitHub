@@ -8,7 +8,7 @@ type UseGraphState = {
     error: string | null;
 };
 
-export function useGraph(userId: string, limit = 50) {
+export function useGraph(userId: string, sessionToken: string | null, limit = 50) {
     const [state, setState] = useState<UseGraphState>({
         data: null,
         loading: true,
@@ -23,7 +23,7 @@ export function useGraph(userId: string, limit = 50) {
                 error: null,
             }));
 
-            const data = await fetchGraph(userId, limit);
+            const data = await fetchGraph(userId, limit, sessionToken);
 
             setState({
                 data,
@@ -40,17 +40,17 @@ export function useGraph(userId: string, limit = 50) {
                 error: message,
             });
         }
-    }, [userId, limit]);
+    }, [userId, limit, sessionToken]);
 
     const createInterest = useCallback(
         async (interestName: string) => {
-            await addInterest(userId, interestName);
+            await addInterest(userId, interestName, sessionToken);
 
             // Reload after mutation so frontend gets fresh graph
             // after backend invalidates Redis cache.
             await load();
         },
-        [userId, load]
+        [userId, load, sessionToken]
     );
 
     useEffect(() => {

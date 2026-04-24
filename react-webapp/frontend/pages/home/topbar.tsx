@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { Search, Bell } from "lucide-react"
 import { useAuth } from "../../context/AuthContext"

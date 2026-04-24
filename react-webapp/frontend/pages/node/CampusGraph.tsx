@@ -19,6 +19,9 @@ import Legend                             from "./components/Legend";
 import TopConnected                       from "./components/TopConnected";
 import HoverCard                          from "./components/HoverCard";
 import { useAuth }                        from "../../context/AuthContext";
+import { NetworkIntro }                   from "../../components/NetworkTransition";
+import CampusNavbar                       from "../../components/CampusNavbar";
+import Graph3DGlobeView                  from "./components/Graph3DGlobeView";
 import "./CampusGraph.css";
 
 const API = import.meta.env.VITE_API_URL ?? "";
@@ -506,18 +509,18 @@ export default function CampusGraph() {
   useEffect(() => { setEdgeExplain(null); }, [mode, selectedNode?.id, pathNodeIds.length]);
 
   // ── Stable-ref callbacks (avoids D3 setup re-running on mode changes) ─────
-  const modeRef = useRef<GraphMode>("free");
-  const selectedIdRef = useRef<string | null>(null);
-  const nodesRef = useRef(nodes);
-  const linksRef = useRef(links);
+  const modeRef          = useRef<GraphMode>("free");
+  const selectedIdRef    = useRef<string | null>(null);
+  const nodesRef         = useRef(nodes);
+  const linksRef         = useRef(links);
+  useEffect(() => { modeRef.current       = mode;   }, [mode]);
+  useEffect(() => { nodesRef.current      = nodes;  }, [nodes]);
+  useEffect(() => { linksRef.current      = links;  }, [links]);
   const hoveredNodeIdRef = useRef<string | null>(null);
   const pathNodeIdsRef = useRef<string[]>([]);
   const searchActiveRef = useRef(false);
   const currentZoomKRef = useRef(1);
   const flickerTimeRef = useRef(0);
-  useEffect(() => { modeRef.current = mode; }, [mode]);
-  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
-  useEffect(() => { linksRef.current = links; }, [links]);
   useEffect(() => { pathNodeIdsRef.current = pathNodeIds; }, [pathNodeIds]);
   useEffect(() => { hiddenTypesRef.current = hiddenTypes; }, [hiddenTypes]);
   useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);

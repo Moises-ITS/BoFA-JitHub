@@ -19,6 +19,8 @@ export interface User {
   skills: string[]
   looking_for: string[]
   year: string | null
+  is_eboard?: boolean
+  eboard_club_id?: number | null
 }
 
 export interface ProfileUpdate {

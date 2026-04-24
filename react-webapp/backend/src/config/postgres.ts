@@ -52,3 +52,14 @@ db.connect()
     client.release()
   })
   .catch(err => console.error("PostgreSQL connection failed:", err))
+
+// EDEN's separate Postgres — holds clubs/events/rsvps (owned by the FastAPI backend).
+// Used read-only by the /api/eden/* routes to join attendance against events.
+export const edenDb = new Pool({
+  host:     process.env.EDEN_DB_HOST     ?? "localhost",
+  port:     Number(process.env.EDEN_DB_PORT) || 5432,
+  user:     process.env.EDEN_DB_USER     ?? "postgres",
+  password: process.env.EDEN_DB_PASSWORD ?? "Perdomo1107!",
+  database: process.env.EDEN_DB_NAME     ?? "eden",
+  ssl:      false,
+})

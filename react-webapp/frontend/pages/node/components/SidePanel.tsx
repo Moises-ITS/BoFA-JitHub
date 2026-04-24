@@ -55,8 +55,6 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
   const [connStatus,    setConnStatus]    = useState<ConnStatus>("none");
   const [connLoading,   setConnLoading]   = useState(false);
   const [connExpanded,  setConnExpanded]  = useState(false);
-  //  Connection status state 
-  
 
   //  Recommendations (shown on own node) 
   const [recs, setRecs] = useState<Recommendation[]>([]);

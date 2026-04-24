@@ -24,6 +24,7 @@ const DigitalTwin = lazy(() => import("./pages/map/DigitalTwin"))
 const CampusView = lazy(() => import("./pages/campus/CampusView"))
 const GlbInspector = lazy(() => import("./pages/campus/GlbInspector"))
 const ResearchDistricts = lazy(() => import("./pages/districts/ResearchDistricts"))
+const EdenPage = lazy(() => import("./pages/eden/EdenPage"))
 
 function MissingClerkConfigScreen() {
   return (

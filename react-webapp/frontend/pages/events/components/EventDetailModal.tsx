@@ -362,6 +362,14 @@ export function EventDetailModal({ event, attendees, connectionIds, rsvpStatus, 
           )}
         </div>
 
+        {isPast && event.date && event.club_id != null && (
+          <AttendanceForm
+            eventId={event.event_id}
+            clubId={event.club_id}
+            eventDate={event.date}
+          />
+        )}
+
         {onRsvpToggle && !isPast && (
           <button onClick={() => onRsvpToggle(event.event_id)}
             onMouseEnter={e => { if (isGoing) { e.currentTarget.textContent = "Cancel RSVP"; e.currentTarget.style.color = "var(--status-error)"; e.currentTarget.style.borderColor = "rgba(243,111,111,0.3)"; e.currentTarget.style.backgroundColor = "var(--status-error-soft)"; } }}

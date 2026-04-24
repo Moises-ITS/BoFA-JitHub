@@ -1,7 +1,6 @@
 import express from "express";
-import { connectRedis } from "./lib/redis";
-import authRouter from "./routes/auth";
-import edenRouter from "./routes/eden";
+import { connectRedis } from "./lib/redis.js";
+import authRouter from "./routes/auth.js";
 
 const app = express();
 

@@ -1,4 +1,5 @@
 import { Router } from "express"
+import { requireSafeId } from "../middlewear/security.js"
 
 export interface Building {
   id: string
@@ -109,8 +110,13 @@ router.get("/", (_req, res) => {
   res.json({ success: true, data: buildings })
 })
 
-router.get("/:id", (req, res) => {
-  const building = buildings.find(b => b.id === req.params.id)
+router.get("/by-id/:id", (req, res) => {
+  const safeId = requireSafeId(req.params.id)
+  if (!safeId) {
+    res.status(400).json({ success: false, error: "Invalid building id" })
+    return
+  }
+  const building = buildings.find(b => b.id === safeId)
   if (!building) {
     res.status(404).json({ success: false, error: "Building not found" })
     return

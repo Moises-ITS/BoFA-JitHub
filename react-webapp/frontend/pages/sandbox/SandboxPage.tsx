@@ -261,7 +261,7 @@ export default function SandboxPage() {
   }
 
   function isContextRelevant(text: string): boolean {
-    return /event|club|org|connect|network|people|trending|popular|semester|happening|rsvp|attend|hackathon|workshop|panel|social|recruit|intern|research|food|talk|meet|who should|what'?s? (going|up|on)|top|shpe|ieee|acm|wics|nsbe|swe|greek|fraternity|sorority/i.test(text);
+    return /event|club|org|connect|network|people|trending|popular|semester|happening|rsvp|attend|hackathon|workshop|panel|social|recruit|intern|research|food|talk|meet|who should|what'?s? (going|up|on)|top|shpe|ieee|acm|wics|nsbe|swe|haccs|greek|fraternity|sorority/i.test(text);
   }
 
   function emptyContext() {
@@ -466,7 +466,7 @@ export default function SandboxPage() {
       await fetch(`${AUTH_API}/api/connections/request`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ targetUserId: action.user_id }),
+        body: JSON.stringify({ toUserId: action.user_id }),
       });
       setConnectedIds(prev => new Set([...prev, action.user_id!]));
     } finally {
@@ -478,7 +478,7 @@ export default function SandboxPage() {
     if (!action.user_id || !token) return;
     setConnectingId(action.user_id);
     try {
-      await fetch(`${AUTH_API}/api/connections/${action.user_id}`, {
+      await fetch(`${AUTH_API}/api/connections/by-user/${action.user_id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

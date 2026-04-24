@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": "20.x || 22.x",
+    "npm": "10.x"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -10,11 +14,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.4",
     "@tailwindcss/vite": "^4.2.1",
     "3d-force-graph": "^1.79.1",
     "compression": "^1.8.1",
     "express": "^5.2.1",
-    "Express": "^3.0.1",
     "helmet": "^8.1.0",
     "morgan": "^1.10.1",
     "node-fetch": "^3.3.2",

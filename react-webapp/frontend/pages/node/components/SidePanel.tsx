@@ -36,6 +36,17 @@ interface SidePanelProps {
   onSelectNode: (id: string) => void;
 }
 
+// Minimal recommendation type returned by the recommendations API
+interface Recommendation {
+  id: string;
+  name: string;
+  score: number;
+  sameMajor?: boolean;
+  major?: string;
+  sharedInterests?: number;
+  sharedClubs?: number;
+}
+
 export default function SidePanel({ node, nodes, links, onClose, onSelectNode }: SidePanelProps) {
   const { user, token } = useAuth();
   const isOwnNode = node?.id === user?.id;
@@ -123,7 +134,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     if (!node || !user) return;
     setConnLoading(true);
     try {
-      const res = await fetch(`${API}/api/connections/${node.id}`, {
+      const res = await fetch(`${API}/api/connections/by-user/${node.id}`, {
         method:  "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -265,13 +276,13 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
           <h4 className="sectionTitle">Recommended for You</h4>
           {recs.map(rec => {
             const reasons: string[] = [];
-            if (rec.sameMajor)          reasons.push(`Same major (${rec.major})`);
-            if (rec.sharedInterests > 0) reasons.push(`${rec.sharedInterests} shared interest${rec.sharedInterests > 1 ? "s" : ""}`);
-            if (rec.sharedClubs > 0)     reasons.push(`${rec.sharedClubs} shared club${rec.sharedClubs > 1 ? "s" : ""}`);
+            if (rec.sameMajor) reasons.push(`Same major (${rec.major})`);
+            if ((rec.sharedInterests ?? 0) > 0) reasons.push(`${rec.sharedInterests} shared interest${(rec.sharedInterests ?? 0) > 1 ? "s" : ""}`);
+            if ((rec.sharedClubs ?? 0) > 0) reasons.push(`${rec.sharedClubs} shared club${(rec.sharedClubs ?? 0) > 1 ? "s" : ""}`);
             return (
               <div key={rec.id} className="recItem" onClick={() => onSelectNode(rec.id)}>
-                <div className="recAvatar" style={{ background: TYPE_COLOR.student }}>
-                  {rec.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                  <div className="recAvatar" style={{ background: TYPE_COLOR.student }}>
+                  {rec.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
                 </div>
                 <div className="recInfo">
                   <div className="recRowTop">
@@ -305,7 +316,6 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     </div>
   );
 }
-
 
 
 

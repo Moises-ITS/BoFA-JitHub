@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import AttendanceForm from "./AttendanceForm";
+import { clubNamesEquivalent, getClubTermsFromEvent } from "../utils/clubMatching";
 
 export const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥", "🎨", "🏆", "💻", "🎪", "🌈"];
 
@@ -11,12 +11,33 @@ export interface UserProfile {
 export interface AttendeeInfo { count: number; preview: { user_id: string; user_name: string; user_major: string }[] }
 
 export const CLUB_GROUPS: string[][] = [
-  ["ACM", "IEEE", "GDSC", "Hack@NJIT", "WiCS", "Software Engineering Club", "Data Science Club", "Cyber Defense Organization"],
-  ["SHPE", "SWE", "NSBE", "BMES", "WiCS", "LASO"],
-  ["ASCE", "ASME", "AIChE", "BMES", "IEEE"],
-  ["Entrepreneurship Club", "Finance Club", "Investment Club", "SGA"],
-  ["MSA", "LASO", "Caribbean Student Association", "Chinese Student Association", "Korean Student Association", "Vietnamese Student Association"],
-  ["Pre-Medical Society", "BMES", "Biology Club"],
+  [
+    "Association for Computing Machinery", "ACM",
+    "Institute of Electrical and Electronics Engineers", "IEEE",
+    "Google Developer Student Club", "GDSC",
+    "Hack@NJIT", "Women in Computer Science", "WiCS",
+    "Software Engineering Club", "Data Science Club", "Cyber Defense Organization",
+  ],
+  [
+    "Society of Hispanic Professional Engineers", "SHPE",
+    "Society of Women Engineers", "SWE",
+    "National Society of Black Engineers", "NSBE",
+    "Biomedical Engineering Society", "BMES",
+    "Women in Computer Science", "WiCS",
+    "Latino American Student Organization", "LASO",
+    "Hispanic Association of Computing College Students", "HACCS",
+    "Hispanic and Latine Association of Computing College Students",
+  ],
+  [
+    "American Society of Civil Engineers", "ASCE",
+    "American Society of Mechanical Engineers", "ASME",
+    "American Institute of Chemical Engineers", "AIChE",
+    "Biomedical Engineering Society", "BMES",
+    "Institute of Electrical and Electronics Engineers", "IEEE",
+  ],
+  ["Entrepreneurship Club", "Finance Club", "Investment Club", "Student Government Association", "SGA"],
+  ["Muslim Student Association", "MSA", "Latino American Student Organization", "LASO", "Caribbean Student Association", "Chinese Student Association", "Korean Student Association", "Vietnamese Student Association"],
+  ["Pre-Medical Society", "Biomedical Engineering Society", "BMES", "Biology Club"],
 ];
 
 export const INTEREST_AFFINITIES: Record<string, Record<string, number>> = {
@@ -111,6 +132,23 @@ export function captionBlurb(caption: string): string {
   return cut + "…";
 }
 
+export function getEventCategories(event: any): string[] {
+  const values = Array.isArray(event?.event_categories) && event.event_categories.length > 0
+    ? event.event_categories
+    : typeof event?.event_category === "string"
+      ? event.event_category.split(",")
+      : [];
+
+  const unique: string[] = [];
+  values.forEach((value) => {
+    const cleaned = String(value ?? "").trim().toLowerCase();
+    if (cleaned && !unique.includes(cleaned)) {
+      unique.push(cleaned);
+    }
+  });
+  return unique;
+}
+
 export function fmt12(time: string): string {
   const [h, m] = time.split(":").map(Number);
   const period = h >= 12 ? "pm" : "am";
@@ -129,16 +167,17 @@ export function matchScore(event: any, profile: UserProfile): number {
   const hasProfile = profile.major || profile.interests.length > 0 || profile.clubs.length > 0;
   if (!hasProfile) return -1;
   let score = 0;
-  const cat = event.event_category ?? "";
+  const cat = getEventCategories(event)[0] ?? "";
   const clubName = event.club_name ?? "";
+  const clubTerms = getClubTermsFromEvent(event);
   for (const interest of profile.interests) score += INTEREST_AFFINITIES[interest]?.[cat] ?? 0;
   score += MAJOR_AFFINITIES[profile.major]?.[cat] ?? 0;
   for (const intent of (profile.looking_for ?? [])) score += LOOKING_FOR_AFFINITIES[intent]?.[cat] ?? 0;
   if (profile.year) score += YEAR_BOOSTS[profile.year]?.[cat] ?? 0;
-  if (profile.clubs.some(c => c.toLowerCase() === clubName.toLowerCase())) score += 30;
+  if (profile.clubs.some(c => clubTerms.some(term => clubNamesEquivalent(c, term)))) score += 30;
   for (const group of CLUB_GROUPS) {
-    const userInGroup = profile.clubs.some(c => group.includes(c));
-    const eventInGroup = group.includes(clubName);
+    const userInGroup = profile.clubs.some(c => group.some(groupClub => clubNamesEquivalent(c, groupClub)));
+    const eventInGroup = group.some(groupClub => clubTerms.some(term => clubNamesEquivalent(groupClub, term)));
     if (userInGroup && eventInGroup) { score += 20; break; }
   }
   if (event.engagement_score) score += Math.min(8, event.engagement_score * 2);
@@ -147,15 +186,17 @@ export function matchScore(event: any, profile: UserProfile): number {
 }
 
 export function explainMatch(event: any, profile: UserProfile): string {
-  const cat = event.event_category ?? "";
+  const cat = getEventCategories(event)[0] ?? "";
   const clubName = event.club_name ?? "";
+  const clubTerms = getClubTermsFromEvent(event);
   const reasons: string[] = [];
-  if (profile.clubs.some(c => c.toLowerCase() === clubName.toLowerCase())) {
+  if (profile.clubs.some(c => clubTerms.some(term => clubNamesEquivalent(c, term)))) {
     reasons.push(`you're a member of ${clubName}`);
   } else {
     for (const group of CLUB_GROUPS) {
-      const userClubs = profile.clubs.filter(c => group.includes(c));
-      if (userClubs.length > 0 && group.includes(clubName)) {
+      const userClubs = profile.clubs.filter(c => group.some(groupClub => clubNamesEquivalent(c, groupClub)));
+      const eventInGroup = group.some(groupClub => clubTerms.some(term => clubNamesEquivalent(groupClub, term)));
+      if (userClubs.length > 0 && eventInGroup) {
         reasons.push(`your involvement with ${userClubs[0]} connects you to ${clubName}'s network`);
         break;
       }
@@ -185,7 +226,7 @@ export function EventDetailModal({ event, attendees, connectionIds, rsvpStatus, 
 }) {
   const score = matchScore(event, profile);
   const isGoing = rsvpStatus === "going";
-  const catStyle = CATEGORY_STYLE[event.event_category] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" };
+  const eventCategories = getEventCategories(event);
   // Past events: hide RSVP. forceReadOnly overrides date check (e.g. events with no date that are still past).
   const isPast = forceReadOnly || (event.date ? new Date(event.date + "T23:59:59") < new Date() : false);
 
@@ -214,16 +255,74 @@ export function EventDetailModal({ event, attendees, connectionIds, rsvpStatus, 
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "16px" }}>
-          {event.event_category && <span style={{ backgroundColor: catStyle.bg, color: catStyle.color, fontSize: "12px", padding: "3px 10px", borderRadius: "6px", fontWeight: 500, textTransform: "capitalize" as const }}>{event.event_category}</span>}
+          {eventCategories.map((category) => {
+            const catStyle = CATEGORY_STYLE[category] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" };
+            return (
+              <span
+                key={category}
+                style={{ backgroundColor: catStyle.bg, color: catStyle.color, fontSize: "12px", padding: "3px 10px", borderRadius: "6px", fontWeight: 500, textTransform: "capitalize" as const }}
+              >
+                {category}
+              </span>
+            );
+          })}
           {event.has_free_food && <span style={{ backgroundColor: "var(--accent-events-soft)", color: "var(--accent-events)", fontSize: "12px", padding: "3px 10px", borderRadius: "6px" }}>Free Food</span>}
           {event.virtual && <span style={{ backgroundColor: "var(--accent-orgs-soft)", color: "var(--accent-orgs)", fontSize: "12px", padding: "3px 10px", borderRadius: "6px" }}>Virtual</span>}
           {event.is_open_to_public && <span style={{ backgroundColor: "var(--status-info-soft)", color: "var(--status-info)", fontSize: "12px", padding: "3px 10px", borderRadius: "6px" }}>Open to Public</span>}
         </div>
 
         {event.caption && (
-          <p style={{ color: "var(--text-muted)", fontSize: "13px", lineHeight: 1.6, borderLeft: "2px solid var(--border-default)", paddingLeft: "12px", marginBottom: "16px" }}>
-            {captionBlurb(event.caption)}
-          </p>
+          <div
+            style={{
+              color: "var(--text-muted)",
+              fontSize: "13px",
+              lineHeight: 1.6,
+              borderLeft: "2px solid var(--border-default)",
+              paddingLeft: "12px",
+              marginBottom: "16px",
+              maxHeight: "180px",
+              overflowY: "auto",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {event.caption}
+          </div>
+        )}
+
+        {(Array.isArray(event.collaborators) && event.collaborators.length > 0) && (
+          <div style={{ marginBottom: "16px" }}>
+            <p style={{ color: "var(--text-subtle)", fontSize: "11px", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", margin: "0 0 10px" }}>
+              Collaborating Clubs
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {event.collaborators.map((collaborator: string) => (
+                <span
+                  key={collaborator}
+                  style={{ backgroundColor: "rgba(215,25,32,0.12)", border: "1px solid rgba(215,25,32,0.24)", color: "#ffe7e8", fontSize: "12px", padding: "6px 10px", borderRadius: "999px", fontWeight: 600 }}
+                >
+                  {collaborator}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(Array.isArray(event.sponsors) && event.sponsors.length > 0) && (
+          <div style={{ marginBottom: "16px" }}>
+            <p style={{ color: "var(--text-subtle)", fontSize: "11px", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: "0.06em", margin: "0 0 10px" }}>
+              Corporate Partners
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {event.sponsors.map((sponsor: string) => (
+                <span
+                  key={sponsor}
+                  style={{ backgroundColor: "rgba(49,197,143,0.12)", border: "1px solid rgba(49,197,143,0.24)", color: "var(--accent-opportunities)", fontSize: "12px", padding: "6px 10px", borderRadius: "999px", fontWeight: 600 }}
+                >
+                  {sponsor}
+                </span>
+              ))}
+            </div>
+          </div>
         )}
 
         {score >= 70 && (

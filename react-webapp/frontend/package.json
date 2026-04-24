@@ -3,6 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "npm@10.9.0",
+  "engines": {
+    "node": "20.x || 22.x",
+    "npm": "10.x"
+  },
   "scripts": {
     "dev": "vite",
     "dev:all": "concurrently -n frontend,backend -c blue,yellow \"vite\" \"npm run dev --prefix ../backend\"",
@@ -22,6 +27,7 @@
     "@supabase/supabase-js": "^2.99.0",
     "@tailwindcss/vite": "^4.2.1",
     "@types/topojson-client": "^3.1.5",
+    "3d-force-graph": "^1.80.0",
     "cesium": "^1.139.1",
     "d3": "^7.9.0",
     "date-fns": "^4.1.0",

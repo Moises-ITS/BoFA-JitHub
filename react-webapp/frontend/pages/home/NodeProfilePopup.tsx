@@ -66,17 +66,19 @@ export default function NodeProfilePopup({ nodeId, onClose }: Props) {
   // Fetch profile + connection status when nodeId changes
   useEffect(() => {
     if (!nodeId) { setProfile(null); setConnStatus("none"); return; }
-    setLoading(true);
+    setLoading(isOwnNode);
     setProfile(null);
     setConnStatus("none");
 
-    fetch(`${API}/api/auth/users/${nodeId}/profile`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then((data: PublicProfile | null) => setProfile(data))
-      .catch(() => setProfile(null))
-      .finally(() => setLoading(false));
+    if (isOwnNode) {
+      fetch(`${API}/api/auth/users/${nodeId}/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then((data: PublicProfile | null) => setProfile(data))
+        .catch(() => setProfile(null))
+        .finally(() => setLoading(false));
+    }
 
     if (isStudent && !isOwnNode) {
       fetch(`${API}/api/connections/status?userId=${nodeId}`, {

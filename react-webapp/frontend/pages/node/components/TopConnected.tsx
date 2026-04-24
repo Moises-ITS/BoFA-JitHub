@@ -73,7 +73,6 @@ export default function TopConnected({ nodes, links, currentUserId, onSelectNode
 
     return nodes
       .filter(n => n.type === "student")
-      .map(n => ({ node: n, connCount: degree[n.id] || 0 }))
       .map(n => ({ node: n, connCount: neighborsByStudent.get(n.id)?.size || 0 }))
       .sort((a, b) => b.connCount - a.connCount)
       .map((item, i) => ({ ...item, rank: i + 1 }));
@@ -102,7 +101,7 @@ export default function TopConnected({ nodes, links, currentUserId, onSelectNode
           const firstName = node.label.split(" ")[0];
           return (
             <div
-              key={node.id}
+              key={`${node.id}-${rank}`}
               className="tcRow"
               onClick={() => onSelectNode(node.id)}
             >
@@ -191,7 +190,7 @@ export default function TopConnected({ nodes, links, currentUserId, onSelectNode
                   const initials = node.label.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
                   return (
                     <motion.div
-                      key={node.id}
+                      key={`${node.id}-${rank}`}
                       whileHover={{ background: "rgba(255,255,255,0.04)" }}
                       onClick={() => { setOpen(false); onSelectNode(node.id); }}
                       style={{

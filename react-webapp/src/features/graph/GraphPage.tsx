@@ -3,10 +3,11 @@ import { useGraph } from "./useGraph";
 
 type Props = {
     userId: string;
+    sessionToken: string | null;
 };
 
-export function GraphPage({ userId }: Props) {
-    const { data, loading, error, reload, createInterest } = useGraph(userId, 50);
+export function GraphPage({ userId, sessionToken }: Props) {
+    const { data, loading, error, reload, createInterest } = useGraph(userId, sessionToken, 50);
     const [interestName, setInterestName] = useState("");
 
     const onSubmit = async (e: React.FormEvent) => {

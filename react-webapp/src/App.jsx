@@ -1,35 +1,64 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/clerk-react";
+import { GraphPage } from "./features/graph/GraphPage";
+import { fetchCurrentProfile } from "./api/graph";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "";
+  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const [sessionToken, setSessionToken] = useState(null);
+  const [graphUserId, setGraphUserId] = useState(null);
+  const [bootstrapError, setBootstrapError] = useState(null);
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+  useEffect(() => {
+    if (!apiBaseUrl) {
+      setBootstrapError("Missing VITE_API_BASE_URL (or VITE_API_URL).");
+      return;
+    }
+
+    if (!isLoaded || !isSignedIn) {
+      setSessionToken(null);
+      setGraphUserId(null);
+      setBootstrapError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const bootstrap = async () => {
+      try {
+        const token = await getToken({ skipCache: true });
+        if (!token) throw new Error("Could not obtain Clerk session token.");
+        const profile = await fetchCurrentProfile(token);
+        if (!profile?.id) {
+          throw new Error("Authenticated profile is missing an id.");
+        }
+        if (!cancelled) {
+          setSessionToken(token);
+          setGraphUserId(profile.id);
+          setBootstrapError(null);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!cancelled) {
+          setSessionToken(null);
+          setGraphUserId(null);
+          setBootstrapError(message);
+        }
+      }
+    };
+
+    void bootstrap();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, isLoaded, isSignedIn, getToken]);
+
+  if (!isLoaded) return <div style={{ padding: 24 }}>Loading authentication…</div>;
+  if (!isSignedIn) return <div style={{ padding: 24 }}>Please sign in to view your graph.</div>;
+  if (bootstrapError) return <div style={{ padding: 24 }}>Error: {bootstrapError}</div>;
+  if (!sessionToken || !graphUserId) return <div style={{ padding: 24 }}>Loading profile…</div>;
+
+  return <GraphPage userId={graphUserId} sessionToken={sessionToken} />;
 }
-
-export default App

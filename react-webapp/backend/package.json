@@ -9,6 +9,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "redis:smoke": "node scripts/redis-smoke.mjs",
+    "security:scan-secrets": "node scripts/scan-secrets.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

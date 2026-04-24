@@ -1,21 +1,24 @@
 import { useEffect } from "react"
 import { SignIn, useAuth as useClerkAuth, useClerk } from "@clerk/clerk-react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
+import "./auth.css"
 
 export default function LoginPage() {
   const { isSignedIn, isLoaded } = useClerkAuth()
   const { signOut } = useClerk()
-  const { user, loading } = useAuth()
+  const { user, loading, needsProfileSetup, authError } = useAuth()
+  const navigate = useNavigate()
 
-  // If already signed in with Clerk but no DB profile (stale session from a
-  // failed setup attempt), sign out so the login form actually shows.
   useEffect(() => {
-    if (isLoaded && isSignedIn && !loading && !user) {
-      void signOut()
-    }
-  }, [isLoaded, isSignedIn, loading, signOut, user])
+    if (!isLoaded || loading) return
 
+    // Already fully authenticated → go straight to app
+    if (isSignedIn && user) {
+      navigate("/home", { replace: true })
+      return
+    }
+  }, [isLoaded, isSignedIn, loading, user, signOut])
   return (
     <div className="auth-page">
       <div className="auth-card auth-card--clerk">

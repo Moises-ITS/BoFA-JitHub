@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "npm@10.9.0",
   "engines": {
     "node": "20.x || 22.x",
     "npm": "10.x"
@@ -70,6 +71,5 @@
     "supabase:init": "supabase init",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop"
-  },
-  "packageManager": "npm@10.9.0"
+  }
 }

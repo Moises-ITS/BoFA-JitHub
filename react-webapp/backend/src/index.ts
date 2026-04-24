@@ -74,7 +74,16 @@ try {
 
 // Run the opportunities migration on startup
 try {
-  const migrationPath = path.resolve(__dirname, "db/migrations/003_opportunities.sql")
+  const migrationCandidates = [
+    path.resolve(__dirname, "db/migrations/003_opportunities.sql"),
+    path.resolve(__dirname, "../src/db/migrations/003_opportunities.sql"),
+    path.resolve(process.cwd(), "react-webapp/backend/src/db/migrations/003_opportunities.sql"),
+    path.resolve(process.cwd(), "src/db/migrations/003_opportunities.sql"),
+  ]
+  const migrationPath = migrationCandidates.find((candidate) => fs.existsSync(candidate))
+  if (!migrationPath) {
+    throw new Error("003_opportunities.sql not found in expected locations")
+  }
   const sql = fs.readFileSync(migrationPath, "utf8")
   await db.query(sql)
   console.log("Migration 003_opportunities applied")

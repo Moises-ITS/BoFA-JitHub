@@ -18,10 +18,18 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   }
   const token = authHeader.slice(7)
 
+  let clerkId: string
   try {
     const payload = await verifyClerkSessionToken(token, req.headers.origin)
-    const clerkId = payload.sub
+    clerkId = payload.sub
+  } catch (error) {
+    console.error("Clerk token verification failed in requireAuth:", error)
+    console.warn("[security][auth-failed]", { reason: "invalid_or_expired_token", path: req.originalUrl, ip: req.ip })
+    res.status(401).json({ error: "Invalid or expired token" })
+    return
+  }
 
+  try {
     const result = await db.query("SELECT id FROM users WHERE clerk_id = $1", [clerkId])
     if (result.rows.length > 0) {
       req.userId = result.rows[0].id
@@ -61,8 +69,8 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
     console.warn("[security][auth-failed]", { reason: "profile_required", path: req.originalUrl, ip: req.ip, clerkId })
     res.status(403).json({ error: "Profile not set up", code: "PROFILE_REQUIRED" })
   } catch (error) {
-    console.error("Clerk token verification failed in requireAuth:", error)
-    console.warn("[security][auth-failed]", { reason: "invalid_or_expired_token", path: req.originalUrl, ip: req.ip })
-    res.status(401).json({ error: "Invalid or expired token" })
+    console.error("Auth middleware database lookup failed:", error)
+    console.warn("[security][auth-failed]", { reason: "auth_backend_unavailable", path: req.originalUrl, ip: req.ip })
+    res.status(500).json({ error: "Authentication backend unavailable" })
   }
 }

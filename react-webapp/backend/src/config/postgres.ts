@@ -17,9 +17,10 @@ if (!connectionString) {
   throw new Error("DATABASE_URL is required")
 }
 
+let parsedDbUrl: URL
 try {
-  const dbUrl = new URL(connectionString)
-  const privateHost = isPrivateHost(dbUrl.hostname)
+  parsedDbUrl = new URL(connectionString)
+  const privateHost = isPrivateHost(parsedDbUrl.hostname)
   const isProduction = process.env.NODE_ENV === "production"
   const enforcePrivateDb = process.env.ENFORCE_PRIVATE_DATABASE === "true" && isProduction
   if (!privateHost) {
@@ -36,7 +37,16 @@ try {
 }
 
 const sslDisabled = process.env.PG_SSL === "disable"
-const rejectUnauthorized = process.env.PG_SSL_REJECT_UNAUTHORIZED !== "false"
+const pgRejectUnauthorizedRaw = process.env.PG_SSL_REJECT_UNAUTHORIZED?.trim().toLowerCase()
+const isRailwayLikeHost =
+  parsedDbUrl.hostname.endsWith(".rlwy.net") ||
+  parsedDbUrl.hostname.includes("railway.internal")
+
+const rejectUnauthorized =
+  pgRejectUnauthorizedRaw != null
+    ? pgRejectUnauthorizedRaw !== "false"
+    : !isRailwayLikeHost
+
 if (!sslDisabled && !rejectUnauthorized) {
   console.warn("[security][deployment] PG_SSL_REJECT_UNAUTHORIZED=false weakens TLS verification.")
 }

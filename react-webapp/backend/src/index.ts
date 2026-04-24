@@ -99,10 +99,42 @@ function normalizeOrigin(origin: string): string | null {
   }
 }
 
-const vercelProject =
-  (process.env.FRONTEND_VERCEL_PROJECT ?? process.env.VERCEL_PROJECT_NAME ?? "")
-    .trim()
-    .toLowerCase()
+function extractVercelLabel(value: string): string | null {
+  const normalized = normalizeOrigin(value)
+  if (!normalized) return null
+  try {
+    const host = new URL(normalized).hostname.toLowerCase()
+    if (!host.endsWith(".vercel.app")) return null
+    return host.slice(0, -".vercel.app".length)
+  } catch {
+    return null
+  }
+}
+
+function inferVercelProject(): string {
+  const explicit =
+    (process.env.FRONTEND_VERCEL_PROJECT ?? process.env.VERCEL_PROJECT_NAME ?? "")
+      .trim()
+      .toLowerCase()
+  if (explicit) return explicit
+
+  const labels = [
+    process.env.FRONTEND_URL,
+    process.env.FRONTEND_ORIGIN,
+    process.env.FRONTEND_URLS,
+  ]
+    .filter(Boolean)
+    .flatMap((value) => (value as string).split(","))
+    .map((value) => value.trim())
+    .map((value) => extractVercelLabel(value))
+    .filter((label): label is string => Boolean(label))
+
+  if (labels.length === 0) return ""
+  labels.sort((a, b) => a.length - b.length)
+  return labels[0]
+}
+
+const vercelProject = inferVercelProject()
 const vercelTeam =
   (process.env.FRONTEND_VERCEL_TEAM ?? process.env.VERCEL_TEAM_SLUG ?? "")
     .trim()

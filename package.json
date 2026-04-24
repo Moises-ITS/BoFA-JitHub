@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@clerk/backend": "^3.2.2",
+    "@clerk/backend": "^3.2.3",
     "express-rate-limit": "^8.3.1",
     "node-cron": "^4.2.1",
     "rate-limit-redis": "^4.3.1",

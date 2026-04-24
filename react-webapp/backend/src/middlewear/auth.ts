@@ -19,7 +19,7 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
   const token = authHeader.slice(7)
 
   try {
-    const payload = await verifyClerkSessionToken(token)
+    const payload = await verifyClerkSessionToken(token, req.headers.origin)
     const clerkId = payload.sub
 
     const result = await db.query("SELECT id FROM users WHERE clerk_id = $1", [clerkId])

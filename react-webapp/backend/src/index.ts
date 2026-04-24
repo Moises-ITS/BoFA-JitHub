@@ -90,6 +90,46 @@ const app = express()
 app.disable("x-powered-by")
 app.set("trust proxy", 1)
 
+function normalizeOrigin(origin: string): string | null {
+  try {
+    const parsed = new URL(origin)
+    return `${parsed.protocol}//${parsed.host}`.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+const vercelProject =
+  (process.env.FRONTEND_VERCEL_PROJECT ?? process.env.VERCEL_PROJECT_NAME ?? "")
+    .trim()
+    .toLowerCase()
+const vercelTeam =
+  (process.env.FRONTEND_VERCEL_TEAM ?? process.env.VERCEL_TEAM_SLUG ?? "")
+    .trim()
+    .toLowerCase()
+
+function isAllowedVercelOrigin(origin: string): boolean {
+  if (!vercelProject) return false
+
+  let parsed: URL
+  try {
+    parsed = new URL(origin)
+  } catch {
+    return false
+  }
+
+  if (parsed.protocol !== "https:") return false
+
+  const host = parsed.hostname.toLowerCase()
+  if (!host.endsWith(".vercel.app")) return false
+
+  if (host === `${vercelProject}.vercel.app`) return true
+  if (!host.startsWith(`${vercelProject}-`)) return false
+  if (!vercelTeam) return true
+
+  return host.endsWith(`-${vercelTeam}.vercel.app`)
+}
+
 const configuredOrigins = [
   process.env.FRONTEND_URL,
   process.env.FRONTEND_ORIGIN,
@@ -98,6 +138,7 @@ const configuredOrigins = [
   .filter(Boolean)
   .flatMap((value) => (value as string).split(","))
   .map((origin) => origin.trim())
+  .map((origin) => normalizeOrigin(origin) ?? origin.toLowerCase())
   .filter(Boolean)
 
 const allowedOrigins = new Set<string>([
@@ -112,7 +153,13 @@ const allowedOrigins = new Set<string>([
 
 const corsOptions: CorsOptions = {
   origin(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    if (!origin || allowedOrigins.has(origin)) {
+    if (!origin) {
+      callback(null, true)
+      return
+    }
+
+    const normalized = normalizeOrigin(origin) ?? origin.toLowerCase()
+    if (allowedOrigins.has(normalized) || isAllowedVercelOrigin(origin)) {
       callback(null, true)
       return
     }

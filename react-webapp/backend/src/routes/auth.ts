@@ -92,7 +92,7 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
 
   let clerkId: string
   try {
-    const payload = await verifyClerkSessionToken(token)
+    const payload = await verifyClerkSessionToken(token, req.headers.origin)
     clerkId = payload.sub
   } catch (error) {
     console.error("Clerk token verification failed in /api/auth/sync:", error)

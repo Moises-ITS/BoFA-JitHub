@@ -2,6 +2,11 @@
   "name": "bofa-jithub-root",
   "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "postinstall": "npm install --prefix react-webapp/backend",
+    "build": "npm run build --prefix react-webapp/backend",
+    "start": "npm run start --prefix react-webapp/backend"
+  },
   "dependencies": {
     "@clerk/backend": "^3.2.2",
     "express-rate-limit": "^8.3.1",

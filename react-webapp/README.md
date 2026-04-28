@@ -47,7 +47,7 @@ NEO4J_URI=neo4j+s://...               # AuraDB URI
 NEO4J_USER=...
 NEO4J_PASSWORD=...
 
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=http://localhost:5174
 PORT=3001
 
 CLERK_SECRET_KEY=sk_test_...          # From Clerk Dashboard > API Keys
@@ -94,7 +94,7 @@ cd react-webapp/frontend
 npm run dev:all
 ```
 
-Frontend: http://localhost:5173
+Frontend: http://localhost:5174
 Backend: http://localhost:3001
 
 ### Redis smoke test

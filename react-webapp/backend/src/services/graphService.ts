@@ -246,9 +246,20 @@ export async function getNodes() {
     const result = await session.run(
       `MATCH (n)
        RETURN
-         COALESCE(n.id, toLower(labels(n)[0]) + '-' + toLower(replace(coalesce(n.label,''), ' ', '-'))) AS id,
-         n.label   AS label,
-         n.type    AS type,
+         COALESCE(
+           n.id,
+           toLower(labels(n)[0]) + '-' + toLower(replace(coalesce(n.label, n.name, n.normalizedName, elementId(n)), ' ', '-'))
+         ) AS id,
+         COALESCE(n.label, n.name, n.normalizedName, n.id, elementId(n)) AS label,
+         CASE
+           WHEN n.type IS NOT NULL THEN n.type
+           WHEN 'Student' IN labels(n) THEN 'student'
+           WHEN 'Club' IN labels(n) THEN 'club'
+           WHEN 'Company' IN labels(n) THEN 'company'
+           WHEN 'Professor' IN labels(n) THEN 'professor'
+           WHEN 'Interest' IN labels(n) THEN 'interest'
+           ELSE 'interest'
+         END AS type,
          properties(n) AS details`
     )
     return result.records.map(record => ({
@@ -338,7 +349,7 @@ export async function getLinks() {
   const session = driver.session()
   try {
     const result = await session.run(
-      `MATCH (a)-[r]->(b)
+      `MATCH (a)-[r:WORKS_AT|MEMBER_OF|INTERESTED_IN|CONNECTED_TO]->(b)
        WITH a, r, b, type(r) AS relType
        OPTIONAL MATCH (peer:Student)-[:INTERESTED_IN]->(b)
          WHERE relType = 'INTERESTED_IN'

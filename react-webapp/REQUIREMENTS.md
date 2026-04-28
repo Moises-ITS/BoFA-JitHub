@@ -139,7 +139,7 @@ VITE_API_URL=http://localhost:3001
 
 ```
 PORT=3001
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=http://localhost:5174
 
 # Neo4j AuraDB
 NEO4J_URI=neo4j+s://<your-instance>.databases.neo4j.io
@@ -212,7 +212,7 @@ Open **Terminal 2** from the `frontend/` folder:
 npm run dev
 ```
 
-Open **http://localhost:5173** — you will be redirected to `/login`.
+Open **http://localhost:5174** — you will be redirected to `/login`.
 
 ---
 
@@ -222,7 +222,7 @@ Open **http://localhost:5173** — you will be redirected to `/login`.
 
 | Command           | What it does                                   |
 |-------------------|------------------------------------------------|
-| `npm run dev`     | Start Vite dev server on http://localhost:5173 |
+| `npm run dev`     | Start Vite dev server on http://localhost:5174 |
 | `npm run build`   | Compile to `dist/` for production              |
 | `npm run preview` | Serve the production build locally             |
 | `npm run lint`    | Run ESLint                                     |
@@ -310,7 +310,7 @@ Open **http://localhost:5173** — you will be redirected to `/login`.
 | Variable         | Required | Description                                          |
 |------------------|----------|------------------------------------------------------|
 | `PORT`           | No       | Express listen port. Defaults to `3001`              |
-| `FRONTEND_URL`   | Yes      | CORS allowed origin. `http://localhost:5173` locally |
+| `FRONTEND_URL`   | Yes      | CORS allowed origin. `http://localhost:5174` locally |
 | `CLERK_SECRET_KEY` | Yes    | Clerk backend secret key                             |
 | `CLERK_JWT_PUBLIC_KEY` | Yes | Clerk JWT public key PEM (quoted, multi-line)      |
 | `NEO4J_URI`      | Yes      | Neo4j AuraDB connection URI (`neo4j+s://...`)        |

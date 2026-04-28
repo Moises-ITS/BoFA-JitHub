@@ -1,12 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // hooks/useGraphData.ts
 // Fetches nodes and links from the Express backend.
-// Falls back to mock data when the backend is unavailable (local dev without API).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef } from "react";
 import type { GraphNode, GraphLink } from "../types/graphNodes";
-import { mockNodes, mockLinks } from "../data/mockGraphData";
 import { useAuth } from "../../../context/AuthContext";
 
 interface GraphData {
@@ -71,7 +69,7 @@ const normalizeLink = (raw: unknown): GraphLink | null => {
 };
 
 export function useGraphData(): GraphData {
-  const { token, user } = useAuth();
+  const { token, user, loading: authLoading } = useAuth();
   const [nodes,   setNodes]   = useState<GraphNode[]>([]);
   const [links,   setLinks]   = useState<GraphLink[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -79,12 +77,19 @@ export function useGraphData(): GraphData {
   const fetchedForUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const API = import.meta.env.VITE_API_URL;
+    const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
     const userId = user?.id ?? null;
 
-    if (!API || !token) {
-      // Keep current graph state stable while auth/API initializes.
-      // This avoids brief mock-data swaps when token availability changes.
+    if (authLoading) {
+      return;
+    }
+
+    if (!token) {
+      setNodes([]);
+      setLinks([]);
+      setError("Sign in is required to load the campus network.");
+      setLoading(false);
+      fetchedForUserIdRef.current = null;
       return;
     }
 
@@ -99,6 +104,8 @@ export function useGraphData(): GraphData {
     }
 
     const headers = { Authorization: `Bearer ${token}` };
+    setLoading(true);
+    setError(null);
     Promise.all([
       fetch(`${API}/api/graph/nodes`, { headers }),
       fetch(`${API}/api/graph/links`, { headers }),
@@ -122,14 +129,14 @@ export function useGraphData(): GraphData {
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
-        console.error("[useGraphData] Backend unreachable, falling back to mock data:", message);
-        setNodes(mockNodes);
-        setLinks(mockLinks);
+        console.error("[useGraphData] Failed to load campus network from backend:", message);
+        setNodes([]);
+        setLinks([]);
         setError(message);
         fetchedForUserIdRef.current = null;
       })
       .finally(() => setLoading(false));
-  }, [token, user?.id]); // token may rotate; guard above prevents unnecessary refetches
+  }, [authLoading, token, user?.id]); // token may rotate; guard above prevents unnecessary refetches
 
   return { nodes, links, loading, error };
 }

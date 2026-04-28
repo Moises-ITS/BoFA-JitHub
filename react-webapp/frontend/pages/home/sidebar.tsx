@@ -1,13 +1,12 @@
 import { NavLink } from "react-router-dom";
 import { motion } from "motion/react";
-import { Home, Calendar, Briefcase, FlaskConical, Network, User, Bot, Activity, Flag } from "lucide-react";
+import { Home, Calendar, Briefcase, Network, User, Bot, Activity, Flag } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 const baseNavItems = [
   { icon: Home, label: "Home", path: "/home" },
   { icon: Calendar, label: "Events", path: "/events" },
   { icon: Briefcase, label: "Opportunities", path: "/opportunities" },
-  { icon: FlaskConical, label: "Research", path: "/research" },
   { icon: Network, label: "Campus Network", path: "/network" },
   { icon: Bot, label: "Sandbox", path: "/sandbox" },
   { icon: User, label: "Profile", path: "/profile" },

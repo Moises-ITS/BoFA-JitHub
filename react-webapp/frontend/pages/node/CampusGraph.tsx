@@ -258,21 +258,22 @@ const edgeTierFromStrength = (s: number) => s >= 0.78 ? 1 : s >= 0.48 ? 2 : 3;
 const edgeWidthFromStrength = (s: number) => EDGE_WIDTH_MIN + easeInOut(s) * (EDGE_WIDTH_MAX - EDGE_WIDTH_MIN);
 const edgeOpacityFromStrength = (s: number) => 0.04 + easeInOut(s) * 0.26;
 const edgePairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+const isCompanyRel = (rel: string) => rel === "WORKS_AT" || rel === "WORKED_AT";
 const edgeDashForLink = (l: GraphLink) => {
   // Company links should always be visually primary and solid.
-  if (l.rel === "WORKS_AT") return null;
+  if (isCompanyRel(l.rel)) return null;
   return (l.style === "dashed" || l.rel === "INTERESTED_IN") ? "5,4" : null;
 };
 const edgeStrokeColorForLink = (l: GraphLink) => {
   if (l.rel === "CONNECTED_TO") return "#8b5cf6";
-  if (l.rel === "WORKS_AT") return "#93c5fd";
+  if (isCompanyRel(l.rel)) return "#93c5fd";
   if (l.rel === "MEMBER_OF" || l.rel === "SAME_MAJOR") return "#58789b";
   if (l.rel === "INTERESTED_IN") return "#4a647e";
   return null;
 };
 const edgeWidthForLink = (l: GraphLink) => {
   const base = edgeWidthFromStrength(edgeStrength(l));
-  if (l.rel === "CONNECTED_TO" || l.rel === "WORKS_AT") return base + 0.7;
+  if (l.rel === "CONNECTED_TO" || isCompanyRel(l.rel)) return base + 0.7;
   if (l.rel === "MEMBER_OF" || l.rel === "SAME_MAJOR") return Math.max(0.85, base * 0.82);
   if (l.rel === "INTERESTED_IN") return Math.max(0.75, base * 0.74);
   return base;
@@ -1680,8 +1681,8 @@ export default function CampusGraph() {
         const tId = getNodeId(d.target);
         const maxDeg = Math.max(degree[sId] ?? 0, degree[tId] ?? 0);
         const depthClass = maxDeg >= 5 ? " link-depth-foreground" : maxDeg <= 2 ? " link-depth-background" : " link-depth-mid";
-        const dashedClass = d.style === "dashed" && d.rel !== "WORKS_AT" ? " link-dashed" : "";
-        const companyClass = d.rel === "WORKS_AT" ? " link-company-primary" : "";
+        const dashedClass = d.style === "dashed" && !isCompanyRel(d.rel) ? " link-dashed" : "";
+        const companyClass = isCompanyRel(d.rel) ? " link-company-primary" : "";
         return `link link-t${edgeTier(d)}${dashedClass}${companyClass}${d.style === "direct" ? " link-direct" : ""}${depthClass}`;
       })
       .attr("stroke-width", (d: GraphLink) => edgeWidthForLink(d))
@@ -1748,7 +1749,7 @@ export default function CampusGraph() {
       .attr("r", (d) => d.size)
       .attr("fill-opacity", 0);
     const nodePulseMeta = nodes.map((n: GraphNode, i: number) => {
-      const profile = GRAPH_MOTION.nodeTypeProfile[n.type];
+      const profile = GRAPH_MOTION.nodeTypeProfile[n.type] ?? GRAPH_MOTION.nodeTypeProfile.student;
       const period = GRAPH_MOTION.nodePulse.periodMsMin + Math.random() * (GRAPH_MOTION.nodePulse.periodMsMax - GRAPH_MOTION.nodePulse.periodMsMin);
       const cohort = i % GRAPH_MOTION.cohorts.nodeCount;
       return {
@@ -1763,7 +1764,7 @@ export default function CampusGraph() {
     });
     const edgeEnergyMeta = simLinks.map((l: GraphLink, i: number) => {
       const strength = edgeStrength(l);
-      const edgeTypeBonus = l.rel === "CONNECTED_TO" ? 1.1 : l.rel === "WORKS_AT" ? 1.06 : 0.96;
+      const edgeTypeBonus = l.rel === "CONNECTED_TO" ? 1.1 : isCompanyRel(l.rel) ? 1.06 : 0.96;
       const cohort = i % GRAPH_MOTION.cohorts.edgeCount;
       return {
         key: edgePairKey(getNodeId(l.source), getNodeId(l.target)),
@@ -2485,7 +2486,10 @@ export default function CampusGraph() {
     // Label (hidden at default zoom in free mode)
     const labels = nodeSel.append("text")
       .attr("dy", (d: GraphNode) => (d.r ?? 12) + 14)
-      .text((d: GraphNode) => d.label.length > 20 ? d.label.slice(0, 18) + "…" : d.label)
+      .text((d: GraphNode) => {
+        const label = typeof d.label === "string" ? d.label : "";
+        return label.length > 20 ? label.slice(0, 18) + "..." : label;
+      })
       .attr("font-size", (d: GraphNode) => d.type === "company" ? "11px" : "10px")
       .attr("font-weight", (d: GraphNode) =>
         d.id === user?.id

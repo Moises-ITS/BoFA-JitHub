@@ -266,11 +266,11 @@ export async function getShortestPath(fromId: string, toId: string): Promise<{ n
   const session = driver.session()
   try {
     // Restrict traversal to meaningful relationship types only:
-    // WORKS_AT, MEMBER_OF, INTERESTED_IN, CONNECTED_TO
+    // WORKS_AT/WORKED_AT, MEMBER_OF, INTERESTED_IN, CONNECTED_TO
     // This prevents paths through arbitrary Neo4j relationships and keeps results meaningful
     const result = await session.run(
       `MATCH (a {id: $fromId}), (b {id: $toId})
-       MATCH p = shortestPath((a)-[:WORKS_AT|MEMBER_OF|INTERESTED_IN|CONNECTED_TO*..10]-(b))
+       MATCH p = shortestPath((a)-[:WORKS_AT|WORKED_AT|MEMBER_OF|INTERESTED_IN|CONNECTED_TO*..10]-(b))
        RETURN [n IN nodes(p) | COALESCE(n.id, '')] AS nodeIds,
               [r IN relationships(p) | type(r)]     AS rels`,
       { fromId, toId }
@@ -349,6 +349,7 @@ export async function getLinks() {
          relType AS rel,
          CASE relType
            WHEN 'WORKS_AT'      THEN 0.85
+           WHEN 'WORKED_AT'     THEN 0.85
            WHEN 'MEMBER_OF'     THEN 0.65
            WHEN 'CONNECTED_TO'  THEN 0.75
            WHEN 'INTERESTED_IN' THEN
@@ -362,6 +363,7 @@ export async function getLinks() {
          END AS weight,
          CASE relType
            WHEN 'WORKS_AT'      THEN 0.90
+           WHEN 'WORKED_AT'     THEN 0.90
            WHEN 'MEMBER_OF'     THEN 0.75
            WHEN 'CONNECTED_TO'  THEN 0.70
            WHEN 'INTERESTED_IN' THEN 0.50

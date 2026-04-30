@@ -375,12 +375,23 @@ export default function SandboxPage() {
         },
       });
 
+      if (!token) throw new Error("Please sign in to use the AI chatbot.");
+
       const res = await fetch(`${EVENTS_API}/sandbox/chat/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body,
       });
 
+      if (res.status === 429) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error === "AI chat limit reached"
+          ? "You've reached the 3 AI responses per 24 hours limit. Try again later."
+          : "You've reached the AI chat limit. Try again later.");
+      }
+      if (res.status === 401 || res.status === 403) {
+        throw new Error("Please sign in again to use the AI chatbot.");
+      }
       if (!res.ok || !res.body) throw new Error("Stream failed");
 
       // Add empty assistant bubble we'll fill as tokens arrive
@@ -419,11 +430,13 @@ export default function SandboxPage() {
           } catch { /* malformed chunk */ }
         }
       }
-    } catch {
+    } catch (err) {
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: "Couldn't reach the server. Make sure the EDEN backend is running.",
+        content: err instanceof Error
+          ? err.message
+          : "Couldn't reach the server. Make sure the EDEN backend is running.",
         error: true,
       }]);
     } finally {

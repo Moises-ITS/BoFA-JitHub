@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid"
 import { createClerkClient } from "@clerk/backend"
 import { db } from "../config/postgres"
 import { requireAuth, AuthRequest } from "../middlewear/auth"
-import { createStudentNode, updateStudentNode } from "../services/graphService"
+import { createStudentNode, deleteStudentNode, updateStudentNode } from "../services/graphService"
 import { verifyClerkSessionToken } from "../utils/clerkToken"
 import { syncRateLimiter, profileUpdateRateLimiter } from "../middlewear/authRateLimit"
 import {
@@ -350,6 +350,53 @@ router.put("/profile", requireAuth, profileUpdateRateLimiter, async (req: AuthRe
   } catch (err) {
     console.error("Profile update error:", err)
     res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+router.delete("/account", requireAuth, profileUpdateRateLimiter, async (req: AuthRequest, res: Response) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized" })
+    return
+  }
+
+  try {
+    const userResult = await db.query("SELECT id, clerk_id FROM users WHERE id = $1", [userId])
+    if (userResult.rows.length === 0) {
+      res.status(404).json({ error: "User not found" })
+      return
+    }
+
+    const clerkId = userResult.rows[0].clerk_id as string | null
+    if (!clerkId) {
+      res.status(409).json({ error: "Account is not linked to Clerk" })
+      return
+    }
+
+    await clerk.users.deleteUser(clerkId)
+    await deleteStudentNode(userId)
+
+    const client = await db.connect()
+    try {
+      await client.query("BEGIN")
+      await client.query("DELETE FROM user_chat_memory WHERE user_id = $1", [userId])
+      await client.query("DELETE FROM user_notifications WHERE user_id = $1 OR related_user_id = $1", [userId])
+      await client.query("DELETE FROM password_reset_tokens WHERE user_id = $1", [userId])
+      await client.query("DELETE FROM connection_requests WHERE from_user_id = $1 OR to_user_id = $1", [userId])
+      await client.query("DELETE FROM users WHERE id = $1", [userId])
+      await client.query("COMMIT")
+    } catch (err) {
+      await client.query("ROLLBACK")
+      throw err
+    } finally {
+      client.release()
+    }
+
+    console.info("[security][account-delete]", { userId, ip: req.ip })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error("Account deletion error:", err)
+    res.status(500).json({ error: "Unable to delete account" })
   }
 })
 

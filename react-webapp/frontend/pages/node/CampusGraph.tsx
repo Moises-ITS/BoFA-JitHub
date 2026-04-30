@@ -386,7 +386,7 @@ export default function CampusGraph() {
   const { user, token } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const { nodes, links, loading, error } = useGraphData();
+  const { nodes, links, loading, error, refresh: refreshGraphData } = useGraphData();
   const [introComplete, setIntroComplete] = useState(true);
 
   // ── UI State ──────────────────────────────────────────────────────────────
@@ -573,6 +573,13 @@ export default function CampusGraph() {
   useEffect(() => {
     noteInteraction();
   }, [noteInteraction]);
+  useEffect(() => {
+    const handleConnectionsChanged = () => {
+      void refreshGraphData();
+    };
+    window.addEventListener("jithub:connections-changed", handleConnectionsChanged);
+    return () => window.removeEventListener("jithub:connections-changed", handleConnectionsChanged);
+  }, [refreshGraphData]);
   useEffect(() => () => {
     if (searchMessageTimerRef.current) {
       window.clearTimeout(searchMessageTimerRef.current);
@@ -4088,6 +4095,7 @@ export default function CampusGraph() {
           links={links}
           onClose={deselectAll}
           onSelectNode={id => { const n = nodes.find(x => x.id === id); if (n) selectNodeFn(n); }}
+          onConnectionChanged={refreshGraphData}
         />
         {!walkthroughLayout2D && (
           <>

@@ -1,7 +1,7 @@
 import { Router, Response } from "express"
 import { db } from "../config/postgres"
 import { requireAuth, AuthRequest } from "../middlewear/auth"
-import { createConnectionInNeo4j, removeConnectionFromNeo4j, getRecommendations } from "../services/graphService"
+import { createConnectionInNeo4j, createStudentNode, removeConnectionFromNeo4j, getRecommendations } from "../services/graphService"
 import { connectionActionRateLimiter } from "../middlewear/authRateLimit"
 import { requireSafeId, toBoundedPositiveInt } from "../middlewear/security"
 
@@ -9,6 +9,30 @@ const router = Router()
 
 // All connection routes require auth
 router.use(requireAuth)
+
+async function ensureConnectionNodes(userIds: string[]) {
+  const result = await db.query(
+    `SELECT id, name, major, gpa, graduation_year, bio, clubs, companies, interests, linkedin_url
+     FROM users
+     WHERE id = ANY($1)`,
+    [userIds]
+  )
+
+  for (const row of result.rows) {
+    await createStudentNode({
+      id: row.id,
+      name: row.name ?? "Student",
+      major: row.major ?? "",
+      gpa: row.gpa == null ? null : Number(row.gpa),
+      graduationYear: row.graduation_year ?? null,
+      bio: row.bio ?? "",
+      clubs: Array.isArray(row.clubs) ? row.clubs : [],
+      companies: Array.isArray(row.companies) ? row.companies : [],
+      interests: Array.isArray(row.interests) ? row.interests : [],
+      linkedinUrl: row.linkedin_url ?? null,
+    })
+  }
+}
 
 // GET /api/connections/status?userId=X — connection status with another user
 router.get("/status", async (req: AuthRequest, res: Response) => {
@@ -165,6 +189,7 @@ router.post("/accept", connectionActionRateLimiter, async (req: AuthRequest, res
     }
 
     // Create bidirectional relationship in Neo4j
+    await ensureConnectionNodes([safeFromUserId, toUserId])
     await createConnectionInNeo4j(safeFromUserId, toUserId)
 
     // Notify original sender that their request was accepted.

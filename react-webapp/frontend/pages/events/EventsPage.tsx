@@ -18,6 +18,19 @@ import {
 const API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
 const AUTH_API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
+function eventWebSocketUrl() {
+  try {
+    const url = new URL(API);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    url.pathname = "/events/ws";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 // ─── Category filters ────────────────────────────────────────────────────────
 const FILTERS = [
   { label: "Fundraising", value: "fundraiser" },
@@ -356,6 +369,43 @@ export default function EventsPage() {
   const [selectedEventCanRsvp, setSelectedEventCanRsvp] = useState(true);
   const [modalAttendees, setModalAttendees] = useState<AttendeeInfo | null>(null);
   const selectedEventId = selectedEvent?.event_id ?? null;
+
+  useEffect(() => {
+    const wsUrl = eventWebSocketUrl();
+    if (!wsUrl) return;
+
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | null = null;
+    let closedByPage = false;
+
+    const connect = () => {
+      socket = new WebSocket(wsUrl);
+      socket.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload?.type === "event.created") {
+            setRefreshNonce((prev) => prev + 1);
+          }
+        } catch {
+          // Ignore malformed websocket payloads.
+        }
+      };
+      socket.onclose = () => {
+        socket = null;
+        if (!closedByPage) {
+          reconnectTimer = window.setTimeout(connect, 2000);
+        }
+      };
+    };
+
+    connect();
+
+    return () => {
+      closedByPage = true;
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      socket?.close();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

@@ -167,9 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const fetchedUser = await res.json()
           cachedUserRef.current = fetchedUser
           setUser(fetchedUser); setNeedsSetup(false)
-          const data = await res.json()
-          console.log("[AUTH] /me OK — user:", data?.name, data?.email)
-          setUser(data); setNeedsSetup(false)
+          console.log("[AUTH] /me OK — user:", fetchedUser?.name, fetchedUser?.email)
         } else if (res.status === 403) {
           const body = await res.json()
           console.log("[AUTH] /me 403 body:", body)
@@ -193,9 +191,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const syncedUser = await syncRes.json()
                 cachedUserRef.current = syncedUser
                 setToken(t); setUser(syncedUser); setNeedsSetup(false); return
-                const syncData = await syncRes.json()
-                console.log("[AUTH] /sync OK — user:", syncData?.name)
-                setToken(t); setUser(syncData); setNeedsSetup(false); return
               } else {
                 const syncErr = await syncRes.json().catch(() => ({}))
                 console.error("[AUTH] /sync failed:", syncRes.status, syncErr)

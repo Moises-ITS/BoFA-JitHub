@@ -313,6 +313,7 @@ const curvePathBetweenNodes = (
 };
 
 const normalize = (v: unknown) => String(v ?? "").trim().toLowerCase();
+const normalizeSearchName = (v: unknown) => normalize(v).replace(/[^a-z0-9]/g, "");
 
 const resolveCurrentUserNode = (
   nodes: GraphNode[],
@@ -321,6 +322,7 @@ const resolveCurrentUserNode = (
   if (!user) return null;
   const userId = normalize(user.id);
   const userEmail = normalize(user.email);
+  const userEmailLocalPart = userEmail.includes("@") ? userEmail.split("@")[0] : "";
   const userName = normalize(user.name);
   const userMajor = normalize(user.major);
 
@@ -338,8 +340,12 @@ const resolveCurrentUserNode = (
       details.graphNodeId,
       details.clerk_id,
       details.clerkId,
+      details.email,
     ];
-    return candidates.some((c) => normalize(c) && normalize(c) === userId);
+    return candidates.some((c) => {
+      const value = normalize(c);
+      return value && (value === userId || value === userEmail || value === userEmailLocalPart);
+    });
   });
   if (byStrongId) return byStrongId;
 
@@ -353,7 +359,6 @@ const resolveCurrentUserNode = (
   const byName = nodes.find((n) => n.type === "student" && userName && normalize(n.label) === userName);
   if (byName) return byName;
 
-  const localPart = userEmail.includes("@") ? userEmail.split("@")[0] : "";
   const nameTokens = userName.split(/\s+/).filter(Boolean);
   const scored = nodes
     .filter((n) => n.type === "student")
@@ -363,7 +368,7 @@ const resolveCurrentUserNode = (
       const detailName = normalize(details.name);
       const detailMajor = normalize(details.major);
       let score = 0;
-      if (localPart && (label.includes(localPart) || detailName.includes(localPart))) score += 5;
+      if (userEmailLocalPart && (label.includes(userEmailLocalPart) || detailName.includes(userEmailLocalPart))) score += 5;
       if (userName && (label.includes(userName) || detailName.includes(userName))) score += 6;
       if (nameTokens.length && nameTokens.some((t) => t.length > 2 && (label.includes(t) || detailName.includes(t)))) score += 3;
       if (userMajor && detailMajor && detailMajor === userMajor) score += 1;
@@ -389,12 +394,15 @@ export default function CampusGraph() {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [hiddenTypes, setHiddenTypes] = useState<Set<NodeType>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchMessage, setSearchMessage] = useState("");
   const [companyQuery, setCompanyQuery] = useState("");
   const [pathNodeIds, setPathNodeIds] = useState<string[]>([]);
   const [pathStatus, setPathStatus] = useState<"idle" | "searching" | "found" | "notfound">("idle");
   const [visibleCount, setVisibleCount] = useState(0);
   const [hoverCard, setHoverCard] = useState<{ node: GraphNode; x: number; y: number } | null>(null);
   const [d3Ready, setD3Ready] = useState(false);
+  const [graphSettling, setGraphSettling] = useState(true);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
 
   // Lens mode removed: keep ref hard-disabled so legacy branches stay inactive.
@@ -402,7 +410,6 @@ export default function CampusGraph() {
   const [heatmapMode, setHeatmapMode] = useState(false);
   const heatmapModeRef = useRef(false);
   useEffect(() => { heatmapModeRef.current = heatmapMode; }, [heatmapMode]);
-  const ghostPredictionsRef = useRef<{targetId: string, prob: number}[]>([]);
   const lensPosRef = useRef<{ x: number, y: number } | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
@@ -413,11 +420,11 @@ export default function CampusGraph() {
   const [edgeExplain, setEdgeExplain] = useState<{ link: GraphLink; reasons: string[]; x: number; y: number } | null>(null);
   const [overlaySafeRight, setOverlaySafeRight] = useState(20);
   const [overlayNoFlyRect, setOverlayNoFlyRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const [introFocusReady, setIntroFocusReady] = useState(false);
   const currentUserNode = useMemo(
     () => resolveCurrentUserNode(nodes, user),
     [nodes, user]
   );
+  const currentUserNodeId = currentUserNode?.id ?? user?.id ?? null;
   const perfTierOverride = useMemo(() => {
     const raw = (searchParams.get("perf") ?? "").toLowerCase();
     if (raw === "full" || raw === "balanced" || raw === "performance") return raw as MotionTier;
@@ -466,9 +473,6 @@ export default function CampusGraph() {
   const searchMatchesRef = useRef<Set<string>>(new Set());
   const dimsRef = useRef({ w: 900, h: 600 });
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-  const introDoneRef = useRef(false);
-  const introLandingFixRef = useRef(false);
-  const introDebugRef = useRef({ waitingForNodeLogged: false, introStartedLogged: false });
 
   // ── Pan inertia refs ──────────────────────────────────────────────────────
   const inertiaRafRef = useRef<number | null>(null);
@@ -477,6 +481,7 @@ export default function CampusGraph() {
   const lastZoomYRef = useRef<number | null>(null);
   const demoTimerRef = useRef<number | null>(null);
   const selectionCommitTimerRef = useRef<number | null>(null);
+  const searchMessageTimerRef = useRef<number | null>(null);
   const demoAppliedStepRef = useRef<number>(-1);
   const draggingNodeIdRef = useRef<string | null>(null);
   const dragNeighborhoodRef = useRef<Set<string>>(new Set());
@@ -534,27 +539,15 @@ export default function CampusGraph() {
     motionTierRef.current = next;
   }, [nodes.length, links.length, perfTierOverride]);
   useEffect(() => {
-    introDoneRef.current = true;
-    introLandingFixRef.current = false;
-    introDebugRef.current = { waitingForNodeLogged: false, introStartedLogged: false };
-    setIntroComplete(true);
-    setIntroFocusReady(true);
-  }, [user?.id, nodes.length]);
-
+    if (loading) {
+      setGraphSettling(true);
+      return;
+    }
+    if (!nodes.length) setGraphSettling(false);
+  }, [loading, nodes.length]);
   useEffect(() => {
-    const resolved = currentUserNode;
-    // TEMP DEBUG: remove once intro focus is stable.
-    console.info("[CampusGraph/intro] user identity", {
-      authUserId: user?.id,
-      authEmail: (user as { email?: string } | null)?.email,
-      authName: (user as { name?: string } | null)?.name,
-      nodesCount: nodes.length,
-      resolvedNodeId: resolved?.id ?? null,
-      resolvedNodeLabel: resolved?.label ?? null,
-      resolvedHasXY: Boolean(resolved && resolved.x != null && resolved.y != null),
-      introDone: introDoneRef.current,
-    });
-  }, [currentUserNode, nodes.length, user]);
+    setIntroComplete(true);
+  }, [user?.id, nodes.length]);
 
   const noteInteraction = useCallback(() => {
     const now = performance.now();
@@ -566,9 +559,26 @@ export default function CampusGraph() {
     heavyInteractionUntilRef.current = Math.max(heavyInteractionUntilRef.current, now + ms);
     noteInteraction();
   }, [noteInteraction]);
+  const showSearchMessage = useCallback((message: string) => {
+    setSearchMessage(message);
+    if (searchMessageTimerRef.current) {
+      window.clearTimeout(searchMessageTimerRef.current);
+      searchMessageTimerRef.current = null;
+    }
+    searchMessageTimerRef.current = window.setTimeout(() => {
+      setSearchMessage("");
+      searchMessageTimerRef.current = null;
+    }, 1800);
+  }, []);
   useEffect(() => {
     noteInteraction();
   }, [noteInteraction]);
+  useEffect(() => () => {
+    if (searchMessageTimerRef.current) {
+      window.clearTimeout(searchMessageTimerRef.current);
+      searchMessageTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!introComplete) return;
@@ -750,24 +760,6 @@ export default function CampusGraph() {
       .call(zoom.transform, transform);
   }, [getGraphViewportDims]);
 
-  useEffect(() => {
-    if (!d3Ready || !introFocusReady || introLandingFixRef.current) return;
-    if (viewMode !== "2d" || mode !== "free" || demoMode || selectedNode) return;
-    if (!currentUserNode || currentUserNode.x == null || currentUserNode.y == null) return;
-    introLandingFixRef.current = true;
-    // TEMP DEBUG: remove once intro focus is stable.
-    console.info("[CampusGraph/intro] applying post-intro landing correction", {
-      targetNodeId: currentUserNode.id,
-      targetNodeLabel: currentUserNode.label,
-      targetX: currentUserNode.x,
-      targetY: currentUserNode.y,
-    });
-    const raf = requestAnimationFrame(() => {
-      fitToNodeIds([currentUserNode.id], 560, currentUserNode.id);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [currentUserNode, d3Ready, demoMode, fitToNodeIds, introFocusReady, mode, selectedNode, viewMode]);
-
   const explainConnection = useCallback((l: GraphLink): string[] => {
     const sId = getNodeId(l.source);
     const tId = getNodeId(l.target);
@@ -798,8 +790,8 @@ export default function CampusGraph() {
   }, []);
   const defaultLabelOpacity = useCallback((n: GraphNode) => {
     if (n.type === "interest") return 0.38;
-    return n.id === user?.id ? 1 : 0.95;
-  }, [user?.id]);
+    return n.id === currentUserNodeId ? 1 : 0.95;
+  }, [currentUserNodeId]);
 
   const spawnNodeRipple = useCallback((d: GraphNode) => {
     const layer = rippleLayerRef.current;
@@ -886,7 +878,7 @@ export default function CampusGraph() {
       .attr("fill-opacity", (d: GraphNode) => d.id === centerId ? 1 : 0.95)
       .transition("sig-pulse")
       .duration(360)
-      .attr("fill-opacity", (d: GraphNode) => d.id === user?.id ? 1 : 0.9);
+      .attr("fill-opacity", (d: GraphNode) => d.id === currentUserNodeId ? 1 : 0.9);
     linkSel
       .interrupt("sig-pulse")
       .transition("sig-pulse")
@@ -895,7 +887,7 @@ export default function CampusGraph() {
       .transition("sig-pulse")
       .duration(380)
       .attr("stroke-opacity", (l: GraphLink) => edgeOpacityFromStrength(edgeStrength(l)));
-  }, [user?.id]);
+  }, [currentUserNodeId]);
 
   const triggerOpportunityExplosion = useCallback((pathIds: string[]) => {
     if (!pathIds.length) return;
@@ -916,7 +908,7 @@ export default function CampusGraph() {
         .attr("fill-opacity", 1)
         .transition("opp-burst")
         .duration(460)
-        .attr("fill-opacity", (n: GraphNode) => n.id === user?.id ? 1 : 0.9);
+        .attr("fill-opacity", (n: GraphNode) => n.id === currentUserNodeId ? 1 : 0.9);
     }
     if (rippleLayer && center?.x != null && center?.y != null) {
       rippleLayer.append("circle")
@@ -934,7 +926,7 @@ export default function CampusGraph() {
         .attr("fill-opacity", 0)
         .remove();
     }
-  }, [triggerFullSystemPulse, user?.id]);
+  }, [triggerFullSystemPulse, currentUserNodeId]);
 
   const playClickActivationBurst = useCallback((d: GraphNode) => {
     const nodeSel = nodeSelRef.current;
@@ -1022,41 +1014,6 @@ export default function CampusGraph() {
     const rippleLayer = rippleLayerRef.current;
     if (!sim || !nodeSel || !linkSel || !rippleLayer) return;
 
-    const ghostLayer = d3.select<SVGGElement, unknown>(".ghost-prediction-layer");
-    ghostLayer.selectAll("*").remove();
-    ghostPredictionsRef.current = [];
-
-    if (d.type === "student") {
-        const companies = nodesRef.current.filter(n => n.type === "company");
-        const picked = companies.sort(() => 0.5 - Math.random()).slice(0, 2);
-        ghostPredictionsRef.current = picked.map((c) => ({
-           targetId: c.id,
-           prob: 60 + Math.floor(Math.random() * 34)
-        }));
-        
-        ghostPredictionsRef.current.forEach(p => {
-           ghostLayer.append("path")
-               .attr("class", "ghost-path")
-               .attr("stroke", "#38bdf8")
-               .attr("stroke-width", 2.2)
-               .attr("stroke-dasharray", "6,6")
-               .attr("fill", "none")
-               .style("opacity", 0)
-               .transition().delay(800).duration(1000)
-               .style("opacity", 0.7);
-               
-           const t = ghostLayer.append("text")
-               .attr("class", "ghost-label")
-               .attr("fill", "#bae6fd")
-               .style("font-size", "11px")
-               .style("font-weight", "600")
-               .style("text-anchor", "middle")
-               .style("opacity", 0)
-               .text(`AI Prediction: ${p.prob}% Match`);
-           t.transition().delay(1000).duration(1000).style("opacity", 1);
-        });
-    }
-
     // SHOCKWAVE VISUAL
     if (d.x != null && d.y != null) {
       rippleLayer.append("circle")
@@ -1141,7 +1098,9 @@ export default function CampusGraph() {
       .attr("r", (n: GraphNode) => n.id === d.id ? (n.r ?? 12) * 1.8 : d1Set.has(n.id) ? (n.r ?? 12) * 1.15 : (n.r ?? 12) * 0.9);
 
     // Labels
-    fadeLabels((n: GraphNode) => (n.id === d.id ? 1 : d1Set.has(n.id) ? 0.9 : 0), 600);
+    fadeLabels((n: GraphNode) => (
+      n.id === d.id || d1Set.has(n.id) || d2Set.has(n.id) ? 1 : 0
+    ), 600);
 
     // Edges
     linkSel.transition().duration(600).attr("stroke-opacity", (l: GraphLink) => {
@@ -1197,8 +1156,6 @@ export default function CampusGraph() {
 
     d3.selectAll(".link.path-pulse").classed("path-pulse", false);
     d3.selectAll(".path-overlay").remove();
-    d3.select(".ghost-prediction-layer").selectAll("*").remove();
-    ghostPredictionsRef.current = [];
   }, []); // eslint-disable-line
 
   // ── Select / Deselect ─────────────────────────────────────────────────────
@@ -1296,8 +1253,7 @@ export default function CampusGraph() {
     selectNodeFn(target);
 
     // enterLocked places the selected node at graph center (w/2, h/2).
-    // The intro flyover zoom may be mid-flight targeting the current user's node.
-    // Interrupt it and reset the viewport to identity so graph center is visible.
+    // Reset the viewport to identity so the selected node's locked layout is visible.
     d3.select(svgRef.current)
       .interrupt()
       .transition().duration(600).ease(d3.easeCubicInOut)
@@ -1309,7 +1265,7 @@ export default function CampusGraph() {
   // ── Company path search ───────────────────────────────────────────────────
   const findPath = useCallback(async (overrideLabel?: string) => {
     noteInteraction();
-    const fromId = selectedIdRef.current ?? user?.id;
+    const fromId = selectedIdRef.current ?? currentUserNodeId ?? user?.id;
     const queryLabel = overrideLabel ?? companyQuery;
     if (!fromId || !queryLabel.trim()) return;
 
@@ -1344,6 +1300,7 @@ export default function CampusGraph() {
   // ── D3 Setup ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (loading || error || !svgRef.current || nodes.length === 0) return;
+    setGraphSettling(true);
 
     const rootEl = rootRef.current;
     const svg = d3.select(svgRef.current)
@@ -1429,7 +1386,7 @@ export default function CampusGraph() {
     });
     const maxDeg = Math.max(...Object.values(degree), 1);
     const baseNodeFilter = (n: GraphNode) => {
-      if (n.id === user?.id) return "url(#glow-selected)";
+      if (n.id === currentUserNodeId) return "url(#glow-selected)";
       return `url(#bloom-${n.type})`;
     };
     baseNodeFilterRef.current = baseNodeFilter;
@@ -1701,7 +1658,6 @@ export default function CampusGraph() {
         });
       });
     // ── Pulse layer (between links and nodes) ────────────────────────────
-    g.append("g").attr("class", "ghost-prediction-layer").attr("pointer-events", "none");
     const pulseLayer = g.append("g").attr("class", "edge-pulse-layer").attr("pointer-events", "none");
     const rippleLayer = g.append("g").attr("class", "node-ripple-layer").attr("pointer-events", "none");
     const satelliteLayer = g.append("g").attr("class", "node-satellite-layer").attr("pointer-events", "none");
@@ -1721,7 +1677,7 @@ export default function CampusGraph() {
         .map(([id]) => id)
     );
     if (coreSeedId) importantNodeIds.add(coreSeedId);
-    if (user?.id) importantNodeIds.add(user.id);
+    if (currentUserNodeId) importantNodeIds.add(currentUserNodeId);
     const importantNodes = nodes.filter((n: GraphNode) => importantNodeIds.has(n.id));
     const satellitesData: Array<{ key: string; nodeId: string; orbit: number; speed: number; phase: number; size: number }> = [];
     importantNodes.forEach((n: GraphNode, idx: number) => {
@@ -2222,7 +2178,7 @@ export default function CampusGraph() {
             auraLift += 0.08;
           }
 
-          const baseFill = n.id === user?.id ? 1 : 0.9;
+          const baseFill = n.id === currentUserNodeId ? 1 : 0.9;
           const baseStroke = NODE_FLICKER_BASE;
           circle.setAttribute("r", `${(n.r ?? 12) * (1 + scale)}`);
           circle.setAttribute("fill-opacity", `${clamp01(baseFill + fillLift)}`);
@@ -2306,9 +2262,9 @@ export default function CampusGraph() {
       .selectAll<SVGGElement, GraphNode>("g")
       .data(nodes).enter().append("g")
       .attr("class", (d: GraphNode) => {
-        const elevated = (degree[d.id] ?? 0) >= 5 || d.type === "company" || d.id === user?.id;
+        const elevated = (degree[d.id] ?? 0) >= 5 || d.type === "company" || d.id === currentUserNodeId;
         const background = !elevated && (degree[d.id] ?? 0) <= 2;
-        const currentUser = d.id === user?.id ? " node-current-user" : "";
+        const currentUser = d.id === currentUserNodeId ? " node-current-user" : "";
         const important = elevated ? " node-important" : "";
         const depth = elevated ? " node-depth-foreground" : background ? " node-depth-background" : " node-depth-mid";
         return `node${currentUser}${important}${depth}`;
@@ -2466,17 +2422,17 @@ export default function CampusGraph() {
     // Main circle
     const mainCircles = nodeSel.append("circle")
       .attr("class", (d: GraphNode) =>
-        `main-circle ambient-glow${d.type === "company" || d.id === user?.id ? " ambient-glow--hi" : ""}`
+        `main-circle ambient-glow${d.type === "company" || d.id === currentUserNodeId ? " ambient-glow--hi" : ""}`
       )
       .attr("r", (d: GraphNode) => d.r ?? 12)
       .attr("fill", (d: GraphNode) =>
-        d.id === user?.id ? "#facc15" : TYPE_COLOR[d.type]
+        d.id === currentUserNodeId ? "#facc15" : TYPE_COLOR[d.type]
       )
-      .attr("fill-opacity", (d: GraphNode) => d.id === user?.id ? 1 : 0.9)
+      .attr("fill-opacity", (d: GraphNode) => d.id === currentUserNodeId ? 1 : 0.9)
       .attr("stroke", (d: GraphNode) =>
-        d.id === user?.id ? "#fef3c7" : TYPE_COLOR[d.type]
+        d.id === currentUserNodeId ? "#fef3c7" : TYPE_COLOR[d.type]
       )
-      .attr("stroke-width", (d: GraphNode) => d.id === user?.id ? 3 : 2)
+      .attr("stroke-width", (d: GraphNode) => d.id === currentUserNodeId ? 3 : 2)
       .attr("stroke-opacity", 0.9)
       .attr("filter", (d: GraphNode) => baseNodeFilter(d));
     mainCircleNodes = mainCircles.nodes();
@@ -2492,12 +2448,12 @@ export default function CampusGraph() {
       })
       .attr("font-size", (d: GraphNode) => d.type === "company" ? "11px" : "10px")
       .attr("font-weight", (d: GraphNode) =>
-        d.id === user?.id
+        d.id === currentUserNodeId
           ? "800"
           : ["company", "professor"].includes(d.type) ? "600" : "400"
       )
       .attr("fill", (d: GraphNode) =>
-        d.id === user?.id ? "#fef9c3" : d.type === "interest" ? "#8ea0b7" : "#cbd5e1"
+        d.id === currentUserNodeId ? "#fef9c3" : d.type === "interest" ? "#8ea0b7" : "#cbd5e1"
       )
       .attr("text-anchor", "middle")
       .attr("pointer-events", "none")
@@ -2676,7 +2632,7 @@ export default function CampusGraph() {
     const clusterX: Partial<Record<string, number>> = { club: -0.28, company: 0.28, professor: -0.14, interest: 0.14, student: 0 };
     const clusterY: Partial<Record<string, number>> = { club: 0.1, company: 0.1, professor: -0.25, interest: -0.2, student: 0 };
     const HIGH_CONNECTION_DEGREE = 5;
-    const resolvedCurrentUserId = currentUserNode?.id ?? user?.id ?? null;
+    const resolvedCurrentUserId = currentUserNodeId;
     const isHighConnectionStudent = (n: GraphNode) => n.type === "student" && (degree[n.id] ?? 0) >= HIGH_CONNECTION_DEGREE;
 
     const sim = d3.forceSimulation<GraphNode>(nodes)
@@ -2823,10 +2779,37 @@ export default function CampusGraph() {
     sim.force("quantumCollapse", quantumCollapseForce as d3.Force<GraphNode, GraphLink>);
 
     // Pre-settle layout so nodes/links are already in place on first paint.
-    const warmupTicks = Math.max(220, Math.min(520, Math.round(nodes.length * 2.6)));
+    const warmupTicks = Math.max(320, Math.min(720, Math.round(nodes.length * 3.4)));
     for (let i = 0; i < warmupTicks; i += 1) sim.tick();
+    sim.alpha(0);
+    sim.stop();
     linkSel.attr("d", (d: GraphLink) => curvePathForLink(d));
     nodeSel.attr("transform", (d: GraphNode) => `translate(${d.x ?? 0},${d.y ?? 0})`);
+    if (zoomRef.current && svgRef.current) {
+      const positionedNodes = nodes.filter((n) => n.x != null && n.y != null);
+      if (positionedNodes.length) {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        positionedNodes.forEach((n) => {
+          const x = n.x as number;
+          const y = n.y as number;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        });
+        const dx = maxX - minX || 1;
+        const dy = maxY - minY || 1;
+        const scale = Math.max(FIT_MIN_SCALE, Math.min(FIT_MAX_SCALE, 0.82 / Math.max(dx / width, dy / height)));
+        const midX = (minX + maxX) / 2;
+        const midY = (minY + maxY) / 2;
+        const initialTransform = d3.zoomIdentity
+          .translate(width / 2 - scale * midX, height / 2 - scale * midY)
+          .scale(scale);
+        d3.select(svgRef.current)
+          .interrupt()
+          .call(zoomRef.current.transform, initialTransform);
+      }
+    }
 
     let tick = 0;
     sim.on("tick", () => {
@@ -2902,36 +2885,6 @@ export default function CampusGraph() {
         }
       }
 
-      if (runHeavyTick || tick % 2 === 0) {
-        if (modeRef.current === "locked" && selectedIdRef.current) {
-          const sNode = nodeById.get(selectedIdRef.current);
-          if (sNode && sNode.type === "student") {
-            const ghostPaths = d3.select(svgRef.current).selectAll<SVGPathElement, unknown>("path.ghost-path");
-            const ghostLabels = d3.select(svgRef.current).selectAll<SVGTextElement, unknown>("text.ghost-label");
-            
-            ghostPaths.attr("d", (_, i) => {
-               const pred = ghostPredictionsRef.current[i];
-               const tNode = pred ? nodeById.get(pred.targetId) : null;
-               if (!tNode || sNode.x == null || sNode.y == null || tNode.x == null || tNode.y == null) return "";
-               return curvePathBetweenNodes(sNode, tNode);
-            });
-            ghostLabels
-              .attr("x", (_, i) => {
-                 const pred = ghostPredictionsRef.current[i];
-                 const tNode = pred ? nodeById.get(pred.targetId) : null;
-                 if (!tNode || sNode.x == null || tNode.x == null) return 0;
-                 return (sNode.x + tNode.x) / 2;
-              })
-              .attr("y", (_, i) => {
-                 const pred = ghostPredictionsRef.current[i];
-                 const tNode = pred ? nodeById.get(pred.targetId) : null;
-                 if (!tNode || sNode.y == null || tNode.y == null) return 0;
-                 return (sNode.y + tNode.y) / 2 - 8;
-              });
-          }
-        }
-      }
-
       if (modeRef.current === "path" && svgRef.current) {
         if (runHeavyTick || tick % 2 === 0) {
           d3.select(svgRef.current)
@@ -2981,7 +2934,7 @@ export default function CampusGraph() {
         flickerTimeRef.current += 0.014;
         nodeSel.select<SVGCircleElement>("circle.main-circle")
           .attr("stroke-opacity", (n: GraphNode, i: number) => {
-            const amp = NODE_FLICKER_SWING + ((n.id === selectedIdRef.current || n.id === user?.id) ? NODE_FLICKER_HIGHLIGHT_BONUS : 0);
+            const amp = NODE_FLICKER_SWING + ((n.id === selectedIdRef.current || n.id === currentUserNodeId) ? NODE_FLICKER_HIGHLIGHT_BONUS : 0);
             const wave = Math.sin(flickerTimeRef.current + i * 0.53);
             return clamp01(NODE_FLICKER_BASE + wave * amp);
           });
@@ -2991,87 +2944,6 @@ export default function CampusGraph() {
       // CONSTANTS (tweak here):
       // particles animate via requestAnimationFrame loop
 
-      // One-time intro flyover: show whole graph, then zoom to current user node
-      if (!introDoneRef.current && user?.id && zoomRef.current && svgRef.current && tick > 45) {
-        const allNodes = nodesRef.current.filter(n => n.x != null && n.y != null);
-        if (!allNodes.length) return;
-
-        const resolvedUserNode = resolveCurrentUserNode(nodesRef.current, user);
-        const userNode = resolvedUserNode && resolvedUserNode.x != null && resolvedUserNode.y != null
-          ? resolvedUserNode
-          : null;
-        if (!userNode) {
-          if (!introDebugRef.current.waitingForNodeLogged) {
-            introDebugRef.current.waitingForNodeLogged = true;
-            // TEMP DEBUG: remove once intro focus is stable.
-            console.info("[CampusGraph/intro] waiting for current user node with coordinates", {
-              authUserId: user.id,
-              resolvedNodeId: resolvedUserNode?.id ?? null,
-              resolvedNodeLabel: resolvedUserNode?.label ?? null,
-              resolvedHasXY: Boolean(resolvedUserNode && resolvedUserNode.x != null && resolvedUserNode.y != null),
-              readyNodeCount: allNodes.length,
-            });
-          }
-          return;
-        }
-
-        introDoneRef.current = true;
-        const { w, h } = getGraphViewportDims();
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        allNodes.forEach(n => {
-          const x = n.x as number, y = n.y as number;
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-        });
-
-        const dx = maxX - minX || 1;
-        const dy = maxY - minY || 1;
-        const scaleFit = 0.85 / Math.max(dx / w, dy / h);
-        const midX = (minX + maxX) / 2;
-        const midY = (minY + maxY) / 2;
-
-        const fitTransform = d3.zoomIdentity
-          .translate(w / 2 - scaleFit * midX, h / 2 - scaleFit * midY)
-          .scale(scaleFit);
-
-        const scaleUser = 1.6;
-        const userTransform = d3.zoomIdentity
-          .translate(w / 2 - scaleUser * (userNode.x as number), h / 2 - scaleUser * (userNode.y as number))
-          .scale(scaleUser);
-
-        const zoomBehavior = zoomRef.current;
-        const svgSel = d3.select(svgRef.current);
-        if (!introDebugRef.current.introStartedLogged) {
-          introDebugRef.current.introStartedLogged = true;
-          // TEMP DEBUG: remove once intro focus is stable.
-          console.info("[CampusGraph/intro] starting intro flyover to current user", {
-            targetNodeId: userNode.id,
-            targetNodeLabel: userNode.label,
-            targetX: userNode.x,
-            targetY: userNode.y,
-            fitScale: scaleFit,
-            userScale: scaleUser,
-            viewport: { w, h },
-          });
-        }
-
-        svgSel
-          .transition()
-          .duration(1500)
-          .ease(d3.easeCubicInOut)
-          .call(zoomBehavior!.transform, fitTransform)
-          .transition()
-          .duration(1500)
-          .ease(d3.easeCubicInOut)
-          .call(zoomBehavior!.transform, userTransform)
-          .on("end", () => {
-            setIntroFocusReady(true);
-            // TEMP DEBUG: remove once intro focus is stable.
-            console.info("[CampusGraph/intro] intro transition finished");
-          });
-      }
     });
 
     nodeSelRef.current = nodeSel;
@@ -3082,6 +2954,13 @@ export default function CampusGraph() {
     pulseLayerRef.current = pulseLayer;
     rippleLayerRef.current = rippleLayer;
     setD3Ready(true);
+    let allowResizeForces = false;
+    requestAnimationFrame(() => {
+      setGraphSettling(false);
+      window.setTimeout(() => {
+        allowResizeForces = true;
+      }, 500);
+    });
 
     const applyCursorAwareness = (gx: number, gy: number) => {
       if (modeRef.current !== "free" || draggingNodeIdRef.current || hoveredNodeIdRef.current) return;
@@ -3093,9 +2972,9 @@ export default function CampusGraph() {
           const dx = (n.x ?? 0) - gx;
           const dy = (n.y ?? 0) - gy;
           const distSq = dx * dx + dy * dy;
-          if (distSq >= radiusSq) return n.id === user?.id ? 1 : 0.9;
+          if (distSq >= radiusSq) return n.id === currentUserNodeId ? 1 : 0.9;
           const t = 1 - Math.sqrt(distSq) / radius;
-          return (n.id === user?.id ? 1 : 0.9) + t * 0.18;
+          return (n.id === currentUserNodeId ? 1 : 0.9) + t * 0.18;
         })
         .attr("transform", (n: GraphNode) => {
           const dx = gx - (n.x ?? 0);
@@ -3171,7 +3050,7 @@ export default function CampusGraph() {
         pointerAwareRafRef.current = null;
       }
       nodeSel.select<SVGCircleElement>("circle.main-circle")
-        .attr("fill-opacity", (n: GraphNode) => n.id === user?.id ? 1 : 0.9)
+        .attr("fill-opacity", (n: GraphNode) => n.id === currentUserNodeId ? 1 : 0.9)
         .attr("transform", null);
       nodeSel.select<SVGCircleElement>("circle.node-aura-ring").attr("transform", null);
       nodeSel.select<SVGCircleElement>("circle.node-aura-halo").attr("transform", null);
@@ -3184,12 +3063,12 @@ export default function CampusGraph() {
       if (modeRef.current !== "free") deselectAll();
     });
 
-    const timer = setTimeout(() => sim.alpha(0.05).restart(), 3200);
     let resizeObserver: ResizeObserver | null = null;
     const onResize = () => {
       const { w, h } = getGraphViewportDims();
       dimsRef.current = { w, h };
-      sim.force("center", d3.forceCenter(w / 2, h / 2).strength(0.04)).alpha(0.3).restart();
+      sim.force("center", d3.forceCenter(w / 2, h / 2).strength(0.04));
+      if (allowResizeForces) sim.alpha(0.3).restart();
       updateMiniViewportRef.current?.();
     };
     window.addEventListener("resize", onResize);
@@ -3199,8 +3078,8 @@ export default function CampusGraph() {
     }
 
     return () => {
+      setGraphSettling(true);
       setD3Ready(false);
-      clearTimeout(timer);
       window.removeEventListener("resize", onResize);
       resizeObserver?.disconnect();
       if (inertiaRafRef.current) cancelAnimationFrame(inertiaRafRef.current);
@@ -3341,9 +3220,9 @@ export default function CampusGraph() {
 
   const userConnCount = useMemo(() =>
     links.filter(l =>
-      getNodeId(l.source) === user?.id || getNodeId(l.target) === user?.id
+      getNodeId(l.source) === currentUserNodeId || getNodeId(l.target) === currentUserNodeId
     ).length,
-    [links, user?.id]);
+    [links, currentUserNodeId]);
 
   const visibleTypeCounts = useMemo(() => ({
     students: nodes.filter(n => n.type === "student" && !hiddenTypes.has(n.type)).length,
@@ -3352,7 +3231,7 @@ export default function CampusGraph() {
   }), [hiddenTypes, nodes]);
 
   const reachableCompanies = useMemo(() => {
-    const fromId = selectedNode?.id ?? user?.id;
+    const fromId = selectedNode?.id ?? currentUserNodeId ?? user?.id;
     if (!fromId) return [] as GraphNode[];
 
     const adjacency = new Map<string, Set<string>>();
@@ -3382,7 +3261,7 @@ export default function CampusGraph() {
     return nodes
       .filter(n => n.type === "company" && seen.has(n.id))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [links, nodes, selectedNode?.id, user?.id]);
+  }, [links, nodes, selectedNode?.id, currentUserNodeId, user?.id]);
 
   useEffect(() => {
     if (!companyQuery) return;
@@ -3436,14 +3315,14 @@ export default function CampusGraph() {
       
     } else {
       nodeSel.select("circle.main-circle").transition().duration(800)
-        .attr("fill", (d: GraphNode) => d.id === user?.id ? "#facc15" : TYPE_COLOR[d.type])
-        .attr("stroke", (d: GraphNode) => d.id === user?.id ? "#fef3c7" : TYPE_COLOR[d.type]);
+        .attr("fill", (d: GraphNode) => d.id === currentUserNodeId ? "#facc15" : TYPE_COLOR[d.type])
+        .attr("stroke", (d: GraphNode) => d.id === currentUserNodeId ? "#fef3c7" : TYPE_COLOR[d.type]);
       nodeSel.select("circle.node-aura-halo").transition().duration(800)
         .attr("fill", (d: GraphNode) => TYPE_COLOR[d.type]);
       nodeSel.select("circle.node-aura-ring").transition().duration(800)
         .attr("stroke", (d: GraphNode) => TYPE_COLOR[d.type]);
     }
-  }, [heatmapMode, nodes, links, user?.id]);
+  }, [heatmapMode, nodes, links, currentUserNodeId]);
 
   useEffect(() => {
     const walkthrough2DActive = demoMode && viewMode === "2d";
@@ -3543,15 +3422,45 @@ export default function CampusGraph() {
     setSpatialFocusNodeIds([n.id]);
   }, [nodes, noteInteraction]);
 
-  const handleSearchEnter = useCallback(() => {
-    if (searchMatches.length !== 1) return;
-    const target = searchMatches[0];
+  const handleSearchEnter = useCallback((rawQuery: string) => {
+    const query = normalizeSearchName(rawQuery);
+    setSearchQuery("");
+    searchActiveRef.current = false;
+    searchMatchesRef.current = new Set();
+
+    if (!query) {
+      showSearchMessage("Type a name, then press Enter");
+      return;
+    }
+
+    const namesForNode = (n: GraphNode) => [
+      n.label,
+      n.details?.name,
+      n.details?.label,
+    ].map(normalizeSearchName).filter(Boolean);
+
+    const exactMatches = nodes.filter((n) => namesForNode(n).some((name) => name === query));
+    const candidates = exactMatches.length > 0
+      ? exactMatches
+      : nodes.filter((n) => namesForNode(n).some((name) => name.includes(query)));
+
+    if (candidates.length === 0) {
+      showSearchMessage("No matching node found");
+      return;
+    }
+    if (candidates.length > 1) {
+      showSearchMessage("Multiple matches. Type more of the name");
+      return;
+    }
+
+    const target = candidates[0];
+    setSearchInput(target.label);
     if (viewMode === "3d") {
       selectNodeFromSpatial(target.id);
       return;
     }
     selectNodeFn(target);
-  }, [searchMatches, viewMode, selectNodeFromSpatial, selectNodeFn]);
+  }, [nodes, viewMode, selectNodeFromSpatial, selectNodeFn, showSearchMessage]);
 
   const handleSpatialBackgroundClick = useCallback(() => {
     noteInteraction();
@@ -3951,6 +3860,7 @@ export default function CampusGraph() {
   const walkthroughLayout2D = demoMode && viewMode === "2d";
   const walkthroughInsightNode = selectedNode ?? currentUserNode;
   const walkthroughTargetCompany = companyQuery || reachableCompanies[0]?.label || "a target company";
+  const graphInitialLoad = loading || graphSettling || !d3Ready;
 
   const edgeExplainStyle = (() => {
     if (!edgeExplain || !rootRef.current) return undefined;
@@ -3980,7 +3890,7 @@ export default function CampusGraph() {
   })();
 
   return (
-    <div className={`root perf-${motionTier}`} ref={rootRef} data-motion-tier={motionTier}>
+    <div className={`root perf-${motionTier}${graphInitialLoad ? " graph-initializing" : ""}`} ref={rootRef} data-motion-tier={motionTier}>
 
       {/* Intro animation overlay — renders on top while graph loads underneath */}
 
@@ -4025,7 +3935,12 @@ export default function CampusGraph() {
 
       {/* Toolbar */}
       <div className="toolbar">
-        <SearchBar value={searchQuery} onChange={setSearchQuery} onEnter={handleSearchEnter} />
+        <SearchBar
+          value={searchInput}
+          onChange={setSearchInput}
+          onEnter={handleSearchEnter}
+          message={searchMessage}
+        />
         <FilterBar hiddenTypes={hiddenTypes} onToggleType={toggleType} />
         <button
           className={`btn-ghost ${heatmapMode ? "active" : ""}`}
@@ -4142,6 +4057,12 @@ export default function CampusGraph() {
         </div>
         <div className="bgGlow" ref={bgGlowRef} />
         <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} className={viewMode === "3d" ? "graph2DHidden" : "graph2DVisible"} />
+        {graphInitialLoad && (
+          <div className="graphInitialLoad" aria-live="polite" aria-busy="true">
+            <div className="graphInitialLoadTitle">Preparing campus network</div>
+            <div className="graphInitialLoadText">Settling nodes before display</div>
+          </div>
+        )}
         <svg
           className={`minimap${viewMode === "2d" && !walkthroughLayout2D ? "" : " minimap--hidden"}`}
           ref={minimapRef}
@@ -4174,7 +4095,7 @@ export default function CampusGraph() {
             <TopConnected
               nodes={nodes}
               links={links}
-              currentUserId={user?.id ?? ""}
+              currentUserId={currentUserNodeId ?? ""}
               onSelectNode={id => { const n = nodes.find(x => x.id === id); if (n) selectNodeFn(n); }}
             />
           </>

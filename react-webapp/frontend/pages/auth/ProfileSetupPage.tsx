@@ -133,6 +133,7 @@ const NJIT_CLUBS = [
   "Finance Club",
   "Google Developer Student Club",
   "Hack@NJIT",
+  "HACCS",
   "Indian Student Association",
   "Institute of Electrical and Electronics Engineers",
   "International Students Organization",

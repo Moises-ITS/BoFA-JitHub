@@ -1,7 +1,7 @@
 import { Router, Response } from "express"
 import { db } from "../config/postgres.js"
 import { requireAuth, AuthRequest } from "../middlewear/auth.js"
-import { createConnectionInNeo4j, createStudentNode, removeConnectionFromNeo4j, getRecommendations } from "../services/graphService"
+import { createConnectionInNeo4j, createStudentNode, removeConnectionFromNeo4j, getRecommendations } from "../services/graphService.js"
 import { connectionActionRateLimiter } from "../middlewear/authRateLimit.js"
 import { requireSafeId, toBoundedPositiveInt } from "../middlewear/security.js"
 

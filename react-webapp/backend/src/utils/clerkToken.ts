@@ -138,12 +138,11 @@ export async function verifyClerkSessionToken(token: string, requestOrigin?: str
 
   const options: VerifyTokenOptions = {
     secretKey: process.env.CLERK_SECRET_KEY,
-  }
-
-  // Preview URLs frequently rotate. Keep azp enforcement opt-in so production
-  // can remain stable while still verifying signature/issuer/expiry via Clerk.
-  if (process.env.CLERK_ENFORCE_AUTHORIZED_PARTIES === "true") {
-    options.authorizedParties = buildAuthorizedParties(requestOrigin)
+    authorizedParties: [
+      process.env.FRONTEND_URL ?? "http://localhost:5175",
+      "http://localhost:5175",
+      "http://127.0.0.1:5175",
+    ],
   }
 
   if (normalizedJwtKey) {

@@ -99,11 +99,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { user: clerkUser, isLoaded: clerkUserLoaded } = useUser()
   const cachedUserRef = useRef<User | null>(readCachedUser())
 
-  const [user,              setUser]      = useState<User | null>(cachedUserRef.current)
-  const [token,             setToken]     = useState<string | null>(null)
-  const [loading,           setLoading]   = useState(true)
+  const [user, setUser] = useState<User | null>(cachedUserRef.current)
+  const [token, setToken] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [needsProfileSetup, setNeedsSetup] = useState(false)
-  const [authError,         setAuthError] = useState(false)
+  const [authError, setAuthError] = useState(false)
   const autoSynced = useRef(false)
   const retryCount = useRef(0)
   const getSessionToken = useCallback(
@@ -156,7 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthError(false)
     console.log("[AUTH] signed in, fetching session token...")
     getSessionToken(true).then(async (t) => {
-      console.log("[AUTH] getToken result:", t ? `token (${t.length} chars, starts: ${t.slice(0,20)}...)` : "NULL")
+      console.log("[AUTH] getToken result:", t ? `token (${t.length} chars, starts: ${t.slice(0, 20)}...)` : "NULL")
       if (!t) { console.log("[AUTH] no token — stopping"); setLoading(false); return }
       setToken(t)
       try {
@@ -166,16 +166,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         console.log("[AUTH] /me response status:", res.status)
         if (res.ok) {
-          const data = await res.json()
-          console.log("[AUTH] /me OK — user:", data?.name, data?.email)
-          setUser(data); setNeedsSetup(false)
+          const fetchedUser = await res.json()
+          cachedUserRef.current = fetchedUser
+          setUser(fetchedUser); setNeedsSetup(false)
+          console.log("[AUTH] /me OK — user:", fetchedUser?.name, fetchedUser?.email)
         } else if (res.status === 403) {
           const body = await res.json()
           console.log("[AUTH] /me 403 body:", body)
           if (body.code === "PROFILE_REQUIRED" && !autoSynced.current) {
             autoSynced.current = true
             const email = clerkUser?.primaryEmailAddress?.emailAddress ?? ""
-            const name  = clerkUser?.fullName ?? clerkUser?.firstName ?? "NJIT Student"
+            const name = clerkUser?.fullName ?? clerkUser?.firstName ?? "NJIT Student"
             console.log("[AUTH] auto-syncing new user — email:", email, "name:", name)
             if (email) {
               const syncRes = await fetch(`${API}/api/auth/sync`, {
@@ -192,9 +193,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const syncedUser = await syncRes.json()
                 cachedUserRef.current = syncedUser
                 setToken(t); setUser(syncedUser); setNeedsSetup(false); return
-                const syncData = await syncRes.json()
-                console.log("[AUTH] /sync OK — user:", syncData?.name)
-                setToken(t); setUser(syncData); setNeedsSetup(false); return
               } else {
                 const syncErr = await syncRes.json().catch(() => ({}))
                 console.error("[AUTH] /sync failed:", syncRes.status, syncErr)

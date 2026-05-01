@@ -637,35 +637,6 @@ export default function EventsPage() {
                   </button>
                 ))}
               </div>
-
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                {view === "upcoming" && (
-                  <select
-                    value={activeFilter ?? ""}
-                    onChange={(e) => setActiveFilter(e.target.value || null)}
-                    className="text-sm text-white rounded-lg px-3 py-2 focus:outline-none cursor-pointer"
-                    style={{ colorScheme: "dark", backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
-                  >
-                    <option value="">All categories</option>
-                    {FILTERS.map((f) => (
-                      <option key={f.value} value={f.value}>{f.label}</option>
-                    ))}
-                  </select>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setSubmitOpen(true)}
-                  className="rounded-lg px-3 py-2 text-xs font-semibold transition-transform hover:-translate-y-0.5 whitespace-nowrap"
-                  style={{
-                    border: "1px solid rgba(204, 0, 0, 0.24)",
-                    background: "linear-gradient(135deg, rgba(215, 25, 32, 0.16), rgba(215, 25, 32, 0.08))",
-                    color: "#f7d7d9",
-                  }}
-                >
-                  Submit Event
-                </button>
-              </div>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
@@ -741,23 +712,23 @@ export default function EventsPage() {
               </button>
             </div>
 
-          {loading && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>}
-          {!loading && displayEvents.length === 0 && (
-            <div className="text-center py-16" style={{ color: "var(--text-muted)" }}>
-              <p className="text-4xl mb-3">📅</p>
-              <p className="font-medium text-white">
-                {view === "top-match" ? "Set up your profile to see matches" : "No events found"}
-              </p>
-              <p className="text-sm mt-1">
-                {view === "top-match"
-                  ? "Add your major, interests, and clubs in your profile."
-                  : (activeFilter || selectedClubId || searchQuery.trim())
-                    ? "Try adjusting your search or filters."
-                    : "Check back soon."}
-              </p>
-            </div>
-          )}
-          {displayEvents.map((event, i) => (
+            {loading && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>}
+            {!loading && displayEvents.length === 0 && (
+              <div className="text-center py-16" style={{ color: "var(--text-muted)" }}>
+                <p className="text-4xl mb-3">📅</p>
+                <p className="font-medium text-white">
+                  {view === "top-match" ? "Set up your profile to see matches" : "No events found"}
+                </p>
+                <p className="text-sm mt-1">
+                  {view === "top-match"
+                    ? "Add your major, interests, and clubs in your profile."
+                    : (activeFilter || selectedClubId || searchQuery.trim())
+                      ? "Try adjusting your search or filters."
+                      : "Check back soon."}
+                </p>
+              </div>
+            )}
+            {displayEvents.map((event, i) => (
               <EventCard
                 key={event.event_id}
                 event={event}

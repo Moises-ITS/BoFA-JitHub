@@ -17,8 +17,16 @@ const API = import.meta.env.VITE_API_URL ?? "";
 type ConnStatus = "none" | "pending-sent" | "pending-received" | "connected";
 
 const HIDDEN_DETAIL_KEYS = new Set([
+  "color",
+  "email",
   "id",
   "graph_node_id",
+  "graphnodeid",
+  "password",
+  "password_hash",
+  "passwordhash",
+  "student_id",
+  "studentid",
   "type",
   "label",
   "name",
@@ -27,6 +35,12 @@ const HIDDEN_DETAIL_KEYS = new Set([
   "linkedinUrl",
   "gpa",
 ]);
+
+const normalizeDetailKey = (key: string) => key.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+const shouldHideDetail = (key: string) => (
+  HIDDEN_DETAIL_KEYS.has(key) ||
+  HIDDEN_DETAIL_KEYS.has(normalizeDetailKey(key))
+);
 
 interface SidePanelProps {
   node:         GraphNode | null;
@@ -231,7 +245,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       <div className="section">
         <h4 className="sectionTitle">Details</h4>
         {Object.entries(node.details || {})
-          .filter(([k]) => !HIDDEN_DETAIL_KEYS.has(k))
+          .filter(([k]) => !shouldHideDetail(k))
           .map(([k, v]) => (
             <div key={k} className="detailRow">
               <span className="detailIcon">{DETAIL_ICONS[k] || "-"}</span>
@@ -316,6 +330,5 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     </div>
   );
 }
-
 
 

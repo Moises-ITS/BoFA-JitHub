@@ -85,3 +85,9 @@ class EventRSVP(Base):
   status         = Column(Text, nullable=False, default="going")
   __table_args__ = (UniqueConstraint("event_id", "user_id"),)
 
+class AiChatUsage(Base):
+  __tablename__ = "ai_chat_usage"
+  id         = Column(Integer, primary_key=True, autoincrement=True)
+  user_id    = Column(Text, nullable=False, index=True)
+  created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+

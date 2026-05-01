@@ -48,6 +48,7 @@ interface SidePanelProps {
   links:        GraphLink[];
   onClose:      () => void;
   onSelectNode: (id: string) => void;
+  onConnectionChanged?: () => void | Promise<void>;
 }
 
 // Minimal recommendation type returned by the recommendations API
@@ -61,7 +62,7 @@ interface Recommendation {
   sharedClubs?: number;
 }
 
-export default function SidePanel({ node, nodes, links, onClose, onSelectNode }: SidePanelProps) {
+export default function SidePanel({ node, nodes, links, onClose, onSelectNode, onConnectionChanged }: SidePanelProps) {
   const { user, token } = useAuth();
   const isOwnNode = node?.id === user?.id;
 
@@ -101,18 +102,26 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
   }, [isOwnNode, user]);
 
   //  Connection actions 
-  const sendRequest = async () => {
-    if (!node || !user) return;
+  const sendRequestTo = async (toUserId: string) => {
+    if (!user) return;
     setConnLoading(true);
     try {
       const res = await fetch(`${API}/api/connections/request`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ toUserId: node.id }),
+        body:    JSON.stringify({ toUserId }),
       });
-      if (res.ok) setConnStatus("pending-sent");
+      if (res.ok) {
+        if (node?.id === toUserId) setConnStatus("pending-sent");
+        setRecs((prev) => prev.filter((rec) => rec.id !== toUserId));
+      }
     } catch { /* silent */ }
     setConnLoading(false);
+  };
+
+  const sendRequest = () => {
+    if (!node) return;
+    void sendRequestTo(node.id);
   };
 
   // ── Early return ──────────────────────────────────────────────────────────
@@ -125,7 +134,10 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ fromUserId: node.id }),
       });
-      if (res.ok) setConnStatus("connected");
+      if (res.ok) {
+        setConnStatus("connected");
+        await onConnectionChanged?.();
+      }
     } catch { /* silent */ }
     setConnLoading(false);
   };
@@ -152,7 +164,10 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
         method:  "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) setConnStatus("none");
+      if (res.ok) {
+        setConnStatus("none");
+        await onConnectionChanged?.();
+      }
     } catch { /* silent */ }
     setConnLoading(false);
   };
@@ -214,7 +229,17 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
             <span className="connectChip connectChip--pending">Request Sent</span>
           )}
           {connStatus === "pending-received" && (
-            <span className="connectChip connectChip--incoming">Wants to connect with you</span>
+            <div className="connectIncoming">
+              <span className="connectChip connectChip--incoming">Wants to connect with you</span>
+              <div className="connectActions">
+                <button className="connectBtn" onClick={acceptRequest} disabled={connLoading}>
+                  {connLoading ? "Accepting..." : "Accept"}
+                </button>
+                <button className="connectBtn connectBtn--decline" onClick={rejectRequest} disabled={connLoading}>
+                  Decline
+                </button>
+              </div>
+            </div>
           )}
           {connStatus === "connected" && (
             <div className="connectIncoming">
@@ -315,7 +340,8 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
                     <button
                       type="button"
                       className="recBtn recBtn--accent"
-                      onClick={(e) => { e.stopPropagation(); onSelectNode(rec.id); }}
+                      onClick={(e) => { e.stopPropagation(); void sendRequestTo(rec.id); }}
+                      disabled={connLoading}
                     >
                       Connect
                     </button>
@@ -330,5 +356,3 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     </div>
   );
 }
-
-

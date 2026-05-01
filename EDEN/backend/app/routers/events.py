@@ -1,7 +1,8 @@
 from datetime import date, datetime, time, timezone
+import json
 
 SEMESTER_START = date(2026, 1, 1)
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -16,6 +17,44 @@ from app.club_directory import (
 )
 
 router = APIRouter(prefix="/events", tags=["events"])
+
+
+class EventSocketManager:
+    def __init__(self):
+        self.active_connections: set[WebSocket] = set()
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.add(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.discard(websocket)
+
+    async def broadcast(self, payload: dict):
+        if not self.active_connections:
+            return
+        message = json.dumps(payload)
+        stale: list[WebSocket] = []
+        for websocket in list(self.active_connections):
+            try:
+                await websocket.send_text(message)
+            except Exception:
+                stale.append(websocket)
+        for websocket in stale:
+            self.disconnect(websocket)
+
+
+event_socket_manager = EventSocketManager()
+
+
+@router.websocket("/ws")
+async def events_ws(websocket: WebSocket):
+    await event_socket_manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        event_socket_manager.disconnect(websocket)
 
 
 def _format_event(event, post, club):
@@ -166,7 +205,7 @@ def _apply_filters(q, public_only, event_type):
 
 
 @router.post("/community", status_code=201)
-def create_community_event(body: CommunityEventBody, db: Session = Depends(get_db)):
+async def create_community_event(body: CommunityEventBody, db: Session = Depends(get_db)):
     club_name = body.club_name.strip()
     event_name = body.event_name.strip()
     event_categories = _normalize_requested_categories(body)
@@ -301,6 +340,7 @@ def create_community_event(body: CommunityEventBody, db: Session = Depends(get_d
     response = _format_event(event, post, club)
     response["collaborators"] = collaborator_names
     response["sponsors"] = requested_corporate_partners
+    await event_socket_manager.broadcast({"type": "event.created", "event": response})
     return response
 
 

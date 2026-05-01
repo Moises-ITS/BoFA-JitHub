@@ -1,7 +1,7 @@
 import { Router, Response } from "express"
 import { db } from "../config/postgres.js"
 import { requireAuth, AuthRequest } from "../middlewear/auth.js"
-import { createConnectionInNeo4j, removeConnectionFromNeo4j, getRecommendations } from "../services/graphService.js"
+import { createConnectionInNeo4j, createStudentNode, removeConnectionFromNeo4j, getRecommendations } from "../services/graphService"
 import { connectionActionRateLimiter } from "../middlewear/authRateLimit.js"
 import { requireSafeId, toBoundedPositiveInt } from "../middlewear/security.js"
 
@@ -9,6 +9,30 @@ const router = Router()
 
 // All connection routes require auth
 router.use(requireAuth)
+
+async function ensureConnectionNodes(userIds: string[]) {
+  const result = await db.query(
+    `SELECT id, name, major, gpa, graduation_year, bio, clubs, companies, interests, linkedin_url
+     FROM users
+     WHERE id = ANY($1)`,
+    [userIds]
+  )
+
+  for (const row of result.rows) {
+    await createStudentNode({
+      id: row.id,
+      name: row.name ?? "Student",
+      major: row.major ?? "",
+      gpa: row.gpa == null ? null : Number(row.gpa),
+      graduationYear: row.graduation_year ?? null,
+      bio: row.bio ?? "",
+      clubs: Array.isArray(row.clubs) ? row.clubs : [],
+      companies: Array.isArray(row.companies) ? row.companies : [],
+      interests: Array.isArray(row.interests) ? row.interests : [],
+      linkedinUrl: row.linkedin_url ?? null,
+    })
+  }
+}
 
 // GET /api/connections/status?userId=X — connection status with another user
 router.get("/status", async (req: AuthRequest, res: Response) => {
@@ -34,7 +58,7 @@ router.get("/status", async (req: AuthRequest, res: Response) => {
     }
     const row = result.rows[0]
     res.json({
-      status:    row.status as string,
+      status: row.status as string,
       direction: row.from_user_id === myId ? "sent" : "received",
     })
   } catch (err) {
@@ -61,9 +85,9 @@ router.get("/recommendations", async (req: AuthRequest, res: Response) => {
     const userMap = new Map<string, { skills: string[]; looking_for: string[]; year: string | null }>()
     for (const row of pgResult.rows) {
       userMap.set(row.id, {
-        skills:      Array.isArray(row.skills)      ? row.skills      : [],
+        skills: Array.isArray(row.skills) ? row.skills : [],
         looking_for: Array.isArray(row.looking_for) ? row.looking_for : [],
-        year:        row.year ?? null,
+        year: row.year ?? null,
       })
     }
 
@@ -71,17 +95,17 @@ router.get("/recommendations", async (req: AuthRequest, res: Response) => {
 
     const enriched = recs
       .map(r => {
-        const other        = userMap.get(r.id) ?? { skills: [], looking_for: [], year: null }
+        const other = userMap.get(r.id) ?? { skills: [], looking_for: [], year: null }
         const sharedSkills = me.skills.filter(s => other.skills.includes(s))
         const sharedIntent = me.looking_for.filter(l => other.looking_for.includes(l))
-        const bonus        = sharedSkills.length * 2 + sharedIntent.length * 3
+        const bonus = sharedSkills.length * 2 + sharedIntent.length * 3
         return {
           ...r,
-          year:             other.year,
+          year: other.year,
           sharedSkills,
           sharedLookingFor: sharedIntent,
-          lookingFor:       other.looking_for,
-          score:            r.score + bonus,
+          lookingFor: other.looking_for,
+          score: r.score + bonus,
         }
       })
       .sort((a, b) => b.score - a.score)
@@ -165,6 +189,7 @@ router.post("/accept", connectionActionRateLimiter, async (req: AuthRequest, res
     }
 
     // Create bidirectional relationship in Neo4j
+    await ensureConnectionNodes([safeFromUserId, toUserId])
     await createConnectionInNeo4j(safeFromUserId, toUserId)
 
     // Notify original sender that their request was accepted.
@@ -271,8 +296,8 @@ router.post("/notifications/mark-read", connectionActionRateLimiter, async (req:
 
 // DELETE /api/connections/by-user/:userId — remove an accepted connection
 router.delete("/by-user/:userId", connectionActionRateLimiter, async (req: AuthRequest, res: Response) => {
-  const myId     = req.userId!
-  const otherId  = requireSafeId(req.params.userId)
+  const myId = req.userId!
+  const otherId = requireSafeId(req.params.userId)
 
   if (!otherId) {
     res.status(400).json({ error: "Invalid userId format" })

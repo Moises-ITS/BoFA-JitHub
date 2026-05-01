@@ -109,7 +109,7 @@ export function Topbar() {
   const handleAcceptRequest = useCallback(async (fromUserId: string) => {
     if (!token) return
     try {
-      await fetch(`${API}/api/connections/accept`, {
+      const res = await fetch(`${API}/api/connections/accept`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -117,6 +117,7 @@ export function Topbar() {
         },
         body: JSON.stringify({ fromUserId }),
       })
+      if (res.ok) window.dispatchEvent(new CustomEvent("jithub:connections-changed"))
     } catch {
       // no-op
     }

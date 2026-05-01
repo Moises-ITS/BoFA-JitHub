@@ -2,14 +2,15 @@ import os
 import re
 import json
 import asyncio
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional, AsyncGenerator
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, text as sa_text
 from sqlalchemy.orm import Session
 import anthropic
+import requests
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 
@@ -27,6 +28,9 @@ router = APIRouter(prefix="/sandbox", tags=["sandbox"])
 client       = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
 async_client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=30.0)
 CHAT_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+AUTH_API_URL = os.getenv("AUTH_API_URL", "http://localhost:3001").rstrip("/")
+AI_CHAT_LIMIT = 3
+AI_CHAT_WINDOW = timedelta(hours=24)
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
 
@@ -89,6 +93,80 @@ class ChatResponse(BaseModel):
     actions: list[ChatAction] = []
 
 # ── Tools ──────────────────────────────────────────────────────────────────────
+
+def _ensure_ai_chat_usage_table(db: Session) -> None:
+    db.execute(sa_text("""
+        CREATE TABLE IF NOT EXISTS ai_chat_usage (
+            id SERIAL PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    """))
+    db.execute(sa_text("""
+        CREATE INDEX IF NOT EXISTS idx_ai_chat_usage_user_created
+        ON ai_chat_usage (user_id, created_at)
+    """))
+    db.commit()
+
+
+def _auth_user_id_from_node(auth_header: str) -> str:
+    try:
+        response = requests.get(
+            f"{AUTH_API_URL}/api/auth/me",
+            headers={"Authorization": auth_header},
+            timeout=5,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=401, detail="Could not verify session") from exc
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail="Invalid auth response") from exc
+
+    user_id = body.get("id")
+    if not isinstance(user_id, str) or not user_id:
+        raise HTTPException(status_code=401, detail="Invalid auth response")
+    return user_id
+
+
+def _consume_ai_chat_quota(db: Session, user_id: str) -> dict[str, object] | None:
+    _ensure_ai_chat_usage_table(db)
+    window_start = datetime.now(timezone.utc) - AI_CHAT_WINDOW
+
+    db.execute(sa_text("SELECT pg_advisory_xact_lock(hashtext(:user_id))"), {"user_id": user_id})
+    usage_rows = db.execute(
+        sa_text("""
+            SELECT created_at
+            FROM ai_chat_usage
+            WHERE user_id = :user_id AND created_at >= :window_start
+            ORDER BY created_at ASC
+        """),
+        {"user_id": user_id, "window_start": window_start},
+    ).fetchall()
+
+    if len(usage_rows) >= AI_CHAT_LIMIT:
+        oldest = usage_rows[0][0]
+        if oldest.tzinfo is None:
+            oldest = oldest.replace(tzinfo=timezone.utc)
+        db.rollback()
+        return {
+            "error": "AI chat limit reached",
+            "limit": AI_CHAT_LIMIT,
+            "remaining": 0,
+            "reset_at": (oldest + AI_CHAT_WINDOW).isoformat(),
+        }
+
+    db.execute(
+        sa_text("INSERT INTO ai_chat_usage (user_id, created_at) VALUES (:user_id, NOW())"),
+        {"user_id": user_id},
+    )
+    db.commit()
+    return None
+
 
 TOOLS = [
     {
@@ -718,9 +796,21 @@ async def _async_tool_loop(system_prompt: str, messages: list, db: Session):
 # ── Streaming endpoint ─────────────────────────────────────────────────────────
 
 @router.post("/chat/stream")
-async def sandbox_chat_stream(body: ChatRequest, db: Session = Depends(get_db)):
+async def sandbox_chat_stream(request: Request, body: ChatRequest, db: Session = Depends(get_db)):
     import traceback as tb
     today = date.today()
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"error": "Missing or invalid token"})
+
+    try:
+        user_id = await asyncio.to_thread(_auth_user_id_from_node, auth_header)
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+
+    quota_error = _consume_ai_chat_quota(db, user_id)
+    if quota_error:
+        return JSONResponse(status_code=429, content=quota_error)
 
     async def generate() -> AsyncGenerator[str, None]:
         try:

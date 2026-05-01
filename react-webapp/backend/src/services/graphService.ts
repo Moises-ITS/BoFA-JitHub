@@ -225,6 +225,20 @@ export async function createConnectionInNeo4j(userId1: string, userId2: string):
   }
 }
 
+// Permanently removes a student's graph node and every relationship attached to it.
+export async function deleteStudentNode(userId: string): Promise<void> {
+  const session = driver.session()
+  try {
+    await session.run(
+      `MATCH (s:Student {id: $userId})
+       DETACH DELETE s`,
+      { userId }
+    )
+  } finally {
+    session.close()
+  }
+}
+
 // Patches any existing nodes that are missing an id property.
 // Safe to call on every startup — only touches nodes where id IS NULL.
 export async function ensureNodeIds() {

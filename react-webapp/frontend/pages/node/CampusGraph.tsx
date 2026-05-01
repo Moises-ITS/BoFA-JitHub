@@ -389,7 +389,7 @@ export default function CampusGraph() {
   const { user, token } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const { nodes, links, loading, error, refresh: refreshGraphData } = useGraphData();
+  const { nodes, links, loading, error } = useGraphData();
   const [introComplete, setIntroComplete] = useState(true);
 
   // ── UI State ──────────────────────────────────────────────────────────────
@@ -576,13 +576,6 @@ export default function CampusGraph() {
   useEffect(() => {
     noteInteraction();
   }, [noteInteraction]);
-  useEffect(() => {
-    const handleConnectionsChanged = () => {
-      void refreshGraphData();
-    };
-    window.addEventListener("jithub:connections-changed", handleConnectionsChanged);
-    return () => window.removeEventListener("jithub:connections-changed", handleConnectionsChanged);
-  }, [refreshGraphData]);
   useEffect(() => () => {
     if (searchMessageTimerRef.current) {
       window.clearTimeout(searchMessageTimerRef.current);
@@ -1715,7 +1708,8 @@ export default function CampusGraph() {
       .attr("r", (d) => d.size)
       .attr("fill-opacity", 0);
     const nodePulseMeta = nodes.map((n: GraphNode, i: number) => {
-      const profile = GRAPH_MOTION.nodeTypeProfile[n.type] ?? GRAPH_MOTION.nodeTypeProfile.student ?? GRAPH_MOTION.nodeTypeProfile.student;
+      const profile = GRAPH_MOTION.nodeTypeProfile[n.type] ?? GRAPH_MOTION.nodeTypeProfile.student;
+      const profile = GRAPH_MOTION.nodeTypeProfile[n.type] ?? GRAPH_MOTION.nodeTypeProfile.student;
       const period = GRAPH_MOTION.nodePulse.periodMsMin + Math.random() * (GRAPH_MOTION.nodePulse.periodMsMax - GRAPH_MOTION.nodePulse.periodMsMin);
       const cohort = i % GRAPH_MOTION.cohorts.nodeCount;
       return {
@@ -2452,7 +2446,14 @@ export default function CampusGraph() {
     // Label (hidden at default zoom in free mode)
     const labels = nodeSel.append("text")
       .attr("dy", (d: GraphNode) => (d.r ?? 12) + 14)
-      .text((d: GraphNode) => d.label.length > 20 ? d.label.slice(0, 18) + "…" : d.label)
+      .text((d: GraphNode) => {
+        const label = typeof d.label === "string" ? d.label : "";
+        return label.length > 20 ? label.slice(0, 18) + "…" : label;
+      })
+      .text((d: GraphNode) => {
+        const label = typeof d.label === "string" ? d.label : "";
+        return label.length > 20 ? label.slice(0, 18) + "..." : label;
+      })
       .attr("font-size", (d: GraphNode) => d.type === "company" ? "11px" : "10px")
       .attr("font-weight", (d: GraphNode) =>
         d.id === currentUserNodeId
@@ -4095,7 +4096,6 @@ export default function CampusGraph() {
           links={links}
           onClose={deselectAll}
           onSelectNode={id => { const n = nodes.find(x => x.id === id); if (n) selectNodeFn(n); }}
-          onConnectionChanged={refreshGraphData}
         />
         {!walkthroughLayout2D && (
           <>

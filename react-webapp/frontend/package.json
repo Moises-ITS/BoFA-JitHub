@@ -36,7 +36,7 @@
     "motion": "^12.36.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.13.1",
+    "react-router-dom": "^7.18.0",
     "resium": "^1.19.4",
     "tailwindcss": "^4.2.1",
     "three": "^0.183.2",

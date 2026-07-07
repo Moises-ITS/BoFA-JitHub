@@ -21,7 +21,7 @@ import HoverCard from "./components/HoverCard";
 import { useAuth } from "@/context/AuthContext";
 import "./CampusGraph.css";
 
-import { API_BASE_URL as API } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 const MAX_NEIGHBORS = 9;
 const HUB_MAX = 6;
 const EDGE_WIDTH_MIN = 1.1;
@@ -1277,10 +1277,10 @@ export default function CampusGraph() {
 
     setPathStatus("searching");
     try {
-      const res = await fetch(`${API}/api/graph/path?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(target.id)}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      const data = await res.json() as { nodeIds: string[]; rels: string[] };
+      const { data } = await apiFetch<{ nodeIds: string[]; rels: string[] }>(
+        `/api/graph/path?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(target.id)}`,
+        token ?? ""
+      );
       if (!data.nodeIds?.length) { setPathStatus("notfound"); return; }
       setPathNodeIds(data.nodeIds);
       setPathStatus("found");

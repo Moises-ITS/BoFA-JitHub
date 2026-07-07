@@ -16,7 +16,7 @@ import {
   getClubOptionLabel,
 } from "./utils/clubMatching";
 
-import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as API } from "@/lib/api";
+import { apiFetch, EDEN_API_BASE_URL as API } from "@/lib/api";
 
 function eventWebSocketUrl() {
   try {
@@ -491,14 +491,13 @@ export default function EventsPage() {
   }, [selectedEventAttendees, selectedEventId]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !token) return;
 
     let cancelled = false;
 
-    fetch(`${AUTH_API}/api/connections`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then((data: { id: string }[]) => {
-        if (!cancelled) {
+    apiFetch<{ id: string }[]>("/api/connections", token)
+      .then(({ ok, data }) => {
+        if (!cancelled && ok && Array.isArray(data)) {
           setConnectionIds(new Set(data.map((connection) => connection.id)));
         }
       })

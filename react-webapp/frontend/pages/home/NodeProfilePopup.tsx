@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "@/context/AuthContext";
 import { getNodeById } from "@/hooks/useNodeSearch";
 
-import { API_BASE_URL as API } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 const TYPE_COLOR: Record<string, string> = {
   student:   "#60a5fa",
@@ -71,21 +71,16 @@ export default function NodeProfilePopup({ nodeId, onClose }: Props) {
     setConnStatus("none");
 
     if (isOwnNode) {
-      fetch(`${API}/api/auth/users/${nodeId}/profile`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(r => r.ok ? r.json() : null)
-        .then((data: PublicProfile | null) => setProfile(data))
+      apiFetch<PublicProfile>(`/api/auth/users/${nodeId}/profile`, token ?? "")
+        .then(({ ok, data }) => setProfile(ok ? data : null))
         .catch(() => setProfile(null))
         .finally(() => setLoading(false));
     }
 
     if (isStudent && !isOwnNode) {
-      fetch(`${API}/api/connections/status?userId=${nodeId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(r => r.ok ? r.json() : { status: "none" })
-        .then(data => {
+      apiFetch<{ status?: string; direction?: string }>(`/api/connections/status?userId=${nodeId}`, token ?? "")
+        .then(({ ok, data: body }) => {
+          const data = ok ? body : { status: "none" };
           if (data.status === "accepted")                                   setConnStatus("connected");
           else if (data.status === "pending" && data.direction === "sent")     setConnStatus("pending-sent");
           else if (data.status === "pending" && data.direction === "received") setConnStatus("pending-received");
@@ -107,12 +102,11 @@ export default function NodeProfilePopup({ nodeId, onClose }: Props) {
     if (!nodeId) return;
     setConnLoading(true);
     try {
-      const res = await fetch(`${API}/api/connections/request`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ toUserId: nodeId }),
+      const { ok } = await apiFetch("/api/connections/request", token ?? "", {
+        method: "POST",
+        body: JSON.stringify({ toUserId: nodeId }),
       });
-      if (res.ok) setConnStatus("pending-sent");
+      if (ok) setConnStatus("pending-sent");
     } catch { /* silent */ }
     setConnLoading(false);
   }, [nodeId, token]);

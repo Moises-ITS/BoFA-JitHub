@@ -9,7 +9,7 @@ import { OPPORTUNITY_TYPE_ICON } from "../opportunities/types/opportunities";
 import { useAuth } from "@/context/AuthContext";
 import EditProfileModal from "../node/components/EditProfileModal";
 
-import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
+import { apiFetch, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
 
 type ProfileEvent = {
   event_id: number;
@@ -209,13 +209,11 @@ export default function Profile() {
 
     setDeleteLoading(true);
     try {
-      const response = await fetch(`${AUTH_API}/api/auth/account`, {
+      const { ok, data: body } = await apiFetch<{ error?: string }>("/api/auth/account", token, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
       });
-      const body = await response.json().catch(() => ({}));
 
-      if (!response.ok) {
+      if (!ok) {
         throw new Error(body.error ?? "Unable to delete account");
       }
 

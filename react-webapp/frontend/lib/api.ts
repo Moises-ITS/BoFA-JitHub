@@ -64,14 +64,41 @@ export async function apiFetch<T>(
   token: string,
   init?: RequestInit
 ): Promise<{ ok: boolean; status: number; data: T }> {
+  return jsonFetch<T>(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, ...init?.headers },
+  })
+}
+
+/**
+ * Same envelope as apiFetch, but for the EDEN FastAPI service (events, RSVPs,
+ * trending clubs). No Bearer header — those endpoints are public today; if
+ * EDEN ever grows auth, add it HERE once instead of at every call site.
+ */
+export async function edenFetch<T>(
+  path: string,
+  init?: RequestInit
+): Promise<{ ok: boolean; status: number; data: T }> {
+  return jsonFetch<T>(`${EDEN_API_BASE_URL}${path}`, init)
+}
+
+/** Bearer header object for the rare call that can't use apiFetch (e.g. SSE streams that need the raw Response). */
+export function authHeaders(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}` }
+}
+
+/** Shared engine behind apiFetch/edenFetch — one timeout policy, one JSON-parsing policy. */
+async function jsonFetch<T>(
+  url: string,
+  init?: RequestInit
+): Promise<{ ok: boolean; status: number; data: T }> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
+    const res = await fetch(url, {
       ...init,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
         ...init?.headers,
       },
       signal: controller.signal,

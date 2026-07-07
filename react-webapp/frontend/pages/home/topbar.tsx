@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext"
 import NodeProfilePopup from "./NodeProfilePopup"
 import { search as nodeSearch, primeCache } from "@/hooks/useNodeSearch"
 
-import { API_BASE_URL as API } from "@/lib/api"
+import { apiFetch } from "@/lib/api"
 
 type PendingRequest = {
   id: number
@@ -59,11 +59,8 @@ export function Topbar() {
     if (!token || !user?.id) return
     setNotificationsLoading(true)
     try {
-      const res = await fetch(`${API}/api/connections/notifications`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return
-      const data = await res.json() as NotificationsPayload
+      const { ok, data } = await apiFetch<NotificationsPayload>("/api/connections/notifications", token)
+      if (!ok) return
       setNotifications(data)
     } catch {
       // no-op
@@ -109,15 +106,11 @@ export function Topbar() {
   const handleAcceptRequest = useCallback(async (fromUserId: string) => {
     if (!token) return
     try {
-      const res = await fetch(`${API}/api/connections/accept`, {
+      const { ok } = await apiFetch("/api/connections/accept", token, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ fromUserId }),
       })
-      if (res.ok) window.dispatchEvent(new CustomEvent("jithub:connections-changed"))
+      if (ok) window.dispatchEvent(new CustomEvent("jithub:connections-changed"))
     } catch {
       // no-op
     }
@@ -127,12 +120,8 @@ export function Topbar() {
   const handleRejectRequest = useCallback(async (fromUserId: string) => {
     if (!token) return
     try {
-      await fetch(`${API}/api/connections/reject`, {
+      await apiFetch("/api/connections/reject", token, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ fromUserId }),
       })
     } catch {
@@ -144,12 +133,8 @@ export function Topbar() {
   const handleMarkAllRead = useCallback(async () => {
     if (!token) return
     try {
-      await fetch(`${API}/api/connections/notifications/mark-read`, {
+      await apiFetch("/api/connections/notifications/mark-read", token, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ markAll: true }),
       })
     } catch {

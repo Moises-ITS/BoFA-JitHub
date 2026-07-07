@@ -148,6 +148,20 @@ app.use("/api/connections", connMod.default)
 app.use("/api/opportunities", oppMod.default)
 app.use("/api/chat-memory", chatMemMod.default)
 app.use("/api/buildings", buildingsMod.default)
+
+// EDEN e-board analytics — PARKED for v2/v3, mounted only behind an explicit
+// flag. History: these routes were previously wired only in an orphaned second
+// entry point (server.ts, now deleted) and thus never actually served, while
+// the frontend still linked to them. The flag keeps the revival a one-env-var
+// operation without shipping half-finished endpoints to 2000 students today.
+// (The EDEN Pool object in config/postgres.ts is constructed either way but
+// never opens a connection unless these routes actually run a query.)
+if (process.env.ENABLE_EDEN === "true") {
+  const edenMod = await import("./routes/eden.js")
+  app.use("/api/eden", edenMod.default)
+  console.log("[config] EDEN routes mounted at /api/eden (ENABLE_EDEN=true)")
+}
+
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API endpoint not found" })
 })

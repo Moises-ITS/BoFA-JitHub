@@ -52,7 +52,9 @@ export function captionBlurb(caption: string): string {
  * array or a comma-separated `event_category` string depending on the
  * endpoint — this smooths both into a deduped, lowercased list.
  */
-export function getEventCategories(event: any): string[] {
+export function getEventCategories(
+  event: { event_category?: string | null; event_categories?: string[] } | null | undefined
+): string[] {
   const values = Array.isArray(event?.event_categories) && event.event_categories.length > 0
     ? event.event_categories
     : typeof event?.event_category === "string"

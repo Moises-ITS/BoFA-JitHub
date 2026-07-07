@@ -10,6 +10,7 @@ import { CATEGORY_STYLE, CLUB_EMOJIS, fmt12, getEventCategories } from "./utils/
 import { matchScore, type UserProfile } from "./utils/eventScoring";
 import SubmitEventModal, { type CommunityEventInput } from "./components/SubmitEventModal";
 import type { AttendeeInfo } from "./components/EventDetailModal";
+import type { EdenEvent, TrendingClub } from "./types/events";
 import {
   type ClubDirectoryEntry,
   eventMatchesQuery,
@@ -63,8 +64,10 @@ function MatchSignal({ score }: { score: number }) {
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
-function useEvents(endpoint: string | null, refreshKey = 0) {
-  const [data, setData] = useState<any[]>([]);
+// Generic because the same fetch-shape serves event lists AND club-stat
+// lists (/events/clubs/trending) — the caller names the row type.
+function useEvents<T = EdenEvent>(endpoint: string | null, refreshKey = 0) {
+  const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(Boolean(endpoint));
 
   useEffect(() => {
@@ -104,12 +107,12 @@ function useEvents(endpoint: string | null, refreshKey = 0) {
 function EventCard({
   event, index, profile, rsvpStatus, attendees, onRsvpToggle, connectionIds, onSelect,
 }: {
-  event: any; index: number; profile: UserProfile;
+  event: EdenEvent; index: number; profile: UserProfile;
   rsvpStatus?: string | null;
   attendees?: AttendeeInfo;
   onRsvpToggle?: (eventId: number) => void;
   connectionIds?: Set<string>;
-  onSelect?: (event: any) => void;
+  onSelect?: (event: EdenEvent) => void;
 }) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const score = matchScore(event, profile);
@@ -216,8 +219,8 @@ function RankingAvatar({
   index,
   size = 28,
 }: {
-  clubId?: number;
-  clubName: string;
+  clubId?: number | null;
+  clubName?: string;
   index: number;
   size?: number;
 }) {
@@ -251,7 +254,7 @@ function RankingAvatar({
   );
 }
 
-function TrendingPodium({ clubs }: { clubs: any[] }) {
+function TrendingPodium({ clubs }: { clubs: TrendingClub[] }) {
   if (clubs.length < 3) return null;
   const podium = [
     { club: clubs[1], rank: 2, height: 58, bg: "rgba(255,255,255,0.08)", border: "var(--border-default)", delay: 0.02 },
@@ -284,7 +287,7 @@ function TrendingPodium({ clubs }: { clubs: any[] }) {
   );
 }
 
-function SidebarClubRow({ club, index, showScore }: { club: any; index: number; showScore?: boolean }) {
+function SidebarClubRow({ club, index, showScore }: { club: TrendingClub; index: number; showScore?: boolean }) {
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
@@ -304,7 +307,7 @@ function SidebarClubRow({ club, index, showScore }: { club: any; index: number; 
   );
 }
 
-function TopEventRow({ event, index, onSelect }: { event: any; index: number; onSelect: (e: any) => void }) {
+function TopEventRow({ event, index, onSelect }: { event: EdenEvent; index: number; onSelect: (e: EdenEvent) => void }) {
   const primaryCategory = getEventCategories(event)[0];
   const catStyle = primaryCategory ? (CATEGORY_STYLE[primaryCategory] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" }) : null;
   return (
@@ -358,14 +361,14 @@ export default function EventsPage() {
 
   const { data: upcomingRaw, loading: upcomingLoading } = useEvents(upcomingUrl, refreshNonce);
   const { data: trendingEvents, loading: trendingLoading } = useEvents(trendingUrl, refreshNonce);
-  const { data: sidebarTrending } = useEvents("/events/clubs/trending?limit=5", refreshNonce);
-  const { data: topRisers } = useEvents("/events/clubs/top-risers?limit=5", refreshNonce);
+  const { data: sidebarTrending } = useEvents<TrendingClub>("/events/clubs/trending?limit=5", refreshNonce);
+  const { data: topRisers } = useEvents<TrendingClub>("/events/clubs/top-risers?limit=5", refreshNonce);
   const { data: topEvents } = useEvents("/events/top-risers?limit=5", refreshNonce);
 
   const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
   const [attendeeMap, setAttendeeMap] = useState<Record<number, AttendeeInfo>>({});
   const [connectionIds, setConnectionIds] = useState<Set<string>>(new Set());
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [selectedEvent, setSelectedEvent] = useState<EdenEvent | null>(null);
   const [selectedEventCanRsvp, setSelectedEventCanRsvp] = useState(true);
   const [modalAttendees, setModalAttendees] = useState<AttendeeInfo | null>(null);
   const selectedEventId = selectedEvent?.event_id ?? null;
@@ -450,7 +453,7 @@ export default function EventsPage() {
       .then((response) => response.json())
       .then((data) => {
         if (cancelled || data?.error) return;
-        setSelectedEvent((prev: any) => (
+        setSelectedEvent((prev) => (
           prev?.event_id === selectedEventId
             ? { ...prev, ...data }
             : prev
@@ -510,9 +513,9 @@ export default function EventsPage() {
 
   const displayEvents = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
-    let baseEvents: any[] = [];
+    let baseEvents: EdenEvent[] = [];
     if (view === "trending") {
-      baseEvents = trendingEvents.filter((e: any) => !e.date || e.date >= today);
+      baseEvents = trendingEvents.filter((e) => !e.date || e.date >= today);
     } else if (view === "top-match") {
       baseEvents = [...upcomingRaw]
         .map(e => ({ ...e, _score: matchScore(e, profile) }))
@@ -523,17 +526,17 @@ export default function EventsPage() {
     }
 
     if (selectedClub) {
-      baseEvents = baseEvents.filter((event: any) => event.club_id === selectedClub.club_id);
+      baseEvents = baseEvents.filter((event) => event.club_id === selectedClub.club_id);
     }
 
     if (searchQuery.trim()) {
-      baseEvents = baseEvents.filter((event: any) => eventMatchesQuery(event, searchQuery));
+      baseEvents = baseEvents.filter((event) => eventMatchesQuery(event, searchQuery));
     }
 
     return baseEvents;
   }, [view, trendingEvents, upcomingRaw, profile, searchQuery, selectedClub]);
   const displayEventIds = useMemo(
-    () => displayEvents.map((event: any) => event.event_id),
+    () => displayEvents.map((event) => event.event_id),
     [displayEvents],
   );
   const displayEventIdsKey = useMemo(

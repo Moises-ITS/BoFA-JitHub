@@ -23,6 +23,7 @@
 import { clubNamesEquivalent, getClubTermsFromEvent } from "./clubMatching";
 import { getEventCategories } from "./eventFormatting";
 import type { User } from "@/context/AuthContext";
+import type { EdenEvent } from "../types/events";
 
 /**
  * The slice of the canonical User (context/AuthContext) that scoring needs.
@@ -132,7 +133,7 @@ const YEAR_BOOSTS: Record<string, Record<string, number>> = {
   "Graduate":  { conference: 10, workshop: 8, "info session": 6 },
 };
 
-export function matchScore(event: any, profile: UserProfile): number {
+export function matchScore(event: EdenEvent, profile: UserProfile): number {
   const hasProfile = profile.major || profile.interests.length > 0 || profile.clubs.length > 0;
   if (!hasProfile) return -1;
   let score = 0;
@@ -154,7 +155,7 @@ export function matchScore(event: any, profile: UserProfile): number {
 }
 
 /** Human-readable "why this matched" sentence for scores shown as Strong Match. */
-export function explainMatch(event: any, profile: UserProfile): string {
+export function explainMatch(event: EdenEvent, profile: UserProfile): string {
   const cat = getEventCategories(event)[0] ?? "";
   const clubName = event.club_name ?? "";
   const clubTerms = getClubTermsFromEvent(event);

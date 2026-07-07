@@ -11,6 +11,7 @@
 import { format } from "date-fns";
 import { CATEGORY_STYLE, fmt12, getEventCategories } from "../utils/eventFormatting";
 import { matchScore, explainMatch, type UserProfile } from "../utils/eventScoring";
+import type { EdenEvent } from "../types/events";
 import { ClubAvatar } from "./ClubAvatar";
 
 // Re-exported so existing `import type { UserProfile } from ".../EventDetailModal"`
@@ -20,7 +21,7 @@ export type { UserProfile };
 export interface AttendeeInfo { count: number; preview: { user_id: string; user_name: string; user_major: string }[] }
 
 export function EventDetailModal({ event, attendees, connectionIds, rsvpStatus, onRsvpToggle, profile, onClose, forceReadOnly }: {
-  event: any; attendees: AttendeeInfo | null; connectionIds: Set<string>;
+  event: EdenEvent; attendees: AttendeeInfo | null; connectionIds: Set<string>;
   rsvpStatus: string | null; onRsvpToggle?: (id: number) => void;
   profile: UserProfile; onClose: () => void;
   /** True for "Top Events of the Semester" and any context where RSVPs are irrelevant */

@@ -11,9 +11,9 @@ import { useState } from "react";
 import { CLUB_EMOJIS } from "../utils/eventFormatting";
 
 /** Standard 40px avatar used in event cards and the detail modal. */
-export function ClubAvatar({ clubId, clubName, index }: { clubId: number; clubName: string; index: number }) {
+export function ClubAvatar({ clubId, clubName, index }: { clubId?: number | null; clubName?: string; index: number }) {
   const [failed, setFailed] = useState(false);
-  if (!failed)
+  if (clubId != null && !failed)
     return <img src={`/club_pics/${clubId}.jpg`} alt={clubName} onError={() => setFailed(true)} className="w-10 h-10 rounded-lg object-cover shrink-0" />;
   return <div className="text-3xl shrink-0 w-10 h-10 flex items-center justify-center">{CLUB_EMOJIS[index % CLUB_EMOJIS.length]}</div>;
 }
@@ -23,7 +23,7 @@ export function ClubAvatar({ clubId, clubName, index }: { clubId: number; clubNa
  * optional here because trending data sometimes lacks one — it falls straight
  * through to the emoji.
  */
-export function TrendingClubAvatar({ clubId, clubName, index }: { clubId?: number; clubName: string; index: number }) {
+export function TrendingClubAvatar({ clubId, clubName, index }: { clubId?: number | null; clubName?: string; index: number }) {
   const [failed, setFailed] = useState(false);
 
   if (clubId && !failed) {

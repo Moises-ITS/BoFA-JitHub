@@ -16,6 +16,7 @@ import { ClubAvatar, TrendingClubAvatar } from "../events/components/ClubAvatar"
 import { CATEGORY_STYLE, fmt12 } from "../events/utils/eventFormatting";
 import type { UserProfile } from "../events/utils/eventScoring";
 import type { AttendeeInfo } from "../events/components/EventDetailModal";
+import type { EdenEvent, TrendingClub } from "../events/types/events";
 
 import { apiFetch, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
 import { readJsonCache, writeJsonCache } from "@/lib/localCache";
@@ -27,8 +28,8 @@ const HOME_CACHE_KEY = "jithub.home-overview.v2"; // v2: envelope format changed
 const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
 
 type HomeOverviewCache = {
-  topEvents: any[];
-  trendingClubs: any[];
+  topEvents: EdenEvent[];
+  trendingClubs: TrendingClub[];
 };
 
 function readHomeOverviewCache(): HomeOverviewCache | null {
@@ -85,20 +86,20 @@ export default function Home() {
     year: user?.year ?? null,
   };
 
-  const [topEvents, setTopEvents] = useState<any[]>(cachedOverview?.topEvents ?? []);
-  const [trendingClubs, setTrendingClubs] = useState<any[]>(cachedOverview?.trendingClubs ?? []);
+  const [topEvents, setTopEvents] = useState<EdenEvent[]>(cachedOverview?.topEvents ?? []);
+  const [trendingClubs, setTrendingClubs] = useState<TrendingClub[]>(cachedOverview?.trendingClubs ?? []);
   const [topEventsLoading, setTopEventsLoading] = useState(!cachedOverview?.topEvents?.length);
   const [trendingClubsLoading, setTrendingClubsLoading] = useState(!cachedOverview?.trendingClubs?.length);
   const [topEventsError, setTopEventsError] = useState<string | null>(null);
   const [trendingClubsError, setTrendingClubsError] = useState<string | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [selectedEvent, setSelectedEvent] = useState<EdenEvent | null>(null);
   const [modalAttendees, setModalAttendees] = useState<AttendeeInfo | null>(null);
   const [attendeeMap, setAttendeeMap] = useState<Record<number, AttendeeInfo>>({});
   const [connectionIds, setConnectionIds] = useState<Set<string>>(new Set());
   const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
   const selectedEventId = selectedEvent?.event_id ?? null;
   const selectedEventAttendees = selectedEventId ? attendeeMap[selectedEventId] : null;
-  const topEventIds = topEvents.map((event: any) => event.event_id);
+  const topEventIds = topEvents.map((event) => event.event_id);
   const topEventIdsKey = topEventIds.join(",");
 
   const moduleCards = [
@@ -197,7 +198,7 @@ export default function Home() {
       .then((response) => response.json())
       .then((data) => {
         if (cancelled || data?.error) return;
-        setSelectedEvent((prev: any) => (
+        setSelectedEvent((prev) => (
           prev?.event_id === selectedEventId
             ? { ...prev, ...data }
             : prev

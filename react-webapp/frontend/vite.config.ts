@@ -1,4 +1,5 @@
 /// <reference types="vitest" />
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -11,9 +12,18 @@ export default defineConfig({
     cesium(),
   ],
 
+  resolve: {
+    // "@/" = the frontend root. MUST mirror the "paths" entry in
+    // tsconfig.app.json: tsc uses that one to type-check, Vite uses this one
+    // to actually resolve at build time — if they disagree, code type-checks
+    // but fails to bundle (or vice versa). Vitest inherits this config, so
+    // unit tests resolve the alias too.
+    alias: { '@': fileURLToPath(new URL('.', import.meta.url)) },
+  },
+
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    port: 5175,
     strictPort: true,
   },
 

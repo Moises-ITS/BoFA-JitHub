@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { Target, Award, Edit2, Calendar, Briefcase, Users } from "lucide-react";
-import { mockOpportunities } from "../home/mock-data";
-import { useAuth } from "../../context/AuthContext";
+import { useSignIn } from "@clerk/clerk-react";
+import { Target, Award, Edit2, Calendar, Briefcase, Users, ShieldCheck, KeyRound, Trash2, AlertTriangle } from "lucide-react";
+// Same live-data hook the /opportunities page uses — replaced a hardcoded mock
+// list so students see real, best-match recommendations here.
+import { useOpportunities } from "../opportunities/hooks/useOpportunities";
+import { OPPORTUNITY_TYPE_ICON } from "../opportunities/types/opportunities";
+import { useAuth } from "@/context/AuthContext";
 import EditProfileModal from "../node/components/EditProfileModal";
 
-const EVENTS_API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
+import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
 
 type ProfileEvent = {
   event_id: number;
@@ -43,11 +47,26 @@ function formatEventDate(date: string | null, startTime: string | null) {
 }
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, token, logout } = useAuth();
+  const { isLoaded: signInLoaded, signIn, setActive } = useSignIn();
   const [editOpen, setEditOpen] = useState(false);
   const [yourEvents, setYourEvents] = useState<ProfileEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
-  const savedOpportunities = mockOpportunities.slice(0, 2);
+  const [passwordResetOpen, setPasswordResetOpen] = useState(false);
+  const [passwordResetCode, setPasswordResetCode] = useState("");
+  const [passwordResetPassword, setPasswordResetPassword] = useState("");
+  const [passwordResetConfirm, setPasswordResetConfirm] = useState("");
+  const [passwordResetLoading, setPasswordResetLoading] = useState(false);
+  const [passwordResetMessage, setPasswordResetMessage] = useState("");
+  const [passwordResetError, setPasswordResetError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  // Top two best-match opportunities for this student. NOTE: this is
+  // "recommended", not "saved" — per-user saved opportunities aren't persisted
+  // to the backend yet, and showing fake "saved" items would lie to the user.
+  const { sortedFiltered: allOpportunities } = useOpportunities();
+  const recommendedOpportunities = allOpportunities.slice(0, 2);
 
   const name = user?.name ?? "";
   const ucid = user?.email?.split("@")[0] ?? "";
@@ -94,6 +113,119 @@ export default function Profile() {
         : rightDate.getTime() - leftDate.getTime();
     });
   }, [yourEvents]);
+
+  const startPasswordReset = async () => {
+    setPasswordResetError("");
+    setPasswordResetMessage("");
+
+    if (!signInLoaded || !signIn || !user?.email) {
+      setPasswordResetError("Password reset is not ready yet. Please try again.");
+      setPasswordResetOpen(true);
+      return;
+    }
+
+    setPasswordResetLoading(true);
+    try {
+      await signIn.create({
+        strategy: "reset_password_email_code",
+        identifier: user.email,
+      });
+      setPasswordResetOpen(true);
+      setPasswordResetMessage(`A confirmation code was sent to ${user.email}.`);
+    } catch (error) {
+      setPasswordResetOpen(true);
+      setPasswordResetError(error instanceof Error ? error.message : "Unable to send password reset code.");
+    } finally {
+      setPasswordResetLoading(false);
+    }
+  };
+
+  const completePasswordReset = async () => {
+    setPasswordResetError("");
+
+    if (!signInLoaded || !signIn) {
+      setPasswordResetError("Password reset is not ready yet. Please try again.");
+      return;
+    }
+
+    if (!passwordResetCode.trim()) {
+      setPasswordResetError("Enter the confirmation code from your email.");
+      return;
+    }
+
+    if (passwordResetPassword.length < 8) {
+      setPasswordResetError("Password must be at least 8 characters.");
+      return;
+    }
+
+    if (passwordResetPassword !== passwordResetConfirm) {
+      setPasswordResetError("Passwords do not match.");
+      return;
+    }
+
+    setPasswordResetLoading(true);
+    try {
+      const result = await signIn.attemptFirstFactor({
+        strategy: "reset_password_email_code",
+        code: passwordResetCode.trim(),
+        password: passwordResetPassword,
+      });
+
+      if (result.status === "complete") {
+        if (result.createdSessionId && setActive) {
+          await setActive({ session: result.createdSessionId });
+        }
+        setPasswordResetCode("");
+        setPasswordResetPassword("");
+        setPasswordResetConfirm("");
+        setPasswordResetMessage("Password changed successfully.");
+      } else {
+        setPasswordResetError("Additional verification is required before the password can be changed.");
+      }
+    } catch (error) {
+      setPasswordResetError(error instanceof Error ? error.message : "Unable to change password.");
+    } finally {
+      setPasswordResetLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteError("");
+
+    if (deleteConfirm.trim() !== "DELETE") {
+      setDeleteError("Type DELETE to confirm permanent account deletion.");
+      return;
+    }
+
+    if (!token) {
+      setDeleteError("Your session expired. Please sign in again before deleting your account.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "This permanently deletes your JitHub account, profile data, connections, graph node, and Clerk login. This cannot be undone."
+    );
+    if (!confirmed) return;
+
+    setDeleteLoading(true);
+    try {
+      const response = await fetch(`${AUTH_API}/api/auth/account`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(body.error ?? "Unable to delete account");
+      }
+
+      logout();
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unable to delete account");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -345,18 +477,77 @@ export default function Profile() {
           >
             <div className="flex items-center gap-2 mb-4">
               <Briefcase className="w-5 h-5" style={{ color: "var(--accent-events)" }} />
-              <h3 className="font-semibold text-white">Saved Opportunities</h3>
+              <h3 className="font-semibold text-white">Recommended Opportunities</h3>
             </div>
             <div className="space-y-3">
-              {savedOpportunities.map((opp) => (
+              {recommendedOpportunities.map((opp) => (
                 <div key={opp.id} className="p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xl">{opp.logo}</span>
-                    <p className="text-sm font-medium text-white truncate flex-1">{opp.role}</p>
+                    <span className="text-xl">{OPPORTUNITY_TYPE_ICON[opp.type]}</span>
+                    <p className="text-sm font-medium text-white truncate flex-1">{opp.title}</p>
                   </div>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{opp.company}</p>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{opp.org}</p>
                 </div>
               ))}
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.55 }}
+            className="rounded-xl p-5"
+            style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <ShieldCheck className="w-5 h-5" style={{ color: "var(--brand-primary)" }} />
+              <h3 className="font-semibold text-white">Account Security</h3>
+            </div>
+
+            <button
+              type="button"
+              onClick={startPasswordReset}
+              disabled={passwordResetLoading}
+              className="w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid var(--border-default)" }}
+            >
+              <KeyRound className="w-4 h-4" />
+              {passwordResetLoading ? "Sending code..." : "Change password by email"}
+            </button>
+            <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+              Clerk sends a confirmation code to your NJIT email before changing the password.
+            </p>
+
+            <div className="mt-5 pt-5 border-t border-white/10">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-4 h-4 text-red-300" />
+                <p className="text-sm font-semibold text-red-200">Danger Zone</p>
+              </div>
+              <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+                Permanently deletes your SQL profile rows, connections, graph node, and Clerk login.
+              </p>
+              <input
+                value={deleteConfirm}
+                onChange={(event) => {
+                  setDeleteConfirm(event.target.value);
+                  setDeleteError("");
+                }}
+                placeholder="Type DELETE"
+                className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)" }}
+                disabled={deleteLoading}
+              />
+              {deleteError && <p className="text-xs text-red-300 mt-2">{deleteError}</p>}
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading || deleteConfirm.trim() !== "DELETE"}
+                className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ backgroundColor: "rgba(220,38,38,0.78)", border: "1px solid rgba(248,113,113,0.45)" }}
+              >
+                <Trash2 className="w-4 h-4" />
+                {deleteLoading ? "Deleting..." : "Delete account permanently"}
+              </button>
             </div>
           </motion.div>
 
@@ -385,6 +576,95 @@ export default function Profile() {
           </motion.div>
         </div>
       </div>
+      {passwordResetOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div
+            className="w-full max-w-md rounded-xl p-6"
+            style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-5 h-5" style={{ color: "var(--brand-primary)" }} />
+                <h3 className="text-lg font-semibold text-white">Change password</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPasswordResetOpen(false)}
+                className="rounded-lg px-2 py-1 text-sm text-white/70 hover:bg-white/10"
+                disabled={passwordResetLoading}
+              >
+                Close
+              </button>
+            </div>
+
+            {passwordResetMessage && (
+              <p className="mb-4 rounded-lg bg-white/5 px-3 py-2 text-sm text-white">{passwordResetMessage}</p>
+            )}
+            {passwordResetError && (
+              <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-200">{passwordResetError}</p>
+            )}
+
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-xs" style={{ color: "var(--text-muted)" }}>Email confirmation code</span>
+                <input
+                  value={passwordResetCode}
+                  onChange={(event) => setPasswordResetCode(event.target.value)}
+                  className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)" }}
+                  placeholder="6-digit code"
+                  disabled={passwordResetLoading}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs" style={{ color: "var(--text-muted)" }}>New password</span>
+                <input
+                  type="password"
+                  value={passwordResetPassword}
+                  onChange={(event) => setPasswordResetPassword(event.target.value)}
+                  className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)" }}
+                  placeholder="At least 8 characters"
+                  disabled={passwordResetLoading}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs" style={{ color: "var(--text-muted)" }}>Confirm new password</span>
+                <input
+                  type="password"
+                  value={passwordResetConfirm}
+                  onChange={(event) => setPasswordResetConfirm(event.target.value)}
+                  className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)" }}
+                  placeholder="Re-enter password"
+                  disabled={passwordResetLoading}
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={startPasswordReset}
+                disabled={passwordResetLoading}
+                className="flex-1 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid var(--border-default)" }}
+              >
+                Resend code
+              </button>
+              <button
+                type="button"
+                onClick={completePasswordReset}
+                disabled={passwordResetLoading}
+                className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ background: "var(--brand-gradient)" }}
+              >
+                {passwordResetLoading ? "Saving..." : "Save password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <EditProfileModal open={editOpen} onClose={() => setEditOpen(false)} />
     </div>
   );

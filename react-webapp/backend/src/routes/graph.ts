@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express"
-import { getNodes, getLinks, getShortestPath } from "../services/graphService"
-import { requireSafeId } from "../middlewear/security"
-import { requireAuth } from "../middlewear/auth"
+import { getNodes, getLinks, getShortestPath } from "../services/graphService.js"
+import { requireSafeId } from "../middleware/security.js"
+import { requireAuth } from "../middleware/auth.js"
 
 const router = Router()
 router.use(requireAuth)

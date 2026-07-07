@@ -16,6 +16,12 @@ node_modules/
 dist/
 build/
 
+# Secrets / credentials — session cookies and auth exports must NEVER be committed.
+# ig_cookies.json once held a live Instagram sessionid (removed + rotated); this
+# rule exists so the scraper's cookie export can't be re-committed by accident.
+ig_cookies.json
+*cookies*.json
+
 # Misc
 .DS_Store
 *.log

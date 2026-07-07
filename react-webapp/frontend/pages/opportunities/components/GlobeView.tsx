@@ -1,9 +1,17 @@
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, extend, type ThreeElement } from '@react-three/fiber';
 import { Stars, useTexture, Html } from '@react-three/drei';
 import { useRef, useMemo, useEffect, Suspense, useState } from 'react';
 import * as THREE from 'three';
 import type { BufferGeometry, LineBasicMaterial } from 'three';
 import type { Opportunity } from '../types/opportunities';
+
+extend({ Line_: THREE.Line });
+
+declare module '@react-three/fiber' {
+  interface ThreeElements {
+    line_: ThreeElement<typeof THREE.Line>;
+  }
+}
 
 const GLOBE_R     = 2.0;
 const CAM_DEFAULT = 7.5;                   // idle — globe fills ~60% of canvas
@@ -291,8 +299,8 @@ function ClusterGroup({
       {/* Individual dots — start at center, animate to ring */}
       {cluster.opps.map((opp, i) => (
         <group key={opp.id}>
-          <line
-            ref={(el) => { lineRefs.current[i] = el; }}
+          <line_
+            ref={(el) => { lineRefs.current[i] = el as THREE.Line<BufferGeometry, LineBasicMaterial> | null; }}
             position={[0, 0, 0]}
           >
             <bufferGeometry>
@@ -308,7 +316,7 @@ function ClusterGroup({
               blending={THREE.AdditiveBlending}
               depthWrite={false}
             />
-          </line>
+          </line_>
           <mesh
             ref={(el) => { dotHaloRefs.current[i] = el; }}
             position={center}

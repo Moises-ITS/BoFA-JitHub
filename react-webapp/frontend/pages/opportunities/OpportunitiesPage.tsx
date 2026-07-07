@@ -1,12 +1,12 @@
 ﻿import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useOpportunities } from './hooks/useOpportunities';
 import type { FilterType, SortType, UrgencyFilter } from './hooks/useOpportunities';
 import SmartFeed from './components/SmartFeed';
 import ApplicationTracker from './components/ApplicationTracker';
 import GlobeView from './components/GlobeView';
 import SubmitOpportunityModal from './components/SubmitOpportunityModal';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import { getCountry } from './utils/getCountry';
 import './Opportunities.css';
 
@@ -15,7 +15,6 @@ type SideTab = 'feed' | 'tracker';
 
 
 export default function OpportunitiesPage() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const districtParam = searchParams.get('district');
   const { token } = useAuth();
@@ -303,20 +302,23 @@ export default function OpportunitiesPage() {
                   ×
                 </button>
               </span>
-              <button
-                onClick={() => navigate('/research')}
-                style={{
-                  border: '1px solid rgba(148, 163, 184, 0.35)',
-                  background: 'rgba(15, 23, 42, 0.55)',
-                  color: '#e2e8f0',
-                  borderRadius: 999,
-                  padding: '6px 12px',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                }}
-              >
-                Back to Research District
-              </button>
+              {/* Quarantined: hide the Research District button until the research section is ready for users. */}
+              {/*
+                <button
+                  onClick={() => navigate('/research')}
+                  style={{
+                    border: '1px solid rgba(148, 163, 184, 0.35)',
+                    background: 'rgba(15, 23, 42, 0.55)',
+                    color: '#e2e8f0',
+                    borderRadius: 999,
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Back to Research District
+                </button>
+              */}
             </div>
           )}
         </div>

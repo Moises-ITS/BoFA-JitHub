@@ -1,4 +1,5 @@
 import type { Opportunity, TrackedApplication } from '../types/opportunities';
+import { OPPORTUNITY_TYPE_ICON as TYPE_ICON } from '../types/opportunities';
 import NetworkBadge from './NetworkBadge';
 
 interface Props {
@@ -7,12 +8,6 @@ interface Props {
   active?: boolean;
   onSelect: (id: string) => void;
 }
-
-const TYPE_ICON: Record<string, string> = {
-  scholarship: '🎓',
-  internship:  '💼',
-  networking:  '🤝',
-};
 
 export default function ListingCard({ opportunity: o, tracked, active = false, onSelect }: Props) {
   const deadlineStr = o.deadline

@@ -1,8 +1,8 @@
 import { Router, Response } from "express"
-import { db } from "../config/postgres"
-import { requireAuth, AuthRequest } from "../middlewear/auth"
-import { apiWriteRateLimiter } from "../middlewear/authRateLimit"
-import { sanitizeStringArray } from "../middlewear/security"
+import { db } from "../config/postgres.js"
+import { requireAuth, AuthRequest } from "../middleware/auth.js"
+import { apiWriteRateLimiter } from "../middleware/authRateLimit.js"
+import { sanitizeStringArray } from "../middleware/security.js"
 
 const router = Router()
 

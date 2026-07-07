@@ -1,11 +1,11 @@
-import { useState, useEffect, FormEvent } from "react"
+import { useState, useEffect, type FormEvent } from "react"
 import { useNavigate, Navigate } from "react-router-dom"
 import { useUser, useAuth as useClerkAuth } from "@clerk/clerk-react"
-import { useAuth } from "../../context/AuthContext"
-import type { SyncData } from "../../context/AuthContext"
+import { useAuth } from "@/context/AuthContext"
+import type { SyncData } from "@/context/AuthContext"
 import "./auth.css"
 
-const API = import.meta.env.VITE_API_URL ?? ""
+import { API_BASE_URL as API } from "@/lib/api"
 
 const STEPS = ["Academic", "Campus Life", "Profile"] as const
 type Step = 0 | 1 | 2
@@ -133,6 +133,7 @@ const NJIT_CLUBS = [
   "Finance Club",
   "Google Developer Student Club",
   "Hack@NJIT",
+  "HACCS",
   "Indian Student Association",
   "Institute of Electrical and Electronics Engineers",
   "International Students Organization",

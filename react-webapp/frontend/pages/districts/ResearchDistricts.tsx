@@ -3,7 +3,6 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, OrbitControls, RoundedBox } from "@react-three/drei";
 import { motion, AnimatePresence } from "motion/react";
 import * as THREE from "three";
-import { useNavigate, Link } from "react-router-dom";
 
 type Opportunity = { id: string; title: string; description: string; tags: string[]; requirement: string };
 type Building = { id: string; name: string; professor: string; position: [number, number, number]; size: [number, number, number]; opportunities: Opportunity[] };
@@ -76,7 +75,7 @@ function GalaxyBackdrop() {
     <group>
       <points position={[0, 0, 0]}>
         <bufferGeometry>
-          <bufferAttribute attach="attributes-position" count={starPositions.length / 3} array={starPositions} itemSize={3} />
+          <bufferAttribute attach="attributes-position" args={[starPositions, 3]} />
         </bufferGeometry>
         <pointsMaterial color="#f8fbff" size={0.18} sizeAttenuation transparent opacity={0.9} depthWrite={false} />
       </points>
@@ -465,7 +464,7 @@ function BuildingNode({ district, building, selected, dimmed, onSelect }: { dist
 }
 
 function Scene({ focusedDistrict, setFocusedDistrict, selectedBuilding, setSelectedBuilding }: { focusedDistrict: District | null; setFocusedDistrict: (d: District | null) => void; selectedBuilding: Building | null; setSelectedBuilding: (b: Building | null) => void }) {
-  const controlsRef = useRef<CameraControls | null>(null);
+  const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
 
   return <>
     <color attach="background" args={["#02030a"]} /><fog attach="fog" args={["#02030a", 18, 34]} />
@@ -496,7 +495,6 @@ function Scene({ focusedDistrict, setFocusedDistrict, selectedBuilding, setSelec
 }
 
 export default function ResearchDistrictsScene() {
-  const navigate = useNavigate();
   const [focusedDistrict, setFocusedDistrict] = useState<District | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
   const reset = () => { setFocusedDistrict(null); setSelectedBuilding(null); };

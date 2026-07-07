@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { requireSafeId } from "../middlewear/security.js"
+import { requireSafeId } from "../middleware/security.js"
 
 export interface Building {
   id: string

@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { Search, Bell } from "lucide-react"
-import { useAuth } from "../../context/AuthContext"
+import { useAuth } from "@/context/AuthContext"
 import NodeProfilePopup from "./NodeProfilePopup"
-import { search as nodeSearch, primeCache } from "../../hooks/useNodeSearch"
+import { search as nodeSearch, primeCache } from "@/hooks/useNodeSearch"
 
-const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001"
+import { API_BASE_URL as API } from "@/lib/api"
 
 type PendingRequest = {
   id: number
@@ -109,7 +109,7 @@ export function Topbar() {
   const handleAcceptRequest = useCallback(async (fromUserId: string) => {
     if (!token) return
     try {
-      await fetch(`${API}/api/connections/accept`, {
+      const res = await fetch(`${API}/api/connections/accept`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -117,6 +117,7 @@ export function Topbar() {
         },
         body: JSON.stringify({ fromUserId }),
       })
+      if (res.ok) window.dispatchEvent(new CustomEvent("jithub:connections-changed"))
     } catch {
       // no-op
     }

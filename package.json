@@ -1,9 +1,19 @@
 {
-  "dependencies": {
-    "@clerk/backend": "^3.2.2",
-    "express-rate-limit": "^8.3.1",
-    "node-cron": "^4.2.1",
-    "rate-limit-redis": "^4.3.1",
-    "redis": "^5.11.0"
+  "name": "bofa-jithub",
+  "version": "1.0.0",
+  "private": true,
+  "//": [
+    "Thin orchestrator for deploy platforms that build from the repo root (Railway).",
+    "It owns NO dependencies on purpose: every dep the backend needs is declared in",
+    "react-webapp/backend/package.json. Deps used to be duplicated here with DIFFERENT",
+    "versions (e.g. @clerk/backend ^3 here vs ^2 in the backend) — the backend's copy",
+    "always won at resolution, so the root copies were dead weight that could only",
+    "cause confusion. The frontend is deployed separately by Vercel with its Root",
+    "Directory set to react-webapp/frontend and never builds from here."
+  ],
+  "scripts": {
+    "postinstall": "npm install --prefix react-webapp/backend",
+    "build": "npm run build --prefix react-webapp/backend",
+    "start": "npm run start --prefix react-webapp/backend"
   }
 }

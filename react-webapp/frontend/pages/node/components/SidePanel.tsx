@@ -10,15 +10,23 @@ import { useState, useEffect } from "react";
 import type { GraphNode, GraphLink } from "../types/graphNodes";
 import { TYPE_COLOR, TYPE_EMOJI, TYPE_BADGE, DETAIL_ICONS } from "../constants/maps";
 import { getNodeId } from "../utils/getNodeId";
-import { useAuth } from "../../../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
-const API = import.meta.env.VITE_API_URL ?? "";
+import { API_BASE_URL as API } from "@/lib/api";
 
 type ConnStatus = "none" | "pending-sent" | "pending-received" | "connected";
 
 const HIDDEN_DETAIL_KEYS = new Set([
+  "color",
+  "email",
   "id",
   "graph_node_id",
+  "graphnodeid",
+  "password",
+  "password_hash",
+  "passwordhash",
+  "student_id",
+  "studentid",
   "type",
   "label",
   "name",
@@ -28,12 +36,19 @@ const HIDDEN_DETAIL_KEYS = new Set([
   "gpa",
 ]);
 
+const normalizeDetailKey = (key: string) => key.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+const shouldHideDetail = (key: string) => (
+  HIDDEN_DETAIL_KEYS.has(key) ||
+  HIDDEN_DETAIL_KEYS.has(normalizeDetailKey(key))
+);
+
 interface SidePanelProps {
   node:         GraphNode | null;
   nodes:        GraphNode[];
   links:        GraphLink[];
   onClose:      () => void;
   onSelectNode: (id: string) => void;
+  onConnectionChanged?: () => void | Promise<void>;
 }
 
 // Minimal recommendation type returned by the recommendations API
@@ -47,7 +62,7 @@ interface Recommendation {
   sharedClubs?: number;
 }
 
-export default function SidePanel({ node, nodes, links, onClose, onSelectNode }: SidePanelProps) {
+export default function SidePanel({ node, nodes, links, onClose, onSelectNode, onConnectionChanged }: SidePanelProps) {
   const { user, token } = useAuth();
   const isOwnNode = node?.id === user?.id;
 
@@ -55,8 +70,6 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
   const [connStatus,    setConnStatus]    = useState<ConnStatus>("none");
   const [connLoading,   setConnLoading]   = useState(false);
   const [connExpanded,  setConnExpanded]  = useState(false);
-  //  Connection status state 
-  
 
   //  Recommendations (shown on own node) 
   const [recs, setRecs] = useState<Recommendation[]>([]);
@@ -89,18 +102,26 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
   }, [isOwnNode, user]);
 
   //  Connection actions 
-  const sendRequest = async () => {
-    if (!node || !user) return;
+  const sendRequestTo = async (toUserId: string) => {
+    if (!user) return;
     setConnLoading(true);
     try {
       const res = await fetch(`${API}/api/connections/request`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ toUserId: node.id }),
+        body:    JSON.stringify({ toUserId }),
       });
-      if (res.ok) setConnStatus("pending-sent");
+      if (res.ok) {
+        if (node?.id === toUserId) setConnStatus("pending-sent");
+        setRecs((prev) => prev.filter((rec) => rec.id !== toUserId));
+      }
     } catch { /* silent */ }
     setConnLoading(false);
+  };
+
+  const sendRequest = () => {
+    if (!node) return;
+    void sendRequestTo(node.id);
   };
 
   // ── Early return ──────────────────────────────────────────────────────────
@@ -113,7 +134,10 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ fromUserId: node.id }),
       });
-      if (res.ok) setConnStatus("connected");
+      if (res.ok) {
+        setConnStatus("connected");
+        await onConnectionChanged?.();
+      }
     } catch { /* silent */ }
     setConnLoading(false);
   };
@@ -140,7 +164,10 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
         method:  "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) setConnStatus("none");
+      if (res.ok) {
+        setConnStatus("none");
+        await onConnectionChanged?.();
+      }
     } catch { /* silent */ }
     setConnLoading(false);
   };
@@ -202,7 +229,17 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
             <span className="connectChip connectChip--pending">Request Sent</span>
           )}
           {connStatus === "pending-received" && (
-            <span className="connectChip connectChip--incoming">Wants to connect with you</span>
+            <div className="connectIncoming">
+              <span className="connectChip connectChip--incoming">Wants to connect with you</span>
+              <div className="connectActions">
+                <button className="connectBtn" onClick={acceptRequest} disabled={connLoading}>
+                  {connLoading ? "Accepting..." : "Accept"}
+                </button>
+                <button className="connectBtn connectBtn--decline" onClick={rejectRequest} disabled={connLoading}>
+                  Decline
+                </button>
+              </div>
+            </div>
           )}
           {connStatus === "connected" && (
             <div className="connectIncoming">
@@ -233,7 +270,7 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
       <div className="section">
         <h4 className="sectionTitle">Details</h4>
         {Object.entries(node.details || {})
-          .filter(([k]) => !HIDDEN_DETAIL_KEYS.has(k))
+          .filter(([k]) => !shouldHideDetail(k))
           .map(([k, v]) => (
             <div key={k} className="detailRow">
               <span className="detailIcon">{DETAIL_ICONS[k] || "-"}</span>
@@ -303,7 +340,8 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
                     <button
                       type="button"
                       className="recBtn recBtn--accent"
-                      onClick={(e) => { e.stopPropagation(); onSelectNode(rec.id); }}
+                      onClick={(e) => { e.stopPropagation(); void sendRequestTo(rec.id); }}
+                      disabled={connLoading}
                     >
                       Connect
                     </button>
@@ -318,6 +356,3 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode }:
     </div>
   );
 }
-
-
-

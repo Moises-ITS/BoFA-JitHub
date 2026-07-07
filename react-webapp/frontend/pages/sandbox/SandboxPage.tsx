@@ -3,11 +3,10 @@ import { motion } from "motion/react";
 import { Send } from "lucide-react";
 
 const JITI_AVATAR = "/jiti.png";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import { EventDetailModal, type UserProfile, type AttendeeInfo } from "../events/components/EventDetailModal";
 
-const EVENTS_API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
-const AUTH_API   = import.meta.env.VITE_API_URL         ?? "http://localhost:3001";
+import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
 
 const STARTERS = [
   "What events are happening this week?",
@@ -227,7 +226,6 @@ export default function SandboxPage() {
   const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
-  const [rsvpingId, setRsvpingId] = useState<number | null>(null);
   const [chatInterests, setChatInterests] = useState<string[]>([]);
 
   // Load persisted chat interests on mount
@@ -375,12 +373,23 @@ export default function SandboxPage() {
         },
       });
 
+      if (!token) throw new Error("Please sign in to use the AI chatbot.");
+
       const res = await fetch(`${EVENTS_API}/sandbox/chat/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body,
       });
 
+      if (res.status === 429) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error === "AI chat limit reached"
+          ? "You've reached the 3 AI responses per 24 hours limit. Try again later."
+          : "You've reached the AI chat limit. Try again later.");
+      }
+      if (res.status === 401 || res.status === 403) {
+        throw new Error("Please sign in again to use the AI chatbot.");
+      }
       if (!res.ok || !res.body) throw new Error("Stream failed");
 
       // Add empty assistant bubble we'll fill as tokens arrive
@@ -419,11 +428,13 @@ export default function SandboxPage() {
           } catch { /* malformed chunk */ }
         }
       }
-    } catch {
+    } catch (err) {
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: "Couldn't reach the server. Make sure the EDEN backend is running.",
+        content: err instanceof Error
+          ? err.message
+          : "Couldn't reach the server. Make sure the EDEN backend is running.",
         error: true,
       }]);
     } finally {
@@ -493,7 +504,6 @@ export default function SandboxPage() {
     const current = rsvpMap[eventId] ?? null;
     const newStatus = current === "going" ? null : "going";
     setRsvpMap(prev => ({ ...prev, [eventId]: newStatus }));
-    setRsvpingId(eventId);
     try {
       if (newStatus === null) {
         await fetch(`${EVENTS_API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, { method: "DELETE" });
@@ -510,8 +520,6 @@ export default function SandboxPage() {
       }
     } catch {
       setRsvpMap(prev => ({ ...prev, [eventId]: current }));
-    } finally {
-      setRsvpingId(null);
     }
   }
 

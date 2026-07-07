@@ -1,52 +1,41 @@
 import { Router, Request, Response } from "express"
 import { v4 as uuidv4 } from "uuid"
 import { createClerkClient } from "@clerk/backend"
-import { db } from "../config/postgres"
-import { requireAuth, AuthRequest } from "../middlewear/auth"
-import { createStudentNode, updateStudentNode } from "../services/graphService"
-import { verifyClerkSessionToken } from "../utils/clerkToken"
-import { syncRateLimiter, profileUpdateRateLimiter } from "../middlewear/authRateLimit"
+import { db } from "../config/postgres.js"
+import { requireAuth, AuthRequest } from "../middleware/auth.js"
+import { createStudentNode, deleteStudentNode, updateStudentNode } from "../services/graphService.js"
+import { verifyClerkSessionToken } from "../utils/clerkToken.js"
+import { syncRateLimiter, profileUpdateRateLimiter } from "../middleware/authRateLimit.js"
 import {
   requireSafeId,
   sanitizeOptionalHttpsUrl,
   sanitizeStringArray,
   sanitizeText,
-} from "../middlewear/security"
+} from "../middleware/security.js"
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
+// One query fetches everything; what the CLIENT sees is decided by the
+// formatter below, never by which SQL string a route happened to use. Two
+// near-identical SELECTs + two near-identical formatters previously had to be
+// kept in sync by hand — adding a column meant editing four places, and
+// forgetting one silently dropped the field from some responses.
 const SELECT_PROFILE = `
   SELECT id, name, email, major, gpa, graduation_year, bio,
          clubs, companies, interests, linkedin_url, skills, looking_for, year
   FROM users WHERE id = $1
 `
 
-const SELECT_PUBLIC_PROFILE = `
-  SELECT id, name, major, graduation_year, bio,
-         clubs, companies, interests, linkedin_url, skills, looking_for, year
-  FROM users WHERE id = $1
-`
-
-function formatUser(user: Record<string, unknown>) {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    major: user.major,
-    gpa: user.gpa,
-    graduationYear: user.graduation_year,
-    bio: user.bio,
-    clubs: (user.clubs as string[] | null) ?? [],
-    companies: (user.companies as string[] | null) ?? [],
-    interests: (user.interests as string[] | null) ?? [],
-    linkedinUrl: user.linkedin_url,
-    skills: (user.skills as string[] | null) ?? [],
-    looking_for: (user.looking_for as string[] | null) ?? [],
-    year: (user.year as string | null) ?? null,
-  }
-}
-
-function formatPublicProfile(user: Record<string, unknown>) {
+/**
+ * Maps a DB row to the API response shape.
+ *
+ * SECURITY DESIGN: this is an explicit ALLOWLIST — fields are copied one by
+ * one, never spread (`...user`), so a new DB column (password hash, admin
+ * flag, ...) can never leak into a response by accident. `includePrivate`
+ * gates the fields only the account owner may see (email, gpa): /me passes
+ * true; the public profile route passes false.
+ */
+function formatUser(user: Record<string, unknown>, { includePrivate }: { includePrivate: boolean }) {
   return {
     id: user.id,
     name: user.name,
@@ -60,6 +49,7 @@ function formatPublicProfile(user: Record<string, unknown>) {
     skills: (user.skills as string[] | null) ?? [],
     looking_for: (user.looking_for as string[] | null) ?? [],
     year: (user.year as string | null) ?? null,
+    ...(includePrivate ? { email: user.email, gpa: user.gpa } : {}),
   }
 }
 
@@ -92,7 +82,7 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
 
   let clerkId: string
   try {
-    const payload = await verifyClerkSessionToken(token)
+    const payload = await verifyClerkSessionToken(token, req.headers.origin)
     clerkId = payload.sub
   } catch (error) {
     console.error("Clerk token verification failed in /api/auth/sync:", error)
@@ -130,7 +120,7 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
     if (existing.rows.length > 0) {
       console.info("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "existing_user", userId: existing.rows[0].id, ip: req.ip })
       const user = await db.query(SELECT_PROFILE, [existing.rows[0].id])
-      res.json(formatUser(user.rows[0]))
+      res.json(formatUser(user.rows[0], { includePrivate: true }))
       return
     }
 
@@ -142,23 +132,16 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
       await db.query("UPDATE users SET clerk_id = $1 WHERE id = $2", [clerkId, legacy.rows[0].id])
       console.info("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "legacy_linked", userId: legacy.rows[0].id, ip: req.ip })
       const user = await db.query(SELECT_PROFILE, [legacy.rows[0].id])
-      res.json(formatUser(user.rows[0]))
+      res.json(formatUser(user.rows[0], { includePrivate: true }))
       return
     }
 
+    // Brand-new user — name is required; everything else can be filled in later
     if (!normalizedName) {
       res.status(400).json({ error: "name is required" })
       return
     }
 
-    // Legacy user reclaim handled above
-
-    // Brand-new user — name is required; major/year can be filled in later
-    if (!normalizedName) {
-      res.status(400).json({ error: "name is required" }); return
-    }
-
-    // Brand-new user
     const id = uuidv4()
     const majorValue = sanitizeText(major, 120)
     const gpaValue = toNullableNumber(gpa)
@@ -213,7 +196,7 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
 
     const user = await db.query(SELECT_PROFILE, [id])
     console.info("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "new_user_created", userId: id, ip: req.ip })
-    res.status(201).json(formatUser(user.rows[0]))
+    res.status(201).json(formatUser(user.rows[0], { includePrivate: true }))
   } catch (err) {
     console.error("Sync error:", err)
     res.status(500).json({ error: "Internal server error" })
@@ -227,7 +210,7 @@ router.get("/me", requireAuth, async (req: AuthRequest, res: Response) => {
       res.status(404).json({ error: "User not found" })
       return
     }
-    res.json(formatUser(result.rows[0]))
+    res.json(formatUser(result.rows[0], { includePrivate: true }))
   } catch (err) {
     console.error("Me error:", err)
     res.status(500).json({ error: "Internal server error" })
@@ -245,12 +228,12 @@ router.get("/users/:id/profile", requireAuth, async (req: AuthRequest, res: Resp
     return
   }
   try {
-    const result = await db.query(SELECT_PUBLIC_PROFILE, [safeId])
+    const result = await db.query(SELECT_PROFILE, [safeId])
     if (result.rows.length === 0) {
       res.status(404).json({ error: "User not found" })
       return
     }
-    res.json(formatPublicProfile(result.rows[0]))
+    res.json(formatUser(result.rows[0], { includePrivate: false }))
   } catch (err) {
     console.error("Profile fetch error:", err)
     res.status(500).json({ error: "Internal server error" })
@@ -346,10 +329,57 @@ router.put("/profile", requireAuth, profileUpdateRateLimiter, async (req: AuthRe
     })
 
     const updated = await db.query(SELECT_PROFILE, [req.userId])
-    res.json(formatUser(updated.rows[0]))
+    res.json(formatUser(updated.rows[0], { includePrivate: true }))
   } catch (err) {
     console.error("Profile update error:", err)
     res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+router.delete("/account", requireAuth, profileUpdateRateLimiter, async (req: AuthRequest, res: Response) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized" })
+    return
+  }
+
+  try {
+    const userResult = await db.query("SELECT id, clerk_id FROM users WHERE id = $1", [userId])
+    if (userResult.rows.length === 0) {
+      res.status(404).json({ error: "User not found" })
+      return
+    }
+
+    const clerkId = userResult.rows[0].clerk_id as string | null
+    if (!clerkId) {
+      res.status(409).json({ error: "Account is not linked to Clerk" })
+      return
+    }
+
+    await clerk.users.deleteUser(clerkId)
+    await deleteStudentNode(userId)
+
+    const client = await db.connect()
+    try {
+      await client.query("BEGIN")
+      await client.query("DELETE FROM user_chat_memory WHERE user_id = $1", [userId])
+      await client.query("DELETE FROM user_notifications WHERE user_id = $1 OR related_user_id = $1", [userId])
+      await client.query("DELETE FROM password_reset_tokens WHERE user_id = $1", [userId])
+      await client.query("DELETE FROM connection_requests WHERE from_user_id = $1 OR to_user_id = $1", [userId])
+      await client.query("DELETE FROM users WHERE id = $1", [userId])
+      await client.query("COMMIT")
+    } catch (err) {
+      await client.query("ROLLBACK")
+      throw err
+    } finally {
+      client.release()
+    }
+
+    console.info("[security][account-delete]", { userId, ip: req.ip })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error("Account deletion error:", err)
+    res.status(500).json({ error: "Unable to delete account" })
   }
 })
 

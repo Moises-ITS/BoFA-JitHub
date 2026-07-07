@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { clubNamesEquivalent, getClubTermsFromEvent } from "../utils/clubMatching";
-// BUG FIX: <AttendanceForm /> was rendered below without ever being imported —
-// opening any past event's detail modal crashed with a ReferenceError.
-import { AttendanceForm } from "./AttendanceForm";
 import type { User } from "@/context/AuthContext";
 
 export const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥", "🎨", "🏆", "💻", "🎪", "🌈"];
@@ -372,13 +369,14 @@ export function EventDetailModal({ event, attendees, connectionIds, rsvpStatus, 
           )}
         </div>
 
-        {isPast && event.date && event.club_id != null && (
-          <AttendanceForm
-            eventId={event.event_id}
-            clubId={event.club_id}
-            eventDate={event.date}
-          />
-        )}
+        {/* AttendanceForm removed: it submits to /api/eden/*, which is only
+            mounted when the parked EDEN feature is enabled (ENABLE_EDEN=true
+            on the backend) — in production today every submission silently
+            404s. Restore this render when EDEN ships in v2:
+              {isPast && event.date && event.club_id != null && (
+                <AttendanceForm eventId={event.event_id} clubId={event.club_id} eventDate={event.date} />
+              )}
+            The component itself is parked at ./AttendanceForm.tsx. */}
 
         {onRsvpToggle && !isPast && (
           <button onClick={() => onRsvpToggle(event.event_id)}

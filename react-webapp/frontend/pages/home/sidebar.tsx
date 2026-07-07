@@ -1,7 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { motion } from "motion/react";
-import { Home, Calendar, Briefcase, Network, User, Bot, Activity, Flag } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { Home, Calendar, Briefcase, Network, User, Flag } from "lucide-react";
 
 const baseNavItems = [
   { icon: Home, label: "Home", path: "/home" },
@@ -18,10 +17,11 @@ const baseNavItems = [
 
 
 export function Sidebar() {
-  const { user } = useAuth();
-  const navItems = user?.is_eboard
-    ? [...baseNavItems, { icon: Activity, label: "EDEN", path: "/eden" }]
-    : baseNavItems;
+  // EDEN (e-board analytics) is PARKED for v2 — see pages/eden/README.md.
+  // An e-board-only link used to render here (via useAuth().user.is_eboard),
+  // but no /eden route exists, so clicking it silently bounced users to the
+  // landing page. Don't show a door that opens onto a wall.
+  const navItems = baseNavItems;
   return (
     <aside
       className="fixed left-0 top-0 h-screen w-20 flex flex-col items-center py-6 z-50"

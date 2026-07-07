@@ -47,3 +47,6 @@ export interface GraphLink {
   opacity: number; // 0–1  confidence / recency
   style:   "solid" | "dashed" | "direct"; // solid = structural, dashed = inferred, direct = student↔student
 }
+
+/** Interaction mode of the graph page: free exploration, locked onto a node, or tracing a path. */
+export type GraphMode = "free" | "locked" | "path";

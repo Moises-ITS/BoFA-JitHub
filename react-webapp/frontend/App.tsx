@@ -151,13 +151,19 @@ export default function App() {
                   </Suspense>
                 </ErrorBoundary>
               } />
-              <Route path="/inspect" element={
-                <ErrorBoundary>
-                  <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0f1117", color:"#718096" }}>Loading Inspector…</div>}>
-                    <GlbInspector />
-                  </Suspense>
-                </ErrorBoundary>
-              } />
+              {/* /inspect is a 3D-model debugging tool for developers, not a student
+                  feature. Gating it behind import.meta.env.DEV means Vite strips the
+                  route (and its lazy chunk) from production builds entirely — students
+                  never download it, and it can't leak internal model data. */}
+              {import.meta.env.DEV && (
+                <Route path="/inspect" element={
+                  <ErrorBoundary>
+                    <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0f1117", color:"#718096" }}>Loading Inspector…</div>}>
+                      <GlbInspector />
+                    </Suspense>
+                  </ErrorBoundary>
+                } />
+              )}
 
               <Route element={<Layout />}>
                 <Route path="/home" element={<Home />} />

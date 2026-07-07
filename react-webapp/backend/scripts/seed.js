@@ -4,7 +4,9 @@ import { fileURLToPath } from "url"
 import path from "path"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-dotenv.config({ path: path.resolve(__dirname, ".env") })
+// Script lives in scripts/; the .env lives at the backend package root — resolve
+// one level up so credentials load regardless of the invoking working directory.
+dotenv.config({ path: path.resolve(__dirname, "..", ".env") })
 
 const NEO4J_URI = process.env.NEO4J_URI || "bolt://localhost:7687"
 const NEO4J_USER = process.env.NEO4J_USER || "neo4j"

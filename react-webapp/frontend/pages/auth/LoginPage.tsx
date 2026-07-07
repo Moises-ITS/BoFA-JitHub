@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { SignIn, useAuth as useClerkAuth, useClerk } from "@clerk/clerk-react"
 import { Link, useNavigate } from "react-router-dom"
-import { useAuth } from "../../context/AuthContext"
+import { useAuth } from "@/context/AuthContext"
 import "./auth.css"
 
 export default function LoginPage() {

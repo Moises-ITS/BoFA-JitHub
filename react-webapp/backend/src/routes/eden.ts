@@ -1,6 +1,6 @@
 import { Router, Response } from "express"
 import { db, edenDb } from "../config/postgres.js"
-import { requireAuth, AuthRequest } from "../middlewear/auth.js"
+import { requireAuth, AuthRequest } from "../middleware/auth.js"
 
 const router = Router()
 

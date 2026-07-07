@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { Search, Bell } from "lucide-react"
-import { useAuth } from "../../context/AuthContext"
+import { useAuth } from "@/context/AuthContext"
 import NodeProfilePopup from "./NodeProfilePopup"
-import { search as nodeSearch, primeCache } from "../../hooks/useNodeSearch"
+import { search as nodeSearch, primeCache } from "@/hooks/useNodeSearch"
 
-import { API_BASE_URL as API } from "../../lib/api"
+import { API_BASE_URL as API } from "@/lib/api"
 
 type PendingRequest = {
   id: number

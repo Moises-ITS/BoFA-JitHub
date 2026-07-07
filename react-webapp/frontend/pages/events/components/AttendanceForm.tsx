@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
-import { useAuth } from "../../../context/AuthContext"
+import { useAuth } from "@/context/AuthContext"
 
-import { API_BASE_URL as API } from "../../../lib/api"
+import { API_BASE_URL as API } from "@/lib/api"
 
 type AttendanceRecord = {
   event_id: number

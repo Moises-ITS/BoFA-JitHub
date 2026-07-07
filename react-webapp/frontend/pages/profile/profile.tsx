@@ -6,10 +6,10 @@ import { Target, Award, Edit2, Calendar, Briefcase, Users, ShieldCheck, KeyRound
 // list so students see real, best-match recommendations here.
 import { useOpportunities } from "../opportunities/hooks/useOpportunities";
 import { OPPORTUNITY_TYPE_ICON } from "../opportunities/types/opportunities";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import EditProfileModal from "../node/components/EditProfileModal";
 
-import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "../../lib/api";
+import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
 
 type ProfileEvent = {
   event_id: number;

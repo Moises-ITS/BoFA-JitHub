@@ -1,4 +1,19 @@
-# Move this file to: .github/workflows/playwright.yaml
+# Playwright E2E — runs the browser tests in react-webapp/frontend/tests/e2e.
+#
+# HISTORY / WHY THIS LOOKS THE WAY IT DOES:
+# The previous version ran from the react-webapp/ root (which held a dead,
+# since-deleted Vite scaffold), invoked an `npm run start` script that didn't
+# exist there, and waited on port 3001 (the BACKEND's port) for a frontend app.
+# None of those steps could ever have worked.
+#
+# This version leans on playwright.config.ts's `webServer` block, which starts
+# the Vite dev server on 5175 and waits for it — so the workflow needs no
+# manual build/start/wait choreography at all. The specs mock every backend
+# call with page.route(), so no backend or database is needed either.
+#
+# REQUIRED SECRET: VITE_CLERK_PUBLISHABLE_KEY (a Clerk *test-instance*
+# publishable key). Without it the app renders the "Missing Clerk publishable
+# key" setup screen and every spec fails on its first navigation.
 
 name: Playwright QA
 
@@ -22,7 +37,7 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: react-webapp   # FIX #2
+        working-directory: react-webapp/frontend
 
     steps:
       - name: Checkout repository
@@ -33,27 +48,19 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: react-webapp/package-lock.json  # FIX #4
+          cache-dependency-path: react-webapp/frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
-
-      - name: Build app
-        run: npm run build
-
-      - name: Start app
-        run: npm run start &
-        env:
-          CI: true
-
-      - name: Wait for app to be ready
-        run: npx wait-on --timeout 60000 http://127.0.0.1:3001  # FIX #3
+        run: npx playwright install --with-deps chromium
 
       - name: Run Playwright tests
         run: npx playwright test
+        env:
+          CI: true
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
 
       - name: Upload Playwright report
         if: always()
@@ -61,6 +68,6 @@ jobs:
         with:
           name: playwright-report
           path: |
-            react-webapp/playwright-report
-            react-webapp/test-results
+            react-webapp/frontend/playwright-report
+            react-webapp/frontend/test-results
           if-no-files-found: ignore

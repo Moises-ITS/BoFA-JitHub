@@ -50,7 +50,7 @@ export type FilterType = OpportunityType | 'all';
 export type SortType = 'best-match' | 'due-soon' | 'newest' | 'saved-first';
 export type UrgencyFilter = 'all' | 'due-soon' | 'this-week' | 'this-month';
 
-import { API_BASE_URL as API } from '../../../lib/api';
+import { API_BASE_URL as API } from '@/lib/api';
 
 function getDaysUntilDeadline(deadline?: string) {
   if (!deadline) return Number.POSITIVE_INFINITY;

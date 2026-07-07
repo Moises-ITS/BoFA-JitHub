@@ -1,9 +1,9 @@
 import { Link, Navigate } from "react-router-dom"
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { useAuth } from "../../context/AuthContext"
+import { useAuth } from "@/context/AuthContext"
 import { ForecastTab, WhatIfTab, AttendanceTab } from "./EdenTabs"
 
-import { API_BASE_URL as API } from "../../lib/api"
+import { API_BASE_URL as API } from "@/lib/api"
 
 // ── Bloomberg-terminal palette ────────────────────────────────────────────
 const C = {

@@ -58,10 +58,10 @@ const [
   import("./scrapers/runner.js"),
   import("./db/migrate.js"),
   import("./services/graphService.js"),
-  import("./middlewear/authRateLimit.js"),
-  import("./middlewear/security.js"),
-  import("./middlewear/observability.js"),
-  import("./middlewear/transportSecurity.js"),
+  import("./middleware/authRateLimit.js"),
+  import("./middleware/security.js"),
+  import("./middleware/observability.js"),
+  import("./middleware/transportSecurity.js"),
 ])
 
 try {

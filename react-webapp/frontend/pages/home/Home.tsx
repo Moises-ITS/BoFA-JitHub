@@ -10,13 +10,13 @@ import { useOpportunities } from "../opportunities/hooks/useOpportunities";
 import { OPPORTUNITY_TYPE_ICON } from "../opportunities/types/opportunities";
 import { DeadlineChip } from "./deadline-chip";
 import { format } from "date-fns";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   CATEGORY_STYLE, EventDetailModal, fmt12, CLUB_EMOJIS,
 } from "../events/components/EventDetailModal";
 import type { AttendeeInfo, UserProfile } from "../events/components/EventDetailModal";
 
-import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "../../lib/api";
+import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
 const HOME_CACHE_KEY = "jithub.home-overview.v1";
 const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
 

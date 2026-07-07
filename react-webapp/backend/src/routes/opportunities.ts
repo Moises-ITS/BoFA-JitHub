@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import { db } from '../config/postgres.js';
-import { requireAuth, type AuthRequest } from '../middlewear/auth.js';
+import { requireAuth, type AuthRequest } from '../middleware/auth.js';
 import { geocode } from '../scrapers/geocoder.js';
 import {
   sanitizeOptionalHttpsUrl,
   sanitizeStringArray,
   sanitizeText,
   toBoundedPositiveInt,
-} from '../middlewear/security.js';
-import { apiWriteRateLimiter } from '../middlewear/authRateLimit.js';
+} from '../middleware/security.js';
+import { apiWriteRateLimiter } from '../middleware/authRateLimit.js';
 
 const router = Router();
 

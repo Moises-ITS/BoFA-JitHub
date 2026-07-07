@@ -11,7 +11,8 @@
     "redis:smoke": "node scripts/redis-smoke.mjs",
     "security:scan-secrets": "node scripts/scan-secrets.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "compression": "^1.8.0",

@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { motion } from "motion/react";
 import { Home, Calendar, Briefcase, Network, User, Bot, Activity, Flag } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
 const baseNavItems = [
   { icon: Home, label: "Home", path: "/home" },

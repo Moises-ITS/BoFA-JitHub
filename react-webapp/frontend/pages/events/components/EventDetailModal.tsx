@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { clubNamesEquivalent, getClubTermsFromEvent } from "../utils/clubMatching";
-import type { User } from "../../../context/AuthContext";
+import type { User } from "@/context/AuthContext";
 
 export const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥", "🎨", "🏆", "💻", "🎪", "🌈"];
 

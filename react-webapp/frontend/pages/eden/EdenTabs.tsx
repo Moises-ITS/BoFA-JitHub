@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Panel, StateMsg } from "./EdenPage"
 
-import { API_BASE_URL as API } from "../../lib/api"
+import { API_BASE_URL as API } from "@/lib/api"
 
 const C = {
   AMBER: "#f7b955",

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
 import { TrendingUp, Zap, Flame, Search } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import { format } from "date-fns";
 import { HeatmapCalendar } from "./components/heatmap-calendar";
 import {
@@ -15,7 +15,7 @@ import {
   getClubOptionLabel,
 } from "./utils/clubMatching";
 
-import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as API } from "../../lib/api";
+import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as API } from "@/lib/api";
 
 function eventWebSocketUrl() {
   try {

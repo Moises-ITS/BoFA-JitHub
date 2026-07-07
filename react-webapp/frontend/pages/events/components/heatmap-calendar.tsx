@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { X, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
-import { EDEN_API_BASE_URL as API } from "../../../lib/api";
+import { EDEN_API_BASE_URL as API } from "@/lib/api";
 const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const times = ["8am", "10am", "12pm", "2pm", "4pm", "6pm", "8pm", "10pm"];
 const timeHours = [8, 10, 12, 14, 16, 18, 20, 22];

@@ -6,7 +6,7 @@ import SmartFeed from './components/SmartFeed';
 import ApplicationTracker from './components/ApplicationTracker';
 import GlobeView from './components/GlobeView';
 import SubmitOpportunityModal from './components/SubmitOpportunityModal';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import { getCountry } from './utils/getCountry';
 import './Opportunities.css';
 

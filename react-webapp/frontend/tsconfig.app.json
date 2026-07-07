@@ -8,6 +8,12 @@
     "types": ["vite/client"],
     "skipLibCheck": true,
 
+    /* Path alias: @/ = the frontend root. Lets any file import shared modules
+       as e.g. "@/lib/api" instead of counting ../ hops. Must stay in sync with
+       resolve.alias in vite.config.ts (tsc checks types, Vite resolves at build). */
+    "baseUrl": ".",
+    "paths": { "@/*": ["./*"] },
+
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
@@ -24,5 +30,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["main.tsx", "App.tsx", "pages/**/*"]
+  "include": ["main.tsx", "App.tsx", "pages/**/*", "components/**/*", "context/**/*", "hooks/**/*", "lib/**/*"]
 }

@@ -7,8 +7,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { GraphNode, GraphLink } from "../types/graphNodes";
 import { mockNodes, mockLinks } from "../data/mockGraphData";
-import { useAuth } from "../../../context/AuthContext";
-import { API_BASE_URL } from "../../../lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { API_BASE_URL } from "@/lib/api";
 
 interface GraphData {
   nodes:   GraphNode[];

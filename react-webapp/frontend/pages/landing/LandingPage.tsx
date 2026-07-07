@@ -1,7 +1,7 @@
 import { useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { motion } from "motion/react"
-import { useAuth } from "../../context/AuthContext"
+import { useAuth } from "@/context/AuthContext"
 
 const pills = ["Graph Networking", "Opportunity Discovery", "Campus Connect"]
 

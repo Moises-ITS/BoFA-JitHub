@@ -10,9 +10,9 @@ import { useState, useEffect } from "react";
 import type { GraphNode, GraphLink } from "../types/graphNodes";
 import { TYPE_COLOR, TYPE_EMOJI, TYPE_BADGE, DETAIL_ICONS } from "../constants/maps";
 import { getNodeId } from "../utils/getNodeId";
-import { useAuth } from "../../../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
-import { API_BASE_URL as API } from "../../../lib/api";
+import { API_BASE_URL as API } from "@/lib/api";
 
 type ConnStatus = "none" | "pending-sent" | "pending-received" | "connected";
 

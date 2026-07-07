@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import type { Building } from "../types"
 
-import { API_BASE_URL as API_URL } from "../../../lib/api"
+import { API_BASE_URL as API_URL } from "@/lib/api"
 
 export function useBuildings() {
   const [buildings, setBuildings] = useState<readonly Building[]>([])

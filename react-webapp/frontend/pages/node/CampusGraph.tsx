@@ -18,13 +18,13 @@ import SearchBar from "./components/SearchBar";
 import Legend from "./components/Legend";
 import TopConnected from "./components/TopConnected";
 import HoverCard from "./components/HoverCard";
-import { useAuth } from "../../context/AuthContext";
-import { NetworkIntro } from "../../components/NetworkTransition";
-import CampusNavbar from "../../components/CampusNavbar";
+import { useAuth } from "@/context/AuthContext";
+import { NetworkIntro } from "@/components/NetworkTransition";
+import CampusNavbar from "@/components/CampusNavbar";
 import Graph3DGlobeView from "./components/Graph3DGlobeView";
 import "./CampusGraph.css";
 
-import { API_BASE_URL as API } from "../../lib/api";
+import { API_BASE_URL as API } from "@/lib/api";
 const MAX_NEIGHBORS = 9;
 const HUB_MAX = 6;
 const EDGE_WIDTH_MIN = 1.1;

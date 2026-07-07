@@ -3,10 +3,10 @@ import { motion } from "motion/react";
 import { Send } from "lucide-react";
 
 const JITI_AVATAR = "/jiti.png";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import { EventDetailModal, type UserProfile, type AttendeeInfo } from "../events/components/EventDetailModal";
 
-import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "../../lib/api";
+import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
 
 const STARTERS = [
   "What events are happening this week?",

@@ -11,10 +11,11 @@ import { OPPORTUNITY_TYPE_ICON } from "../opportunities/types/opportunities";
 import { DeadlineChip } from "./deadline-chip";
 import { format } from "date-fns";
 import { useAuth } from "@/context/AuthContext";
-import {
-  CATEGORY_STYLE, EventDetailModal, fmt12, CLUB_EMOJIS,
-} from "../events/components/EventDetailModal";
-import type { AttendeeInfo, UserProfile } from "../events/components/EventDetailModal";
+import { EventDetailModal } from "../events/components/EventDetailModal";
+import { ClubAvatar, TrendingClubAvatar } from "../events/components/ClubAvatar";
+import { CATEGORY_STYLE, fmt12 } from "../events/utils/eventFormatting";
+import type { UserProfile } from "../events/utils/eventScoring";
+import type { AttendeeInfo } from "../events/components/EventDetailModal";
 
 import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
 const HOME_CACHE_KEY = "jithub.home-overview.v1";
@@ -54,38 +55,6 @@ function writeHomeOverviewCache(payload: Omit<HomeOverviewCache, "fetchedAt">) {
   } catch {
     /* ignore storage issues */
   }
-}
-
-function ClubAvatar({ clubId, clubName, index }: { clubId: number; clubName: string; index: number }) {
-  const [failed, setFailed] = useState(false);
-  if (!failed)
-    return <img src={`/club_pics/${clubId}.jpg`} alt={clubName} onError={() => setFailed(true)} className="w-10 h-10 rounded-lg object-cover shrink-0" />;
-  return <div className="text-3xl shrink-0 w-10 h-10 flex items-center justify-center">{CLUB_EMOJIS[index % CLUB_EMOJIS.length]}</div>;
-}
-
-function TrendingClubAvatar({ clubId, clubName, index }: { clubId?: number; clubName: string; index: number }) {
-  const [failed, setFailed] = useState(false);
-
-  if (clubId && !failed) {
-    return (
-      <img
-        src={`/club_pics/${clubId}.jpg`}
-        alt={clubName}
-        onError={() => setFailed(true)}
-        className="w-8 h-8 rounded-lg object-cover shrink-0"
-      />
-    );
-  }
-
-  return (
-    <div
-      className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
-      style={{ backgroundColor: "rgba(255,255,255,0.05)" }}
-      aria-label={clubName}
-    >
-      {CLUB_EMOJIS[index % CLUB_EMOJIS.length]}
-    </div>
-  );
 }
 
 // change_pct: positive = up, negative = down, null = not yet available

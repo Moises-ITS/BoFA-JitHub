@@ -4,11 +4,12 @@ import { TrendingUp, Zap, Flame, Search } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { format } from "date-fns";
 import { HeatmapCalendar } from "./components/heatmap-calendar";
-import {
-  CATEGORY_STYLE, fmt12, ClubAvatar, CLUB_EMOJIS, getEventCategories, matchScore, EventDetailModal,
-} from "./components/EventDetailModal";
+import { EventDetailModal } from "./components/EventDetailModal";
+import { ClubAvatar } from "./components/ClubAvatar";
+import { CATEGORY_STYLE, CLUB_EMOJIS, fmt12, getEventCategories } from "./utils/eventFormatting";
+import { matchScore, type UserProfile } from "./utils/eventScoring";
 import SubmitEventModal, { type CommunityEventInput } from "./components/SubmitEventModal";
-import type { UserProfile, AttendeeInfo } from "./components/EventDetailModal";
+import type { AttendeeInfo } from "./components/EventDetailModal";
 import {
   type ClubDirectoryEntry,
   eventMatchesQuery,

@@ -404,19 +404,12 @@ export default function CampusGraph() {
   const [graphSettling, setGraphSettling] = useState(true);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
 
-  // Lens mode removed: keep ref hard-disabled so legacy branches stay inactive.
-  const lensModeRef = useRef(false);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const heatmapModeRef = useRef(false);
   useEffect(() => { heatmapModeRef.current = heatmapMode; }, [heatmapMode]);
-  const lensPosRef = useRef<{ x: number, y: number } | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
   const [demoMessage, setDemoMessage] = useState<string>("");
-  // 3D mode is intentionally disabled (constant "2d") but its code paths are
-  // kept until the planned CampusGraph split. The union type keeps those
-  // branches type-checking; flipping this back to a useState re-enables them.
-  const viewMode = "2d" as "2d" | "3d";
   const [motionTier, setMotionTier] = useState<MotionTier>("balanced");
   const [edgeExplain, setEdgeExplain] = useState<{ link: GraphLink; reasons: string[]; x: number; y: number } | null>(null);
   const [overlaySafeRight, setOverlaySafeRight] = useState(20);
@@ -490,7 +483,6 @@ export default function CampusGraph() {
   const updateMiniViewportRef = useRef<(() => void) | null>(null);
   const focusRafRef = useRef<number | null>(null);
   const scanSweepRef = useRef<HTMLDivElement>(null);
-  const viewModeRef = useRef<"2d" | "3d">("2d");
   const demoModeRef = useRef(false);
   const multiSelectedCountRef = useRef(0);
   const lastInteractionAtRef = useRef(0);
@@ -527,7 +519,6 @@ export default function CampusGraph() {
   const flickerTimeRef = useRef(0);
   useEffect(() => { pathNodeIdsRef.current = pathNodeIds; }, [pathNodeIds]);
   useEffect(() => { hiddenTypesRef.current = hiddenTypes; }, [hiddenTypes]);
-  useEffect(() => { viewModeRef.current = viewMode; }, [viewMode]);
   useEffect(() => { demoModeRef.current = demoMode; }, [demoMode]);
   useEffect(() => { multiSelectedCountRef.current = multiSelectedIds.size; }, [multiSelectedIds.size]);
   useEffect(() => { motionTierRef.current = motionTier; }, [motionTier]);
@@ -1202,7 +1193,7 @@ export default function CampusGraph() {
   }, [noteInteraction, playClickActivationBurst, spawnNodeRipple, triggerFullSystemPulse]);
 
   useEffect(() => {
-    if (viewMode !== "2d" || mode !== "locked" || !selectedNode) return;
+    if (mode !== "locked" || !selectedNode) return;
     const neighbors = directNeighbors(selectedNode);
     if (focusRafRef.current) cancelAnimationFrame(focusRafRef.current);
     focusRafRef.current = requestAnimationFrame(() => {
@@ -1217,7 +1208,7 @@ export default function CampusGraph() {
         focusRafRef.current = null;
       }
     };
-  }, [viewMode, mode, selectedNode, directNeighbors, enterLocked, focusSelectedNeighborhood]);
+  }, [mode, selectedNode, directNeighbors, enterLocked, focusSelectedNeighborhood]);
 
   const deselectAll = useCallback(() => {
     noteInteraction();
@@ -1304,20 +1295,7 @@ export default function CampusGraph() {
     setGraphSettling(true);
 
     const rootEl = rootRef.current;
-    const svg = d3.select(svgRef.current)
-      .on("mousemove", (e: MouseEvent) => {
-        if (lensModeRef.current) {
-          const pt = d3.pointer(e, g.node());
-          lensPosRef.current = { x: pt[0], y: pt[1] };
-          if (simRef.current) simRef.current.alpha(Math.max(simRef.current.alpha(), 0.05)).restart();
-        }
-      })
-      .on("mouseleave", () => {
-        if (lensModeRef.current) {
-          lensPosRef.current = null;
-          if (simRef.current) simRef.current.alpha(Math.max(simRef.current.alpha(), 0.05)).restart();
-        }
-      });
+    const svg = d3.select(svgRef.current);
     const width = svgRef.current.clientWidth;
     const height = svgRef.current.clientHeight;
     dimsRef.current = { w: width, h: height };
@@ -1813,8 +1791,7 @@ export default function CampusGraph() {
           });
         }
       }
-      const ambientAllowed = viewModeRef.current === "2d"
-        && modeRef.current === "free"
+      const ambientAllowed = modeRef.current === "free"
         && !searchActiveRef.current
         && !draggingNodeIdRef.current
         && !demoModeRef.current
@@ -1934,7 +1911,7 @@ export default function CampusGraph() {
       }
 
       if (mainCircleNodes.length) {
-        const ambientBase = viewModeRef.current !== "2d" ? 0 : modeRef.current === "path" ? 0 : modeRef.current === "locked" ? 0.56 : 1;
+        const ambientBase = modeRef.current === "path" ? 0 : modeRef.current === "locked" ? 0.56 : 1;
         const tierMul = motionTierRef.current === "full" ? 1 : motionTierRef.current === "balanced" ? 0.86 : 0.72;
         const ambientGain = ambientBase * ambientDampen * tierMul;
         const visibleNodesFrame = nodes.filter((n: GraphNode) => !hiddenTypesRef.current.has(n.type) && n.x != null && n.y != null);
@@ -2825,43 +2802,8 @@ export default function CampusGraph() {
       const runHeavyTick = activeForce || hoveredId != null || modeRef.current === "path" || tick % profile.heavyTickDiv === 0;
       if (runHeavyTick) {
         linkSel.attr("d", (d: GraphLink) => curvePathForLink(d));
-        nodeSel.attr("transform", (d: GraphNode) => {
-          let nx = d.x ?? 0;
-          let ny = d.y ?? 0;
-          let scaleMul = 1;
-
-          if (lensModeRef.current && lensPosRef.current && modeRef.current === "free") {
-            const LENS_RADIUS = 280;
-            const dx = nx - lensPosRef.current.x;
-            const dy = ny - lensPosRef.current.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist < LENS_RADIUS && dist > 0.01) {
-              const force = 1 - dist / LENS_RADIUS;
-              // Push radius outward and scale up heavily based on proximity
-              const stretch = Math.pow(force, 1.2) * LENS_RADIUS * 1.8;
-              nx += (dx / dist) * stretch;
-              ny += (dy / dist) * stretch;
-              scaleMul = 1 + force * 2.2;
-            }
-          }
-
-          if (scaleMul !== 1) {
-            return `translate(${nx},${ny}) scale(${scaleMul})`;
-          }
-          return `translate(${nx},${ny})`;
-        });
+        nodeSel.attr("transform", (d: GraphNode) => `translate(${d.x ?? 0},${d.y ?? 0})`);
         nodeSel.attr("class", null);
-
-        // If lens is over a node, reveal labels!
-        if (lensModeRef.current && lensPosRef.current && modeRef.current === "free") {
-          nodeSel.select("text.node-label").style("opacity", (n: GraphNode) => {
-            if (!lensPosRef.current) return 0;
-            const dx = (n.x ?? 0) - lensPosRef.current.x;
-            const dy = (n.y ?? 0) - lensPosRef.current.y;
-            return Math.sqrt(dx * dx + dy * dy) < 280 ? 1 : 0;
-          });
-        }
 
         // Live Pulse Heatmap (Idea 15)
         if (heatmapModeRef.current && nodes.length > 0) {
@@ -3275,7 +3217,7 @@ export default function CampusGraph() {
   }, [companyQuery, reachableCompanies]);
 
   useEffect(() => {
-    if (viewMode !== "2d" || mode !== "free") return;
+    if (mode !== "free") return;
     nodeSelRef.current
       ?.style("display", null)
       .style("opacity", 1)
@@ -3284,7 +3226,7 @@ export default function CampusGraph() {
       ?.style("display", null)
       .attr("stroke-opacity", (l: GraphLink) => defOp(l));
     fadeLabels(defaultLabelOpacity, 120);
-  }, [viewMode, mode, fadeLabels, defaultLabelOpacity]);
+  }, [mode, fadeLabels, defaultLabelOpacity]);
 
   useEffect(() => {
     const nodeSel = nodeSelRef.current;
@@ -3330,15 +3272,14 @@ export default function CampusGraph() {
   }, [heatmapMode, nodes, links, currentUserNodeId]);
 
   useEffect(() => {
-    const walkthrough2DActive = demoMode && viewMode === "2d";
+    const walkthrough2DActive = demoMode;
     const updateOverlaySafeZones = () => {
       const root = rootRef.current;
       if (!root) return;
       const rootRect = root.getBoundingClientRect();
       const minimap2D = root.querySelector<HTMLElement>(".minimap:not(.minimap--hidden)");
-      const minimap3D = root.querySelector<HTMLElement>(".spatialMinimap");
       const walkthroughPanel = root.querySelector<HTMLElement>(".walkthroughMiniPanel");
-      const minimapEl = walkthrough2DActive ? walkthroughPanel : (viewMode === "3d" ? minimap3D : minimap2D);
+      const minimapEl = walkthrough2DActive ? walkthroughPanel : minimap2D;
       if (!minimapEl) {
         setOverlaySafeRight(20);
         setOverlayNoFlyRect(null);
@@ -3366,7 +3307,7 @@ export default function CampusGraph() {
       window.removeEventListener("resize", updateOverlaySafeZones);
       observer?.disconnect();
     };
-  }, [viewMode, selectedNode?.id, demoMode, mode]);
+  }, [selectedNode?.id, demoMode, mode]);
 
   useEffect(() => {
     if (!import.meta.env.DEV || !selectedNode) return;
@@ -3407,24 +3348,7 @@ export default function CampusGraph() {
     };
     const raf = requestAnimationFrame(runScan);
     return () => cancelAnimationFrame(raf);
-  }, [selectedNode, selectedNode?.id, viewMode, demoMode, mode, pathNodeIds.length, overlaySafeRight]);
-
-  const selectNodeFromSpatial = useCallback((id: string) => {
-    noteInteraction();
-    const n = nodes.find((x) => x.id === id);
-    if (!n) return;
-    setDemoMode(false);
-    setDemoStep(0);
-    demoAppliedStepRef.current = -1;
-    setDemoMessage("");
-    setPathNodeIds([]);
-    setPathStatus("idle");
-    setCompanyQuery("");
-    setMultiSelectedIds(new Set());
-    selectedIdRef.current = n.id;
-    setSelectedNode(n);
-    setMode("locked");
-  }, [nodes, noteInteraction]);
+  }, [selectedNode, selectedNode?.id, demoMode, mode, pathNodeIds.length, overlaySafeRight]);
 
   const handleSearchEnter = useCallback((rawQuery: string) => {
     const query = normalizeSearchName(rawQuery);
@@ -3459,12 +3383,8 @@ export default function CampusGraph() {
 
     const target = candidates[0];
     setSearchInput(target.label);
-    if (viewMode === "3d") {
-      selectNodeFromSpatial(target.id);
-      return;
-    }
     selectNodeFn(target);
-  }, [nodes, viewMode, selectNodeFromSpatial, selectNodeFn, showSearchMessage]);
+  }, [nodes, selectNodeFn, showSearchMessage]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -3769,28 +3689,20 @@ export default function CampusGraph() {
 
     if (demoStep === 0 && userNode) {
       stageDemoMessage("Step 1/4 - Focus on your profile node", 220);
-      if (viewMode === "2d") triggerFullSystemPulse(userNode.id);
-      if (viewMode === "3d") {
-        selectedIdRef.current = userNode.id;
-        setSelectedNode(userNode);
-        setMode("locked");
-      } else {
-        selectNodeFn(userNode, true);
-      }
+      triggerFullSystemPulse(userNode.id);
+      selectNodeFn(userNode, true);
       return;
     }
     if (demoStep === 1 && userNode) {
       stageDemoMessage("Step 2/4 - Nearby clubs and interests reveal your network context", 240);
-      if (viewMode === "2d") triggerFullSystemPulse(userNode.id);
+      triggerFullSystemPulse(userNode.id);
       const focusIds = [userNode.id, ...(contextNeighbors.length ? contextNeighbors : userNeighbors.slice(0, 2)).map((n) => n.id)];
-      if (viewMode !== "3d") {
-        fitToNodeIds(focusIds, 900);
-      }
+      fitToNodeIds(focusIds, 900);
       return;
     }
     if (demoStep === 2 && demoCompany) {
       stageDemoMessage(`Step 3/4 - Trace strongest path to ${demoCompany.label}`, 260);
-      if (viewMode === "2d") triggerFullSystemPulse(demoCompany.id);
+      triggerFullSystemPulse(demoCompany.id);
       setCompanyQuery(demoCompany.label);
       void findPath(demoCompany.label);
       return;
@@ -3798,7 +3710,7 @@ export default function CampusGraph() {
     if (demoStep === 3) {
       stageDemoMessage("Step 4/4 - Path insight: your network has a credible route to this opportunity", 260);
     }
-  }, [demoMode, demoStep, currentUserNode, topNeighbors, reachableCompanies, selectNodeFn, fitToNodeIds, findPath, viewMode, pathNodeIds, triggerFullSystemPulse, stageDemoMessage]);
+  }, [demoMode, demoStep, currentUserNode, topNeighbors, reachableCompanies, selectNodeFn, fitToNodeIds, findPath, pathNodeIds, triggerFullSystemPulse, stageDemoMessage]);
 
   const demoBack = useCallback(() => {
     setDemoStep((s) => Math.max(0, s - 1));
@@ -3837,7 +3749,7 @@ export default function CampusGraph() {
       : mode === "path"
         ? `Tracing the shortest visible path from your network to ${companyQuery || "a company"}.`
         : "Explore students, organizations, and companies.";
-  const walkthroughLayout2D = demoMode && viewMode === "2d";
+  const walkthroughLayout2D = demoMode;
   const walkthroughInsightNode = selectedNode ?? currentUserNode;
   const walkthroughTargetCompany = companyQuery || reachableCompanies[0]?.label || "a target company";
   const graphInitialLoad = loading || graphSettling || !d3Ready;
@@ -3981,7 +3893,7 @@ export default function CampusGraph() {
 
       {/* Main */}
       <div className="main" data-heatmap={heatmapMode}>
-        <div ref={ambientFxRef} className={`graphAmbientFx${viewMode === "3d" ? " graphAmbientFx--hidden" : ""}`} aria-hidden="true">
+        <div ref={ambientFxRef} className="graphAmbientFx" aria-hidden="true">
           <div className="graphAmbientLayer graphAmbientLayer--far" ref={ambientFarRef}>
             {ambientSpecks.far.map((speck) => (
               <span
@@ -4036,7 +3948,7 @@ export default function CampusGraph() {
           <div className="graphScanSweep" ref={scanSweepRef} />
         </div>
         <div className="bgGlow" ref={bgGlowRef} />
-        <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} className={viewMode === "3d" ? "graph2DHidden" : "graph2DVisible"} />
+        <svg id="graph-svg" ref={svgRef} style={{ flex: 1 }} className="graph2DVisible" />
         {graphInitialLoad && (
           <div className="graphInitialLoad" aria-live="polite" aria-busy="true">
             <div className="graphInitialLoadTitle">Preparing campus network</div>
@@ -4044,7 +3956,7 @@ export default function CampusGraph() {
           </div>
         )}
         <svg
-          className={`minimap${viewMode === "2d" && !walkthroughLayout2D ? "" : " minimap--hidden"}`}
+          className={`minimap${!walkthroughLayout2D ? "" : " minimap--hidden"}`}
           ref={minimapRef}
           style={{ right: selectedNode ? "304px" : "20px" }}
         />
@@ -4116,7 +4028,7 @@ export default function CampusGraph() {
 
       {/* Locked Mode overlay hint */}
       {mode === "locked" && (
-        <div className={`modeHint${viewMode === "2d" && !walkthroughLayout2D ? " modeHint--lockedShift" : ""}`}>
+        <div className={`modeHint${!walkthroughLayout2D ? " modeHint--lockedShift" : ""}`}>
           Showing up to {MAX_NEIGHBORS} strongest connections
           &nbsp;·&nbsp;<span>click background to exit</span>
         </div>

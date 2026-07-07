@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from "react"
+import { useState, useEffect, type FormEvent } from "react"
 import { useNavigate, Navigate } from "react-router-dom"
 import { useUser, useAuth as useClerkAuth } from "@clerk/clerk-react"
 import { useAuth } from "@/context/AuthContext"

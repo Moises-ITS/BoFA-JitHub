@@ -7,7 +7,7 @@ import "./auth.css"
 export default function LoginPage() {
   const { isSignedIn, isLoaded } = useClerkAuth()
   const { signOut } = useClerk()
-  const { user, loading, needsProfileSetup, authError } = useAuth()
+  const { user, loading } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {

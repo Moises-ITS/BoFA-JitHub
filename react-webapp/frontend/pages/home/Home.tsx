@@ -280,6 +280,12 @@ export default function Home() {
 
   useEffect(() => {
     if (!user?.id || !token) return;
+    // BUG FIX: this effect referenced `cancelled` without ever declaring it —
+    // a ReferenceError crash whenever the fetch resolved. The cancellation
+    // pattern was copied from the neighboring effects but the declaration and
+    // cleanup were dropped. Restored both so a response arriving after the
+    // user/token changes (or the page unmounts) can't write stale state.
+    let cancelled = false;
     fetch(`${AUTH_API}/api/connections`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then((data: { id: string }[]) => {
@@ -287,6 +293,9 @@ export default function Home() {
         setConnectionIds(new Set(data.map((connection) => connection.id)));
       })
       .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id, token]);
 
   // Batch-fetch RSVP status for visible events

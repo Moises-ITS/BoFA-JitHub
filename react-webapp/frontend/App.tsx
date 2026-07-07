@@ -24,7 +24,9 @@ const DigitalTwin = lazy(() => import("./pages/map/DigitalTwin"))
 const CampusView = lazy(() => import("./pages/campus/CampusView"))
 const GlbInspector = lazy(() => import("./pages/campus/GlbInspector"))
 const ResearchDistricts = lazy(() => import("./pages/districts/ResearchDistricts"))
-const EdenPage = lazy(() => import("./pages/eden/EdenPage"))
+// NOTE: pages/eden (EdenPage/EdenTabs) is currently unrouted — its lazy import
+// was removed here when the route was dropped. The files remain in case the
+// section returns; delete them if that decision becomes permanent.
 
 function MissingClerkConfigScreen() {
   return (

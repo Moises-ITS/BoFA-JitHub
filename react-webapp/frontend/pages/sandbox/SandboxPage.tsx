@@ -226,7 +226,6 @@ export default function SandboxPage() {
   const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
-  const [rsvpingId, setRsvpingId] = useState<number | null>(null);
   const [chatInterests, setChatInterests] = useState<string[]>([]);
 
   // Load persisted chat interests on mount
@@ -505,7 +504,6 @@ export default function SandboxPage() {
     const current = rsvpMap[eventId] ?? null;
     const newStatus = current === "going" ? null : "going";
     setRsvpMap(prev => ({ ...prev, [eventId]: newStatus }));
-    setRsvpingId(eventId);
     try {
       if (newStatus === null) {
         await fetch(`${EVENTS_API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, { method: "DELETE" });
@@ -522,8 +520,6 @@ export default function SandboxPage() {
       }
     } catch {
       setRsvpMap(prev => ({ ...prev, [eventId]: current }));
-    } finally {
-      setRsvpingId(null);
     }
   }
 

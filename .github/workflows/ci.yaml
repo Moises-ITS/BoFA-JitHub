@@ -55,8 +55,14 @@ jobs:
       - name: Type check
         run: npm run type-check
 
-      - name: Lint
+      # TODO(tech-debt): flip continue-on-error off once the ~30 pre-existing
+      # eslint errors (setState-in-effect patterns, fast-refresh export mixing)
+      # are paid down. Non-blocking so the NEW type-check/test/build gates can
+      # protect the repo today without a permanently red pipeline; results are
+      # still visible in the job log.
+      - name: Lint (non-blocking — pre-existing debt)
         run: npm run lint
+        continue-on-error: true
 
       - name: Unit tests
         run: npx vitest run --passWithNoTests

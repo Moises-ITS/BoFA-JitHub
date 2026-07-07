@@ -134,8 +134,10 @@ export function useGraphData(): GraphData {
       setError(message);
       fetchedForUserIdRef.current = null;
     } finally {
-      if (force) return;
-      setLoading(false);
+      // A `return` inside finally would swallow any in-flight exception
+      // (no-unsafe-finally) — the conditional expresses the same intent
+      // (background refreshes never toggle the loading flag) safely.
+      if (!force) setLoading(false);
     }
   }, [token, user?.id, nodes.length, links.length]);
 

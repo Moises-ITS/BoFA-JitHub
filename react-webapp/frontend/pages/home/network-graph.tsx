@@ -156,7 +156,7 @@ export function NetworkGraph({ nodes, onNodeClick }: NetworkGraphProps) {
       }
     };
 
-    const handleClick = (e: MouseEvent) => {
+    const handleClick = () => {
       if (hoveredNode) {
         setSelectedNode(hoveredNode);
         onNodeClick?.(hoveredNode);

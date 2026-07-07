@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { clubNamesEquivalent, getClubTermsFromEvent } from "../utils/clubMatching";
+// BUG FIX: <AttendanceForm /> was rendered below without ever being imported —
+// opening any past event's detail modal crashed with a ReferenceError.
+import { AttendanceForm } from "./AttendanceForm";
 import type { User } from "@/context/AuthContext";
 
 export const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥", "🎨", "🏆", "💻", "🎪", "🌈"];
@@ -148,7 +151,7 @@ export function getEventCategories(event: any): string[] {
       : [];
 
   const unique: string[] = [];
-  values.forEach((value) => {
+  values.forEach((value: unknown) => {
     const cleaned = String(value ?? "").trim().toLowerCase();
     if (cleaned && !unique.includes(cleaned)) {
       unique.push(cleaned);
@@ -176,7 +179,6 @@ export function matchScore(event: any, profile: UserProfile): number {
   if (!hasProfile) return -1;
   let score = 0;
   const cat = getEventCategories(event)[0] ?? "";
-  const clubName = event.club_name ?? "";
   const clubTerms = getClubTermsFromEvent(event);
   for (const interest of profile.interests) score += INTEREST_AFFINITIES[interest]?.[cat] ?? 0;
   score += MAJOR_AFFINITIES[profile.major]?.[cat] ?? 0;

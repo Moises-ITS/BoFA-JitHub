@@ -19,9 +19,6 @@ import Legend from "./components/Legend";
 import TopConnected from "./components/TopConnected";
 import HoverCard from "./components/HoverCard";
 import { useAuth } from "@/context/AuthContext";
-import { NetworkIntro } from "@/components/NetworkTransition";
-import CampusNavbar from "@/components/CampusNavbar";
-import Graph3DGlobeView from "./components/Graph3DGlobeView";
 import "./CampusGraph.css";
 
 import { API_BASE_URL as API } from "@/lib/api";
@@ -402,7 +399,6 @@ export default function CampusGraph() {
   const [companyQuery, setCompanyQuery] = useState("");
   const [pathNodeIds, setPathNodeIds] = useState<string[]>([]);
   const [pathStatus, setPathStatus] = useState<"idle" | "searching" | "found" | "notfound">("idle");
-  const [visibleCount, setVisibleCount] = useState(0);
   const [hoverCard, setHoverCard] = useState<{ node: GraphNode; x: number; y: number } | null>(null);
   const [d3Ready, setD3Ready] = useState(false);
   const [graphSettling, setGraphSettling] = useState(true);
@@ -417,9 +413,11 @@ export default function CampusGraph() {
   const [demoMode, setDemoMode] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
   const [demoMessage, setDemoMessage] = useState<string>("");
-  const viewMode: "2d" = "2d";
+  // 3D mode is intentionally disabled (constant "2d") but its code paths are
+  // kept until the planned CampusGraph split. The union type keeps those
+  // branches type-checking; flipping this back to a useState re-enables them.
+  const viewMode = "2d" as "2d" | "3d";
   const [motionTier, setMotionTier] = useState<MotionTier>("balanced");
-  const [spatialFocusNodeIds, setSpatialFocusNodeIds] = useState<string[]>([]);
   const [edgeExplain, setEdgeExplain] = useState<{ link: GraphLink; reasons: string[]; x: number; y: number } | null>(null);
   const [overlaySafeRight, setOverlaySafeRight] = useState(20);
   const [overlayNoFlyRect, setOverlayNoFlyRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -879,7 +877,7 @@ export default function CampusGraph() {
       .transition("sig-pulse")
       .duration(GRAPH_MOTION.signature.fullPulseMs)
       .attr("fill-opacity", (d: GraphNode) => d.id === centerId ? 1 : 0.95)
-      .transition("sig-pulse")
+      .transition() // chained transition inherits the "sig-pulse" name
       .duration(360)
       .attr("fill-opacity", (d: GraphNode) => d.id === currentUserNodeId ? 1 : 0.9);
     linkSel
@@ -887,7 +885,7 @@ export default function CampusGraph() {
       .transition("sig-pulse")
       .duration(GRAPH_MOTION.signature.fullPulseMs)
       .attr("stroke-opacity", (l: GraphLink) => Math.max(edgeOpacityFromStrength(edgeStrength(l)), GRAPH_MOTION.signature.fullPulseEdgeOpacity))
-      .transition("sig-pulse")
+      .transition() // chained transition inherits the "sig-pulse" name
       .duration(380)
       .attr("stroke-opacity", (l: GraphLink) => edgeOpacityFromStrength(edgeStrength(l)));
   }, [currentUserNodeId]);
@@ -909,7 +907,7 @@ export default function CampusGraph() {
         .duration(210)
         .attr("stroke-opacity", 1)
         .attr("fill-opacity", 1)
-        .transition("opp-burst")
+        .transition() // chained transition inherits the "opp-burst" name
         .duration(460)
         .attr("fill-opacity", (n: GraphNode) => n.id === currentUserNodeId ? 1 : 0.9);
     }
@@ -999,7 +997,7 @@ export default function CampusGraph() {
       .select<SVGCircleElement>("circle.main-circle")
       .interrupt()
       .transition()
-      .delay((n: GraphNode, i: number) => i * GRAPH_MOTION.clickBurst.neighborStaggerMs)
+      .delay((_n: GraphNode, i: number) => i * GRAPH_MOTION.clickBurst.neighborStaggerMs)
       .duration(GRAPH_MOTION.premium.localWakeMs)
       .attr("fill-opacity", 0.98)
       .attr("stroke-opacity", 1)
@@ -1708,7 +1706,6 @@ export default function CampusGraph() {
       .attr("r", (d) => d.size)
       .attr("fill-opacity", 0);
     const nodePulseMeta = nodes.map((n: GraphNode, i: number) => {
-      const profile = GRAPH_MOTION.nodeTypeProfile[n.type] ?? GRAPH_MOTION.nodeTypeProfile.student;
       const profile = GRAPH_MOTION.nodeTypeProfile[n.type] ?? GRAPH_MOTION.nodeTypeProfile.student;
       const period = GRAPH_MOTION.nodePulse.periodMsMin + Math.random() * (GRAPH_MOTION.nodePulse.periodMsMax - GRAPH_MOTION.nodePulse.periodMsMin);
       const cohort = i % GRAPH_MOTION.cohorts.nodeCount;
@@ -3427,7 +3424,6 @@ export default function CampusGraph() {
     selectedIdRef.current = n.id;
     setSelectedNode(n);
     setMode("locked");
-    setSpatialFocusNodeIds([n.id]);
   }, [nodes, noteInteraction]);
 
   const handleSearchEnter = useCallback((rawQuery: string) => {
@@ -3469,14 +3465,6 @@ export default function CampusGraph() {
     }
     selectNodeFn(target);
   }, [nodes, viewMode, selectNodeFromSpatial, selectNodeFn, showSearchMessage]);
-
-  const handleSpatialBackgroundClick = useCallback(() => {
-    noteInteraction();
-    setEdgeExplain(null);
-    if (modeRef.current !== "free") {
-      deselectAll();
-    }
-  }, [deselectAll, noteInteraction]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -3719,7 +3707,6 @@ export default function CampusGraph() {
     setDemoStep(0);
     demoAppliedStepRef.current = -1;
     setDemoMessage("");
-    setSpatialFocusNodeIds([]);
     setPathNodeIds([]);
     setPathStatus("idle");
     setCompanyQuery("");
@@ -3748,7 +3735,6 @@ export default function CampusGraph() {
     setMode("free");
     setSelectedNode(null);
     selectedIdRef.current = null;
-    setSpatialFocusNodeIds([]);
     exitToFree();
     setDemoMode(true);
     setDemoStep(0);
@@ -3788,7 +3774,6 @@ export default function CampusGraph() {
         selectedIdRef.current = userNode.id;
         setSelectedNode(userNode);
         setMode("locked");
-        setSpatialFocusNodeIds([userNode.id]);
       } else {
         selectNodeFn(userNode, true);
       }
@@ -3798,9 +3783,7 @@ export default function CampusGraph() {
       stageDemoMessage("Step 2/4 - Nearby clubs and interests reveal your network context", 240);
       if (viewMode === "2d") triggerFullSystemPulse(userNode.id);
       const focusIds = [userNode.id, ...(contextNeighbors.length ? contextNeighbors : userNeighbors.slice(0, 2)).map((n) => n.id)];
-      if (viewMode === "3d") {
-        setSpatialFocusNodeIds(focusIds);
-      } else {
+      if (viewMode !== "3d") {
         fitToNodeIds(focusIds, 900);
       }
       return;
@@ -3809,17 +3792,11 @@ export default function CampusGraph() {
       stageDemoMessage(`Step 3/4 - Trace strongest path to ${demoCompany.label}`, 260);
       if (viewMode === "2d") triggerFullSystemPulse(demoCompany.id);
       setCompanyQuery(demoCompany.label);
-      if (viewMode === "3d") {
-        setSpatialFocusNodeIds(userNode ? [userNode.id, demoCompany.id] : [demoCompany.id]);
-      }
       void findPath(demoCompany.label);
       return;
     }
     if (demoStep === 3) {
       stageDemoMessage("Step 4/4 - Path insight: your network has a credible route to this opportunity", 260);
-      if (viewMode === "3d" && pathNodeIds.length) {
-        setSpatialFocusNodeIds(pathNodeIds);
-      }
     }
   }, [demoMode, demoStep, currentUserNode, topNeighbors, reachableCompanies, selectNodeFn, fitToNodeIds, findPath, viewMode, pathNodeIds, triggerFullSystemPulse, stageDemoMessage]);
 
@@ -3836,11 +3813,6 @@ export default function CampusGraph() {
     setDemoStep(0);
   }, []);
 
-  useEffect(() => {
-    if (!demoMode || viewMode !== "3d") return;
-    if (demoStep < 2 || !pathNodeIds.length) return;
-    setSpatialFocusNodeIds(pathNodeIds);
-  }, [demoMode, demoStep, pathNodeIds, viewMode]);
 
   // ── Error ────────────────────────────────────────────────────────────────
   if (error) return (

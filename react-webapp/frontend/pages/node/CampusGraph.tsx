@@ -24,7 +24,7 @@ import CampusNavbar from "../../components/CampusNavbar";
 import Graph3DGlobeView from "./components/Graph3DGlobeView";
 import "./CampusGraph.css";
 
-const API = import.meta.env.VITE_API_URL ?? "";
+import { API_BASE_URL as API } from "../../lib/api";
 const MAX_NEIGHBORS = 9;
 const HUB_MAX = 6;
 const EDGE_WIDTH_MIN = 1.1;

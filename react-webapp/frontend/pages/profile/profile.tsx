@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { useSignIn } from "@clerk/clerk-react";
 import { Target, Award, Edit2, Calendar, Briefcase, Users, ShieldCheck, KeyRound, Trash2, AlertTriangle } from "lucide-react";
-import { mockOpportunities } from "../home/mock-data";
+// Same live-data hook the /opportunities page uses — replaced a hardcoded mock
+// list so students see real, best-match recommendations here.
+import { useOpportunities } from "../opportunities/hooks/useOpportunities";
+import { OPPORTUNITY_TYPE_ICON } from "../opportunities/types/opportunities";
 import { useAuth } from "../../context/AuthContext";
 import EditProfileModal from "../node/components/EditProfileModal";
 
-const EVENTS_API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
-const AUTH_API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "../../lib/api";
 
 type ProfileEvent = {
   event_id: number;
@@ -60,7 +62,11 @@ export default function Profile() {
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
-  const savedOpportunities = mockOpportunities.slice(0, 2);
+  // Top two best-match opportunities for this student. NOTE: this is
+  // "recommended", not "saved" — per-user saved opportunities aren't persisted
+  // to the backend yet, and showing fake "saved" items would lie to the user.
+  const { sortedFiltered: allOpportunities } = useOpportunities();
+  const recommendedOpportunities = allOpportunities.slice(0, 2);
 
   const name = user?.name ?? "";
   const ucid = user?.email?.split("@")[0] ?? "";
@@ -471,16 +477,16 @@ export default function Profile() {
           >
             <div className="flex items-center gap-2 mb-4">
               <Briefcase className="w-5 h-5" style={{ color: "var(--accent-events)" }} />
-              <h3 className="font-semibold text-white">Saved Opportunities</h3>
+              <h3 className="font-semibold text-white">Recommended Opportunities</h3>
             </div>
             <div className="space-y-3">
-              {savedOpportunities.map((opp) => (
+              {recommendedOpportunities.map((opp) => (
                 <div key={opp.id} className="p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xl">{opp.logo}</span>
-                    <p className="text-sm font-medium text-white truncate flex-1">{opp.role}</p>
+                    <span className="text-xl">{OPPORTUNITY_TYPE_ICON[opp.type]}</span>
+                    <p className="text-sm font-medium text-white truncate flex-1">{opp.title}</p>
                   </div>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{opp.company}</p>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{opp.org}</p>
                 </div>
               ))}
             </div>

@@ -15,8 +15,7 @@ import {
   getClubOptionLabel,
 } from "./utils/clubMatching";
 
-const API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
-const AUTH_API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as API } from "../../lib/api";
 
 function eventWebSocketUrl() {
   try {

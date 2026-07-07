@@ -2,7 +2,12 @@ import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Calendar, Briefcase, Network, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
-import { mockOpportunities } from "./mock-data";
+// Live opportunities come from the same hook the /opportunities page uses, so
+// the home spotlight card and the full page can never disagree about what the
+// "top match" is. (This replaced a hardcoded mock list that showed every
+// student identical fake data.)
+import { useOpportunities } from "../opportunities/hooks/useOpportunities";
+import { OPPORTUNITY_TYPE_ICON } from "../opportunities/types/opportunities";
 import { DeadlineChip } from "./deadline-chip";
 import { format } from "date-fns";
 import { useAuth } from "../../context/AuthContext";
@@ -11,8 +16,7 @@ import {
 } from "../events/components/EventDetailModal";
 import type { AttendeeInfo, UserProfile } from "../events/components/EventDetailModal";
 
-const EVENTS_API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
-const AUTH_API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "../../lib/api";
 const HOME_CACHE_KEY = "jithub.home-overview.v1";
 const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -109,7 +113,10 @@ const VIRTUAL_BADGE = {
 export default function Home() {
   const { user, token } = useAuth();
   const firstName = user?.name?.split(" ")[0] ?? "";
-  const topOpportunity = mockOpportunities[0];
+  // sortedFiltered defaults to best-match order, so [0] is genuinely the
+  // strongest lead for this student, not an arbitrary first row.
+  const { sortedFiltered: opportunities, counts: opportunityCounts } = useOpportunities();
+  const topOpportunity = opportunities[0];
   const cachedOverview = readHomeOverviewCache();
 
   const profile: UserProfile = {
@@ -154,7 +161,7 @@ export default function Home() {
       accent: "var(--accent-opportunities)",
       accentSoft: "rgba(49, 197, 143, 0.12)",
       description: "Track internships, scholarships, and roles to act on.",
-      metric: `${mockOpportunities.length} active leads surfaced`,
+      metric: `${opportunityCounts.all} active leads surfaced`,
     },
     {
       icon: Network,
@@ -497,43 +504,53 @@ export default function Home() {
             <h2 className="text-xl font-semibold text-white">Opportunity Spotlight</h2>
             <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "var(--brand-primary)" }} />
           </div>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 }}
-            className="rounded-xl p-6"
-            style={{ background: "var(--surface-gradient)", border: "1px solid var(--border-default)" }}
-          >
-            <div className="flex items-start mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center text-2xl">
-                  {topOpportunity.logo}
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">{topOpportunity.role}</h3>
-                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>{topOpportunity.company}</p>
+          {/* Guard: the hook seeds fallback data synchronously so this is
+              practically always present, but a guard costs one line and makes
+              the card safe against an empty feed forever. */}
+          {topOpportunity && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1 }}
+              className="rounded-xl p-6"
+              style={{ background: "var(--surface-gradient)", border: "1px solid var(--border-default)" }}
+            >
+              <div className="flex items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center text-2xl">
+                    {OPPORTUNITY_TYPE_ICON[topOpportunity.type]}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">{topOpportunity.title}</h3>
+                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>{topOpportunity.org}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex flex-wrap gap-2 mb-4">
-              <span className="text-xs px-3 py-1.5 rounded-md" style={{ backgroundColor: "var(--accent-opportunities-soft)", color: "var(--accent-opportunities)" }}>
-                {topOpportunity.type}
-              </span>
-              <DeadlineChip deadline={topOpportunity.deadline} />
-              <span className="text-xs px-3 py-1.5 rounded-md bg-white/5" style={{ color: "var(--text-muted)" }}>
-                {topOpportunity.location}
-              </span>
-            </div>
-            <p className="text-sm text-white mb-4 font-medium">{topOpportunity.salary}</p>
-            <div className="flex gap-2">
-              <button className="flex-1 px-4 py-2 text-white rounded-lg font-medium transition-all" style={{ background: "var(--brand-gradient)", boxShadow: "var(--shadow-brand)" }}>
-                Apply Now
-              </button>
-              <Link to="/opportunities" className="px-4 py-2 bg-white/5 text-white rounded-lg font-medium hover:bg-white/10 transition-colors">
-                View More
-              </Link>
-            </div>
-          </motion.div>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className="text-xs px-3 py-1.5 rounded-md" style={{ backgroundColor: "var(--accent-opportunities-soft)", color: "var(--accent-opportunities)" }}>
+                  {topOpportunity.type}
+                </span>
+                {/* Canonical Opportunity.deadline is an ISO string (it travels over
+                    JSON); DeadlineChip wants a Date, so parse at the boundary. */}
+                {topOpportunity.deadline && <DeadlineChip deadline={new Date(topOpportunity.deadline)} />}
+                <span className="text-xs px-3 py-1.5 rounded-md bg-white/5" style={{ color: "var(--text-muted)" }}>
+                  {topOpportunity.city}, {topOpportunity.state}
+                </span>
+              </div>
+              {/* Internships carry `stipend`, scholarships carry `amount`; networking events have neither. */}
+              {(topOpportunity.stipend ?? topOpportunity.amount) && (
+                <p className="text-sm text-white mb-4 font-medium">{topOpportunity.stipend ?? topOpportunity.amount}</p>
+              )}
+              <div className="flex gap-2">
+                <button className="flex-1 px-4 py-2 text-white rounded-lg font-medium transition-all" style={{ background: "var(--brand-gradient)", boxShadow: "var(--shadow-brand)" }}>
+                  Apply Now
+                </button>
+                <Link to="/opportunities" className="px-4 py-2 bg-white/5 text-white rounded-lg font-medium hover:bg-white/10 transition-colors">
+                  View More
+                </Link>
+              </div>
+            </motion.div>
+          )}
         </div>
 
         {/* Trending Clubs */}

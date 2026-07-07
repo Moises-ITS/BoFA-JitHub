@@ -1,13 +1,21 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { clubNamesEquivalent, getClubTermsFromEvent } from "../utils/clubMatching";
+import type { User } from "../../../context/AuthContext";
 
 export const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥", "🎨", "🏆", "💻", "🎪", "🌈"];
 
-export interface UserProfile {
-  major: string; interests: string[]; clubs: string[]
-  skills?: string[]; looking_for?: string[]; year?: string | null
-}
+/**
+ * The slice of the canonical User (context/AuthContext) that event match-scoring
+ * needs. DESIGN CHOICE: derived with Pick<> instead of re-declaring the fields so
+ * this can never drift from the real User shape — if AuthContext renames a field,
+ * this breaks at compile time instead of silently mis-scoring events.
+ * skills/looking_for/year stay optional because some callers (e.g. the sandbox
+ * page) build partial profiles without them.
+ */
+export type UserProfile =
+  Pick<User, "major" | "interests" | "clubs"> &
+  Partial<Pick<User, "skills" | "looking_for" | "year">>;
 export interface AttendeeInfo { count: number; preview: { user_id: string; user_name: string; user_major: string }[] }
 
 export const CLUB_GROUPS: string[][] = [

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Panel, StateMsg } from "./EdenPage"
 
-const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001"
+import { API_BASE_URL as API } from "../../lib/api"
 
 const C = {
   AMBER: "#f7b955",

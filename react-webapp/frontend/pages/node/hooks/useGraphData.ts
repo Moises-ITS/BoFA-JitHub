@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { GraphNode, GraphLink } from "../types/graphNodes";
 import { mockNodes, mockLinks } from "../data/mockGraphData";
 import { useAuth } from "../../../context/AuthContext";
+import { API_BASE_URL } from "../../../lib/api";
 
 interface GraphData {
   nodes:   GraphNode[];
@@ -80,10 +81,13 @@ export function useGraphData(): GraphData {
   const fetchedForUserIdRef = useRef<string | null>(null);
 
   const fetchGraphData = useCallback(async (force = false) => {
-    const API = import.meta.env.VITE_API_URL;
+    // API_BASE_URL always resolves (env var or localhost fallback), so unlike the
+    // old inline env read, "no API" is no longer a possible state — only the
+    // token gate below decides whether we're ready to fetch.
+    const API = API_BASE_URL;
     const userId = user?.id ?? null;
 
-    if (!API || !token) {
+    if (!token) {
       // Keep current graph state stable while auth/API initializes.
       // This avoids brief mock-data swaps when token availability changes.
       return;

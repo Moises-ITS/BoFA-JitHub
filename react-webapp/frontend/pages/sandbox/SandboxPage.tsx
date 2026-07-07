@@ -6,8 +6,7 @@ const JITI_AVATAR = "/jiti.png";
 import { useAuth } from "../../context/AuthContext";
 import { EventDetailModal, type UserProfile, type AttendeeInfo } from "../events/components/EventDetailModal";
 
-const EVENTS_API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
-const AUTH_API   = import.meta.env.VITE_API_URL         ?? "http://localhost:3001";
+import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "../../lib/api";
 
 const STARTERS = [
   "What events are happening this week?",

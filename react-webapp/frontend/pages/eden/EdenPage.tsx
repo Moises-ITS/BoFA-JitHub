@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { useAuth } from "../../context/AuthContext"
 import { ForecastTab, WhatIfTab, AttendanceTab } from "./EdenTabs"
 
-const API = import.meta.env.VITE_API_URL ?? "http://localhost:3001"
+import { API_BASE_URL as API } from "../../lib/api"
 
 // ── Bloomberg-terminal palette ────────────────────────────────────────────
 const C = {

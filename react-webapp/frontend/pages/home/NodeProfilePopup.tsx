@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../../context/AuthContext";
 import { getNodeById } from "../../hooks/useNodeSearch";
 
-const API = import.meta.env.VITE_API_URL ?? "";
+import { API_BASE_URL as API } from "../../lib/api";
 
 const TYPE_COLOR: Record<string, string> = {
   student:   "#60a5fa",

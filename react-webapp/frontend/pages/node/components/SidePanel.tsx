@@ -12,7 +12,7 @@ import { TYPE_COLOR, TYPE_EMOJI, TYPE_BADGE, DETAIL_ICONS } from "../constants/m
 import { getNodeId } from "../utils/getNodeId";
 import { useAuth } from "../../../context/AuthContext";
 
-const API = import.meta.env.VITE_API_URL ?? "";
+import { API_BASE_URL as API } from "../../../lib/api";
 
 type ConnStatus = "none" | "pending-sent" | "pending-received" | "connected";
 

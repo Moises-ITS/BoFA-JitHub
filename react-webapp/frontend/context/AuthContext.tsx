@@ -16,9 +16,10 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react"
 import { useAuth as useClerkAuth, useClerk, useUser } from "@clerk/clerk-react"
-
-/** Backend origin. Falls back to the local dev server when the env var isn't injected (e.g. running `vite` without a .env). */
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5175"
+// Base URL + authenticated fetch live in lib/api so every page shares ONE backend
+// origin and ONE timeout/error policy (they used to be copy-pasted with
+// disagreeing fallback ports — see lib/api.ts header for the full story).
+import { apiFetch, type ApiErrorBody } from "../lib/api"
 
 /** localStorage key for the "last known profile" cache — see readCachedUser() for why this exists. */
 const USER_CACHE_KEY = "jithub.cached-user"
@@ -29,9 +30,6 @@ const USER_CACHE_KEY = "jithub.cached-user"
  * expired token. This is a *background* refresh — it does not gate the UI.
  */
 const TOKEN_REFRESH_INTERVAL_MS = 50_000
-
-/** Network calls to our backend give up after this long rather than hanging a spinner forever (flaky campus wifi, cold-started backend, etc.). */
-const REQUEST_TIMEOUT_MS = 10_000
 
 /** Our profile row, as returned by GET /api/auth/me (see backend formatUser()). */
 export interface User {
@@ -126,12 +124,6 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-/** Shape returned by our error responses, e.g. `{ error: "..." }` or `{ error: "...", code: "PROFILE_REQUIRED" }`. */
-interface ApiErrorBody {
-  error?: string
-  code?: string
-}
-
 /**
  * Reads the last-known profile out of localStorage so returning students see their
  * own name/avatar instantly instead of a blank loading screen while we re-validate
@@ -170,43 +162,6 @@ function isPlausibleUser(value: unknown): value is User {
     typeof (value as Partial<User>).id === "string" &&
     typeof (value as Partial<User>).email === "string"
   )
-}
-
-/**
- * Thin fetch wrapper shared by every authenticated call to our backend. Centralizes
- * the four things every call site needs and previously duplicated by hand:
- *  1. Prefixing the backend origin
- *  2. Attaching the Bearer token + JSON content-type header
- *  3. Aborting the request after REQUEST_TIMEOUT_MS instead of hanging indefinitely
- *  4. Parsing the JSON body defensively (some error responses may have no body)
- *
- * Returns the raw ok/status/data trio rather than throwing on non-2xx — callers
- * decide what a given status code means (e.g. 403 PROFILE_REQUIRED is an expected,
- * handled case, not an exception).
- */
-async function apiFetch<T>(
-  path: string,
-  token: string,
-  init?: RequestInit
-): Promise<{ ok: boolean; status: number; data: T }> {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-  try {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        ...init?.headers,
-      },
-      signal: controller.signal,
-    })
-    // .catch(() => ({})) guards against empty/non-JSON bodies (e.g. a 204 or a proxy error page).
-    const data = (await res.json().catch(() => ({}))) as T
-    return { ok: res.ok, status: res.status, data }
-  } finally {
-    clearTimeout(timeoutId)
-  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

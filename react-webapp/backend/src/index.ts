@@ -3,6 +3,9 @@ import path from "path"
 import dotenv from "dotenv"
 import fs from "fs"
 import type { CorsOptions } from "cors"
+// Type-only imports are erased at compile time, so they can't defeat the
+// "dotenv must run before any env-reading module" ordering below.
+import type { Request, Response, NextFunction } from "express"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -41,6 +44,7 @@ const [
   { sanitizeRequestInputs },
   { observeApiTraffic },
   { enforceHttps },
+  { isAllowedCorsOrigin },
 ] = await Promise.all([
   import("express"),
   import("cors"),
@@ -62,6 +66,7 @@ const [
   import("./middleware/security.js"),
   import("./middleware/observability.js"),
   import("./middleware/transportSecurity.js"),
+  import("./utils/origins.js"),
 ])
 
 try {
@@ -99,108 +104,18 @@ const app = express()
 app.disable("x-powered-by")
 app.set("trust proxy", 1)
 
-function normalizeOrigin(origin: string): string | null {
-  try {
-    const parsed = new URL(origin)
-    return `${parsed.protocol}//${parsed.host}`.toLowerCase()
-  } catch {
-    return null
-  }
-}
-
-function extractVercelLabel(value: string): string | null {
-  const normalized = normalizeOrigin(value)
-  if (!normalized) return null
-  try {
-    const host = new URL(normalized).hostname.toLowerCase()
-    if (!host.endsWith(".vercel.app")) return null
-    return host.slice(0, -".vercel.app".length)
-  } catch {
-    return null
-  }
-}
-
-function inferVercelProject(): string {
-  const explicit =
-    (process.env.FRONTEND_VERCEL_PROJECT ?? process.env.VERCEL_PROJECT_NAME ?? "")
-      .trim()
-      .toLowerCase()
-  if (explicit) return explicit
-
-  const labels = [
-    process.env.FRONTEND_URL,
-    process.env.FRONTEND_ORIGIN,
-    process.env.FRONTEND_URLS,
-  ]
-    .filter(Boolean)
-    .flatMap((value) => (value as string).split(","))
-    .map((value) => value.trim())
-    .map((value) => extractVercelLabel(value))
-    .filter((label): label is string => Boolean(label))
-
-  if (labels.length === 0) return ""
-  labels.sort((a, b) => a.length - b.length)
-  return labels[0]
-}
-
-const vercelProject = inferVercelProject()
-const vercelTeam =
-  (process.env.FRONTEND_VERCEL_TEAM ?? process.env.VERCEL_TEAM_SLUG ?? "")
-    .trim()
-    .toLowerCase()
-
-function isAllowedVercelOrigin(origin: string): boolean {
-  if (!vercelProject) return false
-
-  let parsed: URL
-  try {
-    parsed = new URL(origin)
-  } catch {
-    return false
-  }
-
-  if (parsed.protocol !== "https:") return false
-
-  const host = parsed.hostname.toLowerCase()
-  if (!host.endsWith(".vercel.app")) return false
-
-  if (host === `${vercelProject}.vercel.app`) return true
-  if (!host.startsWith(`${vercelProject}-`)) return false
-  if (!vercelTeam) return true
-
-  return host.endsWith(`-${vercelTeam}.vercel.app`)
-}
-
-const configuredOrigins = [
-  process.env.FRONTEND_URL,
-  process.env.FRONTEND_ORIGIN,
-  process.env.FRONTEND_URLS,
-]
-  .filter(Boolean)
-  .flatMap((value) => (value as string).split(","))
-  .map((origin) => origin.trim())
-  .map((origin) => normalizeOrigin(origin) ?? origin.toLowerCase())
-  .filter(Boolean)
-
-const allowedOrigins = new Set<string>([
-  ...configuredOrigins,
-  "http://localhost:5175",
-  "http://127.0.0.1:5175",
-])
-
+// Origin trust rules are shared with Clerk token verification (see
+// utils/origins.ts) — they used to be duplicated here and could drift.
 const corsOptions: CorsOptions = {
   origin(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     if (!origin) {
+      callback(null, true) // same-origin / curl / server-to-server: no Origin header
+      return
+    }
+    if (isAllowedCorsOrigin(origin)) {
       callback(null, true)
       return
     }
-
-    const normalized = normalizeOrigin(origin) ?? origin.toLowerCase()
-    if (allowedOrigins.has(normalized) || isAllowedVercelOrigin(origin)) {
-      callback(null, true)
-      return
-    }
-
     callback(new Error(`CORS blocked for origin ${origin}`))
   },
   credentials: true,
@@ -241,9 +156,64 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" })
 })
 
+// Terminal error handler — MUST be registered after every route. Without it,
+// anything thrown outside a route's own try/catch (e.g. the CORS callback's
+// Error, or a bug in middleware) falls to Express's default handler, which
+// prints an HTML stack trace to the client. Full details stay in server logs;
+// clients get a stable JSON shape they can actually parse.
+// (The unused `_next` parameter is required — Express identifies error
+// middleware by its 4-argument signature.)
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const isCorsRejection = err.message.startsWith("CORS blocked")
+  if (!isCorsRejection) {
+    console.error("[unhandled-route-error]", { path: req.originalUrl, message: err.message, stack: err.stack })
+  }
+  if (res.headersSent) return
+  res.status(isCorsRejection ? 403 : 500).json({
+    error: isCorsRejection ? "Origin not allowed" : "Internal server error",
+  })
+})
+
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`)
   // Kick off scrapers after the server is listening
   startScheduler()
+})
+
+// ── Process lifecycle ─────────────────────────────────────────────────────────
+// Railway (and any container platform) sends SIGTERM on redeploy/scale-down.
+// Without this, in-flight student requests are severed mid-response and pool
+// connections are abandoned for Postgres to time out on its side. Order
+// matters: stop accepting new connections first, let in-flight requests
+// finish, then release DB connections. The 10s force-exit guards against a
+// hung request blocking the redeploy forever (platforms hard-kill at ~30s).
+let shuttingDown = false
+async function shutdown(signal: string) {
+  if (shuttingDown) return
+  shuttingDown = true
+  console.log(`[lifecycle] ${signal} received — draining connections`)
+  const forceExit = setTimeout(() => {
+    console.error("[lifecycle] drain timed out after 10s — forcing exit")
+    process.exit(1)
+  }, 10_000)
+  forceExit.unref()
+  server.close(async () => {
+    try {
+      await db.end()
+    } catch (err) {
+      console.error("[lifecycle] error closing Postgres pool:", err)
+    }
+    console.log("[lifecycle] shutdown complete")
+    process.exit(0)
+  })
+}
+process.on("SIGTERM", () => void shutdown("SIGTERM"))
+process.on("SIGINT", () => void shutdown("SIGINT"))
+
+// Log-and-continue: a rejected promise nobody awaited (e.g. a fire-and-forget
+// scraper insert) should be visible in logs, not crash 2000 students' backend.
+// Node's default behavior for unhandledRejection is a process crash.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason)
 })

@@ -1,108 +1,11 @@
 import { verifyToken, type VerifyTokenOptions } from "@clerk/backend"
+// Origin trust rules live in ONE module shared with the CORS layer — this file
+// previously carried its own copy of the same functions, re-parsed from env on
+// every request. See utils/origins.ts for the rules and the why.
+import { buildAuthorizedParties } from "./origins.js"
 
 function looksLikeBase64(value: string) {
   return /^[A-Za-z0-9+/=]+$/.test(value)
-}
-
-function normalizeOrigin(origin: string): string | null {
-  try {
-    const parsed = new URL(origin)
-    return `${parsed.protocol}//${parsed.host}`.toLowerCase()
-  } catch {
-    return null
-  }
-}
-
-function extractVercelLabel(value: string): string | null {
-  const normalized = normalizeOrigin(value)
-  if (!normalized) return null
-  try {
-    const host = new URL(normalized).hostname.toLowerCase()
-    if (!host.endsWith(".vercel.app")) return null
-    return host.slice(0, -".vercel.app".length)
-  } catch {
-    return null
-  }
-}
-
-function inferVercelProject(): string {
-  const explicit =
-    (process.env.FRONTEND_VERCEL_PROJECT ?? process.env.VERCEL_PROJECT_NAME ?? "")
-      .trim()
-      .toLowerCase()
-  if (explicit) return explicit
-
-  const labels = [
-    process.env.FRONTEND_URL,
-    process.env.FRONTEND_ORIGIN,
-    process.env.FRONTEND_URLS,
-  ]
-    .filter(Boolean)
-    .flatMap((value) => (value as string).split(","))
-    .map((value) => value.trim())
-    .map((value) => extractVercelLabel(value))
-    .filter((label): label is string => Boolean(label))
-
-  if (labels.length === 0) return ""
-  labels.sort((a, b) => a.length - b.length)
-  return labels[0]
-}
-
-const vercelProject = inferVercelProject()
-const vercelTeam =
-  (process.env.FRONTEND_VERCEL_TEAM ?? process.env.VERCEL_TEAM_SLUG ?? "")
-    .trim()
-    .toLowerCase()
-
-function isAllowedVercelOrigin(origin: string): boolean {
-  if (!vercelProject) return false
-
-  let parsed: URL
-  try {
-    parsed = new URL(origin)
-  } catch {
-    return false
-  }
-
-  if (parsed.protocol !== "https:") return false
-  const host = parsed.hostname.toLowerCase()
-  if (!host.endsWith(".vercel.app")) return false
-  if (host === `${vercelProject}.vercel.app`) return true
-  if (!host.startsWith(`${vercelProject}-`)) return false
-  if (!vercelTeam) return true
-  return host.endsWith(`-${vercelTeam}.vercel.app`)
-}
-
-function buildAuthorizedParties(requestOrigin?: string) {
-  const configuredOrigins = [
-    process.env.FRONTEND_URL,
-    process.env.FRONTEND_ORIGIN,
-    process.env.FRONTEND_URLS,
-  ]
-    .filter(Boolean)
-    .flatMap((value) => (value as string).split(","))
-    .map((origin) => origin.trim())
-    .map((origin) => normalizeOrigin(origin) ?? origin.toLowerCase())
-    .filter(Boolean)
-
-  const authorizedParties = new Set<string>([
-    ...configuredOrigins,
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:5175",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:5174",
-    "http://127.0.0.1:5175",
-  ])
-
-  if (requestOrigin) {
-    const normalized = normalizeOrigin(requestOrigin)
-    if (normalized && (authorizedParties.has(normalized) || isAllowedVercelOrigin(requestOrigin))) {
-      authorizedParties.add(normalized)
-    }
-  }
-
-  return Array.from(authorizedParties)
 }
 
 function normalizeJwtKey(rawKey: string | undefined) {

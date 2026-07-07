@@ -13,8 +13,8 @@ export const CLUB_EMOJIS = ["🎯", "💡", "🚀", "🎓", "⚡", "🌟", "🔥
  * needs. DESIGN CHOICE: derived with Pick<> instead of re-declaring the fields so
  * this can never drift from the real User shape — if AuthContext renames a field,
  * this breaks at compile time instead of silently mis-scoring events.
- * skills/looking_for/year stay optional because some callers (e.g. the sandbox
- * page) build partial profiles without them.
+ * skills/looking_for/year stay optional because some callers build partial
+ * profiles without them.
  */
 export type UserProfile =
   Pick<User, "major" | "interests" | "clubs"> &

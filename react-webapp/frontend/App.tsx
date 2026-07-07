@@ -19,7 +19,10 @@ const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
 // Lazy-load heavy pages to keep the initial bundle small.
 const CampusGraph = lazy(() => import("./pages/node/CampusGraph"))
-const SandboxPage = lazy(() => import("./pages/sandbox/SandboxPage"))
+// NOTE: the /sandbox Jiti AI chat page was removed 2026-07 for a ground-up
+// rebuild. The full system documentation (model, tool loop, prompts, quota,
+// endpoints) is preserved in docs/JITI-SANDBOX.md; the EDEN FastAPI engine
+// (/sandbox/chat/stream) and /api/chat-memory remain live for the rebuild.
 const DigitalTwin = lazy(() => import("./pages/map/DigitalTwin"))
 const CampusView = lazy(() => import("./pages/campus/CampusView"))
 const GlbInspector = lazy(() => import("./pages/campus/GlbInspector"))
@@ -205,20 +208,6 @@ export default function App() {
                         <CampusGraph />
                       </Suspense>
                     </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/sandbox"
-                  element={
-                    <Suspense
-                      fallback={
-                        <div style={{ color: "var(--text-muted)", padding: "40px" }}>
-                          Loading...
-                        </div>
-                      }
-                    >
-                      <SandboxPage />
-                    </Suspense>
                   }
                 />
               </Route>

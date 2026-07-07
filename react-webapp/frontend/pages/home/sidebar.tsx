@@ -10,7 +10,8 @@ const baseNavItems = [
   // Quarantined: hide the Research section button until the section is ready for users.
   // { icon: FlaskConical, label: "Research", path: "/research" },
   { icon: Network, label: "Campus Network", path: "/network" },
-  { icon: Bot, label: "Sandbox", path: "/sandbox" },
+  // Removed: the /sandbox Jiti AI chat is being rebuilt from scratch — see
+  // docs/JITI-SANDBOX.md for the full documentation of the previous system.
   { icon: User, label: "Profile", path: "/profile" },
   { icon: Flag, label: "Report Issue", path: "/report-issue" },
 ];

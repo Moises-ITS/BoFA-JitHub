@@ -1,5 +1,5 @@
 def main():
-    print("Hello from react-webapp!")
+    print("Hello from rag!")
 
 
 if __name__ == "__main__":

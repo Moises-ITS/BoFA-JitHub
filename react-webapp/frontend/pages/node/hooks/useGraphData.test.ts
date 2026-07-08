@@ -117,7 +117,13 @@ describe('useGraphData', () => {
     const { result } = renderHook(() => useGraphData())
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    const expectedInit = { headers: { Authorization: 'Bearer test-token' } }
+    // The hook goes through the shared apiFetch, which adds Content-Type and
+    // an abort signal on top of the Bearer header — assert on what matters
+    // (URL + auth) rather than pinning the whole init object, so helper
+    // internals can evolve without breaking this test.
+    const expectedInit = expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+    })
     expect(fetchMock).toHaveBeenCalledWith(`${API_BASE_URL}/api/graph/nodes`, expectedInit)
     expect(fetchMock).toHaveBeenCalledWith(`${API_BASE_URL}/api/graph/links`, expectedInit)
   })

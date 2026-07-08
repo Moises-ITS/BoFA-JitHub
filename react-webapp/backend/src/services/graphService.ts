@@ -253,6 +253,48 @@ export async function ensureNodeIds() {
   }
 }
 
+/**
+ * PRIVACY ALLOWLIST for the bulk graph payload.
+ *
+ * /api/graph/nodes returns EVERY node to EVERY signed-in student. It used to
+ * ship `properties(n)` wholesale — meaning each student's GPA, bio, email,
+ * and LinkedIn URL were downloadable in one request by any classmate (a
+ * harvest risk), and the payload grew with every profile field ever added.
+ *
+ * These are exactly the fields the graph UI renders in hover cards, PER NODE
+ * TYPE — the allowlist is type-keyed so a field that's public on one type
+ * (a club's "goal" mission statement) doesn't accidentally expose the same-
+ * named private field on another (a student's personal "goal"). Everything
+ * else — especially email, gpa, bio, linkedinUrl, and internal ids — stays
+ * out. A student's OWN full profile still comes from /api/auth/me.
+ *
+ * Adding a field to a hover card? Add it here deliberately — the default for
+ * new profile data is private.
+ */
+const PUBLIC_DETAIL_FIELDS: Record<string, readonly string[]> = {
+  student:   ["major", "year_grad"],
+  club:      ["members", "goal", "focus"],
+  company:   ["role", "open_roles"],
+  professor: ["focus", "research"],
+  interest:  ["focus"],
+}
+
+function toPublicDetails(
+  type: unknown,
+  props: Record<string, unknown> | null | undefined
+): Record<string, unknown> {
+  if (!props) return {}
+  // Unknown node types share nothing — fail closed, not open.
+  const allowed = PUBLIC_DETAIL_FIELDS[String(type)] ?? []
+  const details: Record<string, unknown> = {}
+  for (const field of allowed) {
+    if (props[field] !== undefined && props[field] !== null) {
+      details[field] = props[field]
+    }
+  }
+  return details
+}
+
 export async function getNodes() {
   const session = driver.session()
   try {
@@ -269,7 +311,7 @@ export async function getNodes() {
       id:      record.get("id"),
       label:   record.get("label"),
       type:    record.get("type"),
-      details: record.get("details"),
+      details: toPublicDetails(record.get("type"), record.get("details")),
     }))
   } finally {
     session.close()

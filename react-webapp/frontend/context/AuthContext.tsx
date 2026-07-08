@@ -20,6 +20,7 @@ import { useAuth as useClerkAuth, useClerk, useUser } from "@clerk/clerk-react"
 // origin and ONE timeout/error policy (they used to be copy-pasted with
 // disagreeing fallback ports — see lib/api.ts header for the full story).
 import { apiFetch, type ApiErrorBody } from "../lib/api"
+import { readJsonCache, writeJsonCache, removeCache } from "../lib/localCache"
 
 /** localStorage key for the "last known profile" cache — see readCachedUser() for why this exists. */
 const USER_CACHE_KEY = "jithub.cached-user"
@@ -137,16 +138,9 @@ const AuthContext = createContext<AuthContextValue | null>(null)
  * or the cache is rejected below.
  */
 function readCachedUser(): User | null {
-  if (typeof window === "undefined") return null
-  try {
-    const raw = window.localStorage.getItem(USER_CACHE_KEY)
-    if (!raw) return null
-    const parsed: unknown = JSON.parse(raw)
-    return isPlausibleUser(parsed) ? parsed : null
-  } catch {
-    // Corrupted JSON (e.g. a half-written value from a crashed tab) — treat as no cache.
-    return null
-  }
+  // Storage mechanics (parse guards, quota/private-mode tolerance) live in the
+  // shared lib/localCache helper; this wrapper only supplies the key + shape guard.
+  return readJsonCache<User>(USER_CACHE_KEY, { validate: isPlausibleUser })
 }
 
 /**
@@ -209,16 +203,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // signed-out user's last-known profile from lingering in devtools-visible
   // storage on a shared machine.
   useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      if (user) {
-        window.localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user))
-      } else {
-        window.localStorage.removeItem(USER_CACHE_KEY)
-      }
-    } catch {
-      // Storage can throw in private-browsing modes or when the quota is full;
-      // the cache is a pure UX nicety, so we silently degrade to "no cache".
+    if (user) {
+      writeJsonCache(USER_CACHE_KEY, user)
+    } else {
+      removeCache(USER_CACHE_KEY)
     }
   }, [user])
 

@@ -165,6 +165,35 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
         ON user_notifications(user_id, is_read);
     `,
   },
+  {
+    // "Incoming requests to me" queries filter by to_user_id alone. The
+    // existing UNIQUE(from_user_id, to_user_id) composite only serves as an
+    // index prefix for from_user_id — to_user_id lookups were seq-scanning,
+    // which gets linearly worse as connection volume grows.
+    name: "011_connection_requests_to_user_idx",
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_connection_requests_to_user
+        ON connection_requests(to_user_id);
+    `,
+  },
+  {
+    // The /api/eden attendance routes have always written to this table with
+    // ON CONFLICT (event_id), but NO migration ever created it — it only
+    // existed because someone created it by hand in the original database.
+    // A fresh environment (or the ENABLE_EDEN revival) would crash without
+    // this. Columns mirror exactly what routes/eden.ts reads and writes.
+    name: "012_event_attendance",
+    sql: `
+      CREATE TABLE IF NOT EXISTS event_attendance (
+        event_id    INT PRIMARY KEY,
+        club_id     INT NOT NULL,
+        headcount   INT NOT NULL,
+        entered_by  VARCHAR,
+        entered_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+        notes       TEXT
+      );
+    `,
+  },
 ]
 
 export async function runMigrations() {

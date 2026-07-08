@@ -50,7 +50,7 @@ export type FilterType = OpportunityType | 'all';
 export type SortType = 'best-match' | 'due-soon' | 'newest' | 'saved-first';
 export type UrgencyFilter = 'all' | 'due-soon' | 'this-week' | 'this-month';
 
-import { API_BASE_URL as API } from '@/lib/api';
+import { apiFetch, API_BASE_URL as API } from '@/lib/api';
 
 function getDaysUntilDeadline(deadline?: string) {
   if (!deadline) return Number.POSITIVE_INFINITY;
@@ -225,17 +225,11 @@ export function useOpportunities(initialDistrict?: string | null) {
   }
 
   async function createOpportunity(input: CreateOpportunityInput, token: string) {
-    const response = await fetch(`${API}/api/opportunities`, {
+    const { ok, data: payload } = await apiFetch<Opportunity & { error?: string }>('/api/opportunities', token, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
       body: JSON.stringify(input),
     });
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
+    if (!ok) {
       throw new Error(payload.error ?? 'Could not create opportunity');
     }
 

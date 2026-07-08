@@ -11,81 +11,39 @@ import { OPPORTUNITY_TYPE_ICON } from "../opportunities/types/opportunities";
 import { DeadlineChip } from "./deadline-chip";
 import { format } from "date-fns";
 import { useAuth } from "@/context/AuthContext";
-import {
-  CATEGORY_STYLE, EventDetailModal, fmt12, CLUB_EMOJIS,
-} from "../events/components/EventDetailModal";
-import type { AttendeeInfo, UserProfile } from "../events/components/EventDetailModal";
+import { EventDetailModal } from "../events/components/EventDetailModal";
+import { ClubAvatar, TrendingClubAvatar } from "../events/components/ClubAvatar";
+import { CATEGORY_STYLE, fmt12 } from "../events/utils/eventFormatting";
+import type { UserProfile } from "../events/utils/eventScoring";
+import type { AttendeeInfo } from "../events/components/EventDetailModal";
+import type { EdenEvent, TrendingClub } from "../events/types/events";
 
-import { API_BASE_URL as AUTH_API, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
-const HOME_CACHE_KEY = "jithub.home-overview.v1";
+import { apiFetch, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
+import { readJsonCache, writeJsonCache } from "@/lib/localCache";
+// Overview cache: 5-minute TTL so a page revisit paints instantly without
+// showing stale-beyond-usefulness data. Storage mechanics (TTL, parse guards,
+// quota tolerance) live in the shared lib/localCache helper — this used to be
+// a second hand-rolled localStorage implementation.
+const HOME_CACHE_KEY = "jithub.home-overview.v2"; // v2: envelope format changed with localCache
 const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
 
 type HomeOverviewCache = {
-  fetchedAt: number;
-  topEvents: any[];
-  trendingClubs: any[];
+  topEvents: EdenEvent[];
+  trendingClubs: TrendingClub[];
 };
 
 function readHomeOverviewCache(): HomeOverviewCache | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(HOME_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as HomeOverviewCache;
-    if (!parsed || !Array.isArray(parsed.topEvents) || !Array.isArray(parsed.trendingClubs) || typeof parsed.fetchedAt !== "number") {
-      return null;
-    }
-    if (Date.now() - parsed.fetchedAt > HOME_CACHE_TTL_MS) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
+  return readJsonCache<HomeOverviewCache>(HOME_CACHE_KEY, {
+    ttlMs: HOME_CACHE_TTL_MS,
+    validate: (v): v is HomeOverviewCache =>
+      typeof v === "object" && v !== null &&
+      Array.isArray((v as HomeOverviewCache).topEvents) &&
+      Array.isArray((v as HomeOverviewCache).trendingClubs),
+  });
 }
 
-function writeHomeOverviewCache(payload: Omit<HomeOverviewCache, "fetchedAt">) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(HOME_CACHE_KEY, JSON.stringify({
-      ...payload,
-      fetchedAt: Date.now(),
-    }));
-  } catch {
-    /* ignore storage issues */
-  }
-}
-
-function ClubAvatar({ clubId, clubName, index }: { clubId: number; clubName: string; index: number }) {
-  const [failed, setFailed] = useState(false);
-  if (!failed)
-    return <img src={`/club_pics/${clubId}.jpg`} alt={clubName} onError={() => setFailed(true)} className="w-10 h-10 rounded-lg object-cover shrink-0" />;
-  return <div className="text-3xl shrink-0 w-10 h-10 flex items-center justify-center">{CLUB_EMOJIS[index % CLUB_EMOJIS.length]}</div>;
-}
-
-function TrendingClubAvatar({ clubId, clubName, index }: { clubId?: number; clubName: string; index: number }) {
-  const [failed, setFailed] = useState(false);
-
-  if (clubId && !failed) {
-    return (
-      <img
-        src={`/club_pics/${clubId}.jpg`}
-        alt={clubName}
-        onError={() => setFailed(true)}
-        className="w-8 h-8 rounded-lg object-cover shrink-0"
-      />
-    );
-  }
-
-  return (
-    <div
-      className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
-      style={{ backgroundColor: "rgba(255,255,255,0.05)" }}
-      aria-label={clubName}
-    >
-      {CLUB_EMOJIS[index % CLUB_EMOJIS.length]}
-    </div>
-  );
+function writeHomeOverviewCache(payload: HomeOverviewCache) {
+  writeJsonCache(HOME_CACHE_KEY, payload);
 }
 
 // change_pct: positive = up, negative = down, null = not yet available
@@ -128,20 +86,20 @@ export default function Home() {
     year: user?.year ?? null,
   };
 
-  const [topEvents, setTopEvents] = useState<any[]>(cachedOverview?.topEvents ?? []);
-  const [trendingClubs, setTrendingClubs] = useState<any[]>(cachedOverview?.trendingClubs ?? []);
+  const [topEvents, setTopEvents] = useState<EdenEvent[]>(cachedOverview?.topEvents ?? []);
+  const [trendingClubs, setTrendingClubs] = useState<TrendingClub[]>(cachedOverview?.trendingClubs ?? []);
   const [topEventsLoading, setTopEventsLoading] = useState(!cachedOverview?.topEvents?.length);
   const [trendingClubsLoading, setTrendingClubsLoading] = useState(!cachedOverview?.trendingClubs?.length);
   const [topEventsError, setTopEventsError] = useState<string | null>(null);
   const [trendingClubsError, setTrendingClubsError] = useState<string | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [selectedEvent, setSelectedEvent] = useState<EdenEvent | null>(null);
   const [modalAttendees, setModalAttendees] = useState<AttendeeInfo | null>(null);
   const [attendeeMap, setAttendeeMap] = useState<Record<number, AttendeeInfo>>({});
   const [connectionIds, setConnectionIds] = useState<Set<string>>(new Set());
   const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
   const selectedEventId = selectedEvent?.event_id ?? null;
   const selectedEventAttendees = selectedEventId ? attendeeMap[selectedEventId] : null;
-  const topEventIds = topEvents.map((event: any) => event.event_id);
+  const topEventIds = topEvents.map((event) => event.event_id);
   const topEventIdsKey = topEventIds.join(",");
 
   const moduleCards = [
@@ -240,7 +198,7 @@ export default function Home() {
       .then((response) => response.json())
       .then((data) => {
         if (cancelled || data?.error) return;
-        setSelectedEvent((prev: any) => (
+        setSelectedEvent((prev) => (
           prev?.event_id === selectedEventId
             ? { ...prev, ...data }
             : prev
@@ -286,10 +244,9 @@ export default function Home() {
     // cleanup were dropped. Restored both so a response arriving after the
     // user/token changes (or the page unmounts) can't write stale state.
     let cancelled = false;
-    fetch(`${AUTH_API}/api/connections`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then((data: { id: string }[]) => {
-        if (cancelled) return;
+    apiFetch<{ id: string }[]>("/api/connections", token)
+      .then(({ ok, data }) => {
+        if (cancelled || !ok || !Array.isArray(data)) return;
         setConnectionIds(new Set(data.map((connection) => connection.id)));
       })
       .catch(() => {});

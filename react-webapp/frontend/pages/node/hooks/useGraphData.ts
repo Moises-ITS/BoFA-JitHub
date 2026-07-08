@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { GraphNode, GraphLink } from "../types/graphNodes";
 import { mockNodes, mockLinks } from "../data/mockGraphData";
 import { useAuth } from "@/context/AuthContext";
-import { API_BASE_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface GraphData {
   nodes:   GraphNode[];
@@ -81,10 +81,6 @@ export function useGraphData(): GraphData {
   const fetchedForUserIdRef = useRef<string | null>(null);
 
   const fetchGraphData = useCallback(async (force = false) => {
-    // API_BASE_URL always resolves (env var or localhost fallback), so unlike the
-    // old inline env read, "no API" is no longer a possible state — only the
-    // token gate below decides whether we're ready to fetch.
-    const API = API_BASE_URL;
     const userId = user?.id ?? null;
 
     if (!token) {
@@ -105,15 +101,14 @@ export function useGraphData(): GraphData {
 
     if (!force) setLoading(true);
     try {
-      const headers = { Authorization: `Bearer ${token}` };
       const [nodesRes, linksRes] = await Promise.all([
-        fetch(`${API}/api/graph/nodes`, { headers }),
-        fetch(`${API}/api/graph/links`, { headers }),
+        apiFetch<unknown[]>("/api/graph/nodes", token),
+        apiFetch<unknown[]>("/api/graph/links", token),
       ]);
       if (!nodesRes.ok) throw new Error(`Nodes fetch failed: ${nodesRes.status}`);
       if (!linksRes.ok) throw new Error(`Links fetch failed: ${linksRes.status}`);
-      const nodesData = await nodesRes.json();
-      const linksData = await linksRes.json();
+      const nodesData = nodesRes.data;
+      const linksData = linksRes.data;
 
       const normalizedNodes = Array.isArray(nodesData)
         ? nodesData.map((node, index) => normalizeNode(node, index))

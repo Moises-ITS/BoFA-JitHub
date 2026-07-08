@@ -2,7 +2,7 @@
 // Fetches all graph nodes once and provides fast client-side filtering.
 // Results are grouped by node type, max 5 per group.
 
-import { API_BASE_URL as API } from "../lib/api"
+import { apiFetch } from "../lib/api"
 import type { GraphNode } from "../pages/node/types/graphNodes"
 
 // DESIGN CHOICE: the search index only needs id/label/type, so we derive a
@@ -37,10 +37,8 @@ async function loadNodes(token?: string | null): Promise<SearchNode[]> {
   }
   if (cachedNodes) return cachedNodes
   if (fetchPromise) return fetchPromise
-  fetchPromise = fetch(`${API}/api/graph/nodes`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-    .then(r => r.ok ? r.json() : [])
+  fetchPromise = apiFetch<SearchNode[]>("/api/graph/nodes", token)
+    .then(({ ok, data }) => (ok && Array.isArray(data) ? data : []))
     .then((data: SearchNode[]) => {
       cachedNodes = data
       cacheToken = token

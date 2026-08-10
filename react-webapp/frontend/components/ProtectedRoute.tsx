@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from "react-router-dom"
 import { useAuth as useClerkAuth } from "@clerk/clerk-react"
 import { useAuth } from "../context/AuthContext"
+import JitiWidget from "./jiti/JitiWidget"
 
 const spinnerStyle: React.CSSProperties = {
   width: 32, height: 32,
@@ -70,5 +71,10 @@ export default function ProtectedRoute() {
     )
   }
 
-  return <Outlet />
+  return (
+    <>
+      <Outlet />
+      <JitiWidget />
+    </>
+  )
 }

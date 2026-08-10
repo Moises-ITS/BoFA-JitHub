@@ -30,5 +30,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["main.tsx", "App.tsx", "pages/**/*", "components/**/*", "context/**/*", "hooks/**/*", "lib/**/*"]
+  "include": ["main.tsx", "App.tsx", "test-setup.ts", "pages/**/*", "components/**/*", "context/**/*", "hooks/**/*", "lib/**/*"]
 }

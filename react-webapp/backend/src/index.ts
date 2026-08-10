@@ -202,8 +202,15 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
 const PORT = process.env.PORT || 3001
 const server = app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`)
-  // Kick off scrapers after the server is listening
-  startScheduler()
+  // Opportunity scrapers — RETIRED. The opportunities board is student-submitted
+  // now (`/api/opportunities` serves `source = 'community'` only), so scraping
+  // job boards every 6h would write rows nothing renders while still spending
+  // outbound API calls and pool connections. Set ENABLE_SCRAPERS=true to run
+  // them again; see src/scrapers/README.md.
+  if (process.env.ENABLE_SCRAPERS === "true") {
+    console.warn("[scrapers] ENABLE_SCRAPERS=true — running retired opportunity scrapers")
+    startScheduler()
+  }
 })
 
 // Live events feed. Shares the HTTP server so it needs no second port and

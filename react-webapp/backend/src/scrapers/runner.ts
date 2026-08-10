@@ -50,11 +50,13 @@ export async function runAllScrapers(): Promise<void> {
 
 /** Start the cron scheduler — re-scrapes every 6 hours */
 export function startScheduler(): void {
-  // Kill switch: lets an operator disable scraping entirely (e.g. a worker-
-  // only deployment topology, or an incident with an upstream API) without a
-  // code change. Default is ON so current single-instance behavior is unchanged.
-  if (process.env.ENABLE_SCRAPERS === 'false') {
-    console.log('[scrapers] disabled via ENABLE_SCRAPERS=false');
+  // Default is now OFF. The opportunities board became student-submitted, so
+  // scraped listings are no longer served (`routes/opportunities.ts` filters to
+  // `source = 'community'`) and a scheduled run would write rows nothing
+  // renders. Opt in explicitly with ENABLE_SCRAPERS=true. index.ts applies the
+  // same gate before calling this, so both entry points agree.
+  if (process.env.ENABLE_SCRAPERS !== 'true') {
+    console.log('[scrapers] retired — set ENABLE_SCRAPERS=true to run them');
     return;
   }
 

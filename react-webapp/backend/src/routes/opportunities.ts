@@ -40,6 +40,12 @@ router.get('/', async (req, res) => {
        WHERE ($1::text IS NULL OR type = $1)
          AND lat IS NOT NULL
          AND lng IS NOT NULL
+         -- Community-submitted only. The board is student-run; rows left over
+         -- from the retired job-board scrapers (source = arbeitnow / remotive /
+         -- curated) stay in the table but are no longer served. Filtering here
+         -- rather than deleting keeps the change reversible — drop this line to
+         -- bring the old listings back.
+         AND source = 'community'
        ORDER BY scraped_at DESC
        LIMIT $2`,
       [type && type !== 'all' ? type : null, limit],

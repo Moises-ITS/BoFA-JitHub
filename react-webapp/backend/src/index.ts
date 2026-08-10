@@ -37,6 +37,8 @@ const [
   oppMod,
   chatMemMod,
   buildingsMod,
+  eventsMod,
+  { attachEventsSocket, closeEventsSocket },
   { startScheduler },
   { runMigrations },
   { ensureNodeIds },
@@ -59,6 +61,8 @@ const [
   import("./routes/opportunities.js"),
   import("./routes/chatMemory.js"),
   import("./routes/buildings.js"),
+  import("./routes/events.js"),
+  import("./realtime/eventsSocket.js"),
   import("./scrapers/runner.js"),
   import("./db/migrate.js"),
   import("./services/graphService.js"),
@@ -149,6 +153,13 @@ app.use("/api/opportunities", oppMod.default)
 app.use("/api/chat-memory", chatMemMod.default)
 app.use("/api/buildings", buildingsMod.default)
 
+// Campus events: the feed, student submissions, RSVPs, and the club directory.
+// Mounted at /api (not /api/events) because this one router owns three sibling
+// path families the frontend already calls: /api/events/*, /api/rsvp/*, and
+// /api/clubs. Previously served by the standalone EDEN FastAPI service on port
+// 8000, which read this same database; see services/eventsService.ts.
+app.use("/api", eventsMod.default)
+
 // EDEN e-board analytics — PARKED for v2/v3, mounted only behind an explicit
 // flag. History: these routes were previously wired only in an orphaned second
 // entry point (server.ts, now deleted) and thus never actually served, while
@@ -195,6 +206,10 @@ const server = app.listen(PORT, () => {
   startScheduler()
 })
 
+// Live events feed. Shares the HTTP server so it needs no second port and
+// inherits the same TLS termination in production.
+attachEventsSocket(server)
+
 // ── Process lifecycle ─────────────────────────────────────────────────────────
 // Railway (and any container platform) sends SIGTERM on redeploy/scale-down.
 // Without this, in-flight student requests are severed mid-response and pool
@@ -212,6 +227,10 @@ async function shutdown(signal: string) {
     process.exit(1)
   }, 10_000)
   forceExit.unref()
+  // Close WebSockets first: server.close() waits for existing connections to
+  // end, and an open socket never ends on its own — without this the drain
+  // always runs to the 10s force-exit.
+  closeEventsSocket()
   server.close(async () => {
     try {
       await db.end()

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express"
 import { createClerkClient } from "@clerk/backend"
 import { db } from "../config/postgres.js"
 import { verifyClerkSessionToken } from "../utils/clerkToken.js"
+import { verifySessionToken } from "../utils/customToken.js"
 
 export interface AuthRequest extends Request {
   userId?: string
@@ -17,6 +18,20 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
     return
   }
   const token = authHeader.slice(7)
+
+  if (token.startsWith("custom_")) {
+    const customUserId = verifySessionToken(token)
+    if (customUserId) {
+      req.userId = customUserId
+      console.info("[security][auth-success]", { path: req.originalUrl, ip: req.ip, userId: req.userId, via: "custom_token" })
+      next()
+      return
+    } else {
+      console.warn("[security][auth-failed]", { reason: "invalid_or_expired_custom_token", path: req.originalUrl, ip: req.ip })
+      res.status(401).json({ error: "Invalid or expired token" })
+      return
+    }
+  }
 
   let clerkId: string
   try {

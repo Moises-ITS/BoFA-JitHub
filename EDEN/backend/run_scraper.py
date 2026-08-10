@@ -1,3 +1,14 @@
+"""
+RETIRED — the Instagram scraper is not scheduled by anything. See EDEN/README.md.
+
+Events are now student-submitted through the Events page, which writes to the
+same `events` + `event_posts` tables this script populated. Running it would
+insert scraped events alongside student submissions with no dedup between the
+two sources, and it still depends on a live Instagram session (ig_cookies.json).
+
+Kept as reference for how `likes` / `engagement_score` were originally derived.
+"""
+
 import sys
 import os
 sys.path.append(os.path.dirname(__file__))

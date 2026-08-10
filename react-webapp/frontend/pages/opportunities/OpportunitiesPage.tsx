@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useOpportunities } from './hooks/useOpportunities';
-import type { FilterType, SortType, UrgencyFilter } from './hooks/useOpportunities';
+import { useOpportunities, formatMajorLabel } from './hooks/useOpportunities';
+import type { FilterType } from './hooks/useOpportunities';
 import SmartFeed from './components/SmartFeed';
 import ApplicationTracker from './components/ApplicationTracker';
 import GlobeView from './components/GlobeView';
@@ -22,9 +22,7 @@ export default function OpportunitiesPage() {
     filtered, sortedFiltered, counts, filter, setFilter,
     activeId, setActiveId,
     tracked, trackApplication, untrackApplication, getTracked, createOpportunity,
-    districtFilter, setDistrictFilter,
-    locationFilter, setLocationFilter, locationOptions,
-    sortBy, setSortBy, urgencyFilter, setUrgencyFilter,
+    districtFilter, setDistrictFilter, majorOptions,
     searchQuery, setSearchQuery,
   } = useOpportunities(districtParam);
 
@@ -64,20 +62,6 @@ export default function OpportunitiesPage() {
     return option;
   }
 
-  const sortOptions: { key: SortType; label: string }[] = [
-    { key: 'best-match', label: 'Best Match' },
-    { key: 'due-soon', label: 'Due Soon' },
-    { key: 'newest', label: 'Newest' },
-    { key: 'saved-first', label: 'Saved First' },
-  ];
-
-  const urgencyOptions: { key: UrgencyFilter; label: string }[] = [
-    { key: 'all', label: 'All dates' },
-    { key: 'due-soon', label: 'Due Soon' },
-    { key: 'this-week', label: 'This Week' },
-    { key: 'this-month', label: 'This Month' },
-  ];
-
 
   useEffect(() => {
     setSearchParams((prev) => {
@@ -105,25 +89,9 @@ export default function OpportunitiesPage() {
     return Math.ceil((due.getTime() - today.getTime()) / msPerDay);
   };
 
-  const dueThisWeek = sortedFiltered.filter((opportunity) => {
-    const days = daysUntil(opportunity.deadline);
-    return Number.isFinite(days) && days >= 0 && days <= 7;
-  }).length;
-
-  const trackedInView = tracked.filter((item) =>
-    sortedFiltered.some((opportunity) => opportunity.id === item.opportunityId),
-  ).length;
-
-  const insightCards = [
-    { label: 'Open Now', value: sortedFiltered.length, tone: 'blue' },
-    { label: 'Due This Week', value: dueThisWeek, tone: 'red' },
-    { label: 'Saved / Applied', value: trackedInView, tone: 'green' },
-  ] as const;
   const selectedTracked = selectedOpportunity ? getTracked(selectedOpportunity.id) : undefined;
   const hasActiveFilters =
     filter !== 'all' ||
-    locationFilter !== 'all' ||
-    urgencyFilter !== 'all' ||
     districtFilter !== null ||
     searchQuery !== '';
   const focusedLabel = selectedOpportunity
@@ -147,7 +115,7 @@ export default function OpportunitiesPage() {
       ]
     : [
         'Pick a pin on the globe or a card in the feed to see why an opportunity stands out.',
-        'This panel will surface urgency, location context, and why it is worth attention.',
+        'This panel will surface location context and why it is worth attention.',
       ];
 
   useEffect(() => {
@@ -226,7 +194,7 @@ export default function OpportunitiesPage() {
             <input
               className="opportunities-search-input"
               type="text"
-              placeholder="Search by title, org, or tag…"
+              placeholder="Search by title or role…"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setActiveId(null); }}
             />
@@ -239,88 +207,44 @@ export default function OpportunitiesPage() {
             )}
           </div>
 
-          <div className="opportunities-location-filter">
+          <div className="opportunities-major-filter">
             <label
-              className="opportunities-location-label"
-              htmlFor="opportunities-location"
+              className="opportunities-major-label"
+              htmlFor="opportunities-major"
             >
-              Location
+              Major
             </label>
             <select
-              id="opportunities-location"
-              className="opportunities-location-select"
-              value={locationFilter}
+              id="opportunities-major"
+              className="opportunities-major-select"
+              value={districtFilter ?? 'all'}
               onChange={(event) => {
-                setLocationFilter(event.target.value);
+                // null (not 'all') clears it — districtFilter is also the
+                // ?district= URL param, and the effect below deletes the param
+                // only when it is null.
+                const next = event.target.value;
+                setDistrictFilter(next === 'all' ? null : next);
                 setActiveId(null);
               }}
             >
-              {locationOptions.map((option) => (
+              {majorOptions.map((option) => (
                 <option key={option} value={option}>
-                  {getLocationLabel(option)}
+                  {formatMajorLabel(option)}
                 </option>
               ))}
             </select>
           </div>
 
-          {districtFilter && (
-            <div
-              style={{
-                display: 'flex',
-                gap: 8,
-                marginTop: 8,
-                alignItems: 'center',
-                flexWrap: 'wrap',
-              }}
-            >
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '6px 10px',
-                  borderRadius: 999,
-                  background: 'rgba(59, 130, 246, 0.12)',
-                  border: '1px solid rgba(59, 130, 246, 0.35)',
-                  color: '#cbd5e1',
-                  fontSize: '12px',
-                }}
-              >
-                District:{' '}
-                <strong style={{ color: '#93c5fd' }}>{districtFilter}</strong>
-                <button
-                  onClick={() => setDistrictFilter(null)}
-                  style={{
-                    border: 'none',
-                    background: 'none',
-                    color: '#93c5fd',
-                    cursor: 'pointer',
-                    fontWeight: 700,
-                  }}
-                  aria-label="Clear district filter"
-                >
-                  ×
-                </button>
-              </span>
-              {/* Quarantined: hide the Research District button until the research section is ready for users. */}
-              {/*
-                <button
-                  onClick={() => navigate('/research')}
-                  style={{
-                    border: '1px solid rgba(148, 163, 184, 0.35)',
-                    background: 'rgba(15, 23, 42, 0.55)',
-                    color: '#e2e8f0',
-                    borderRadius: 999,
-                    padding: '6px 12px',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Back to Research District
-                </button>
-              */}
-            </div>
-          )}
+          {/*
+            The "District: <slug> ×" chip that used to sit here was removed with
+            the Major dropdown's arrival — both read and wrote districtFilter, so
+            it was a second control for state the dropdown already displays (and
+            it showed the raw slug rather than the readable label).
+
+            It also carried a commented-out "Back to Research District" button,
+            quarantined until the research section is user-ready. That button is
+            still recoverable from git history if the research section ships.
+          */}
         </div>
 
 
@@ -368,11 +292,6 @@ export default function OpportunitiesPage() {
               opportunities={sortedFiltered}
               tracked={tracked}
               activeId={activeId}
-              sortBy={sortBy}
-              urgencyFilter={urgencyFilter}
-              sortOptions={sortOptions}
-              urgencyOptions={urgencyOptions}
-              insightCards={insightCards}
               selectedOpportunity={selectedOpportunity}
               selectedTracked={selectedTracked}
               focusedLabel={focusedLabel}
@@ -385,14 +304,10 @@ export default function OpportunitiesPage() {
               onDeselect={() => setActiveId(null)}
               onClearFilters={() => {
                 setFilter('all');
-                setLocationFilter('all');
-                setUrgencyFilter('all');
                 setDistrictFilter(null);
                 setSearchQuery('');
                 setActiveId(null);
               }}
-              onSortChange={setSortBy}
-              onUrgencyChange={setUrgencyFilter}
               onTrackStatus={trackApplication}
               onUnsave={untrackApplication}
             />

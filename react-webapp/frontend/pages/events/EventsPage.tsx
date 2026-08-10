@@ -17,19 +17,35 @@ import {
   getClubOptionLabel,
 } from "./utils/clubMatching";
 
-import { apiFetch, EDEN_API_BASE_URL as API } from "@/lib/api";
+import { apiFetch, authHeaders, EVENTS_API_BASE_URL as API } from "@/lib/api";
 
 function eventWebSocketUrl() {
   try {
     const url = new URL(API);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    url.pathname = "/events/ws";
+    // Append rather than replace: API already carries the backend's /api path
+    // prefix, and assigning pathname outright would drop it and point the
+    // socket at a route that does not exist.
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/events/ws`;
     url.search = "";
     url.hash = "";
     return url.toString();
   } catch {
     return null;
   }
+}
+
+// Reconnect backoff. The previous fixed 2s retry meant that whenever the socket
+// was unreachable — which it always was in production, since the server had no
+// WebSocket transport installed — every open Events tab hammered the API twice
+// a second, indefinitely. Exponential with jitter so a server restart does not
+// bring the whole cohort back in a synchronized thundering herd.
+const WS_RECONNECT_MIN_MS = 1_000;
+const WS_RECONNECT_MAX_MS = 30_000;
+
+function reconnectDelay(attempt: number) {
+  const backoff = Math.min(WS_RECONNECT_MAX_MS, WS_RECONNECT_MIN_MS * 2 ** attempt);
+  return backoff / 2 + Math.random() * (backoff / 2);
 }
 
 // ─── Category filters ────────────────────────────────────────────────────────
@@ -87,7 +103,12 @@ function useEvents<T = EdenEvent>(endpoint: string | null, refreshKey = 0) {
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
-        setData(d.events ?? d);
+        // Every consumer treats this as an array. An error body — FastAPI's
+        // {"detail": ...} on a 4xx/5xx — would otherwise be stored verbatim and
+        // blow up the first .filter/.map downstream, turning a failed request
+        // into a blank page instead of an empty list.
+        const rows = d?.events ?? d;
+        setData(Array.isArray(rows) ? rows : []);
         setLoading(false);
       })
       .catch(() => {
@@ -380,24 +401,52 @@ export default function EventsPage() {
     let socket: WebSocket | null = null;
     let reconnectTimer: number | null = null;
     let closedByPage = false;
+    let attempt = 0;
 
     const connect = () => {
       socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        // Only a connection that actually opened resets the backoff. Resetting
+        // on each attempt instead would collapse the backoff back to ~1s
+        // whenever the server rejects the handshake outright.
+        attempt = 0;
+        // A socket that was down may have missed an event.created entirely, so
+        // resync the feed on every (re)connect rather than trusting that the
+        // list rendered before the drop is still current.
+        setRefreshNonce((prev) => prev + 1);
+      };
+
       socket.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
           if (payload?.type === "event.created") {
             setRefreshNonce((prev) => prev + 1);
+          } else if (payload?.type === "rsvp.changed" && typeof payload.event_id === "number") {
+            // Patch just this event's attendee block. Bumping refreshNonce here
+            // instead would refetch every list on the page each time any
+            // student anywhere tapped "going".
+            const next: AttendeeInfo = {
+              count: payload.count ?? 0,
+              preview: Array.isArray(payload.preview) ? payload.preview : [],
+            };
+            setAttendeeMap((prev) => ({ ...prev, [payload.event_id]: next }));
           }
         } catch {
           // Ignore malformed websocket payloads.
         }
       };
+
+      // Without an onerror handler a failed handshake surfaces as an unhandled
+      // error in the console on every retry. onclose still fires after it, so
+      // reconnect scheduling stays in one place below.
+      socket.onerror = () => { };
+
       socket.onclose = () => {
         socket = null;
-        if (!closedByPage) {
-          reconnectTimer = window.setTimeout(connect, 2000);
-        }
+        if (closedByPage) return;
+        reconnectTimer = window.setTimeout(connect, reconnectDelay(attempt));
+        attempt += 1;
       };
     };
 
@@ -571,14 +620,16 @@ export default function EventsPage() {
   }, [displayEventIds, displayEventIdsKey]);
 
   useEffect(() => {
-    if (!displayEventIds.length || !user?.id) return;
+    if (!displayEventIds.length || !user?.id || !token) return;
 
     let cancelled = false;
 
+    // The server derives whose statuses these are from the token; user_id is no
+    // longer sent, so one student cannot read another's RSVPs.
     fetch(`${API}/rsvp/batch-status`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: user.id, event_ids: displayEventIds }),
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify({ event_ids: displayEventIds }),
     })
       .then(r => r.json())
       .then((data: Record<string, string>) => {
@@ -593,47 +644,49 @@ export default function EventsPage() {
     return () => {
       cancelled = true;
     };
-  }, [displayEventIds, displayEventIdsKey, user?.id]);
+  }, [displayEventIds, displayEventIdsKey, user?.id, token]);
 
   async function handleRsvpToggle(eventId: number) {
-    if (!user) return;
+    if (!user || !token) return;
     const current = rsvpMap[eventId] ?? null;
     const newStatus = current === "going" ? null : "going";
     setRsvpMap(prev => ({ ...prev, [eventId]: newStatus }));
     try {
-      if (newStatus === null) {
-        await fetch(`${API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, { method: "DELETE" });
-      } else {
-        await fetch(`${API}/rsvp/${eventId}`, {
+      const res = newStatus === null
+        ? await fetch(`${API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, {
+          method: "DELETE",
+          headers: authHeaders(token),
+        })
+        : await fetch(`${API}/rsvp/${eventId}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders(token) },
           body: JSON.stringify({
-            user_id: user.id, user_name: user.name,
+            user_name: user.name,
             user_major: user.major ?? null,
             user_interests: JSON.stringify(user.interests ?? []),
             user_clubs: JSON.stringify(user.clubs ?? []),
             status: "going",
           }),
         });
-      }
+      if (!res.ok) throw new Error(`RSVP failed with ${res.status}`);
+      // Both write endpoints return the fresh attendee snapshot, so the count
+      // updates from the same response instead of a follow-up round trip.
+      const data = (await res.json()) as AttendeeInfo;
+      setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
+      if (selectedEvent?.event_id === eventId) setModalAttendees(data);
     } catch {
+      // Roll the optimistic toggle back — the server rejected it.
       setRsvpMap(prev => ({ ...prev, [eventId]: current }));
     }
-    fetch(`${API}/rsvp/${eventId}/attendees`)
-      .then(r => r.json())
-      .then((data: AttendeeInfo) => {
-        setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
-        if (selectedEvent?.event_id === eventId) setModalAttendees(data);
-      })
-      .catch(() => { });
   }
 
   async function handleCreateEvent(payload: CommunityEventInput) {
+    if (!token) throw new Error("Sign in to submit an event");
     setSubmitLoading(true);
     try {
       const res = await fetch(`${API}/events/community`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders(token) },
         body: JSON.stringify(payload),
       });
       const body = await res.json().catch(() => ({}));

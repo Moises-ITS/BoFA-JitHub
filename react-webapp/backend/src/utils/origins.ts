@@ -105,14 +105,16 @@ export const configuredFrontendOrigins: readonly string[] = [
 
 // NOTE the two consumers intentionally trust slightly different localhost sets,
 // preserved exactly from before the dedupe:
-//  - CORS allows only the real Vite dev port (5175).
-//  - Clerk authorizedParties also allows 5173/5174 because Clerk's `azp` claim
-//    can reflect a fallback port from a dev session started while 5175 was busy.
+//  - CORS allows only the real Vite dev port (3000).
+//  - Clerk authorizedParties also allows the legacy 517x ports because Clerk's
+//    `azp` claim can reflect the port a still-running older dev session was
+//    started on. (The dev port moved off 517x: Windows reserves 5093-5657 for
+//    Hyper-V/WSL NAT, so Vite could not bind there.)
 
 const corsAllowedOrigins = new Set<string>([
   ...configuredFrontendOrigins,
-  "http://localhost:5175",
-  "http://127.0.0.1:5175",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
 ])
 
 /** CORS decision for a browser Origin header (configured origins + local dev + our Vercel previews). */
@@ -123,12 +125,19 @@ export function isAllowedCorsOrigin(origin: string): boolean {
 
 const clerkBaseParties = new Set<string>([
   ...configuredFrontendOrigins,
+  "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:5175",
+  "http://127.0.0.1:3000",
   "http://127.0.0.1:5173",
   "http://127.0.0.1:5174",
   "http://127.0.0.1:5175",
+  // No trailing slash. Every lookup against this set goes through
+  // normalizeOrigin(), which yields `protocol//host` — "https://jit-hub.com/"
+  // could never match and the production origin would have been silently
+  // rejected by Clerk verification.
+  "https://jit-hub.com",
 ])
 
 /**

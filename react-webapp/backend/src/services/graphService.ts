@@ -13,11 +13,51 @@ interface StudentInput {
   linkedinUrl?: string | null
 }
 
+export interface ProfessorInput {
+  id: string
+  name: string
+  department: string
+  interests: string[]
+  bio?: string | null
+  linkedinUrl?: string | null
+}
+
 const PROFILE_REL_CAPS = {
   interests: 5,
   clubs: 3,
   companies: 4,
 } as const
+
+/**
+ * Runs a graph write that must NOT be able to fail the request around it.
+ *
+ * WHY: Postgres is the source of truth for identity; Neo4j is a projection of
+ * it used for discovery. Signup used to write Neo4j FIRST and Postgres second,
+ * which made the graph a hard dependency of account creation — an unreachable
+ * or paused Aura instance meant nobody could sign up at all. Worse, each retry
+ * minted a fresh uuid, so a failing Postgres write left a NEW orphan node
+ * behind every attempt instead of converging.
+ *
+ * Callers now write Postgres first and pass the graph write through here. A
+ * failure is logged and surfaces as `null`, which leaves `users.graph_node_id`
+ * NULL — the marker that scripts/reconcile-graph.mjs uses to find rows whose
+ * projection still needs building. Losing a graph node is recoverable; losing
+ * the account row is not.
+ */
+export async function safeGraphWrite<T>(
+  context: { op: string; userId: string },
+  write: () => Promise<T>
+): Promise<T | null> {
+  try {
+    return await write()
+  } catch (err) {
+    console.error("[graph][deferred]", {
+      ...context,
+      message: err instanceof Error ? err.message : String(err),
+    })
+    return null
+  }
+}
 
 const capOrderedUnique = (items: string[], cap: number): string[] => {
   const seen = new Set<string>()
@@ -124,16 +164,25 @@ export async function updateStudentNode(student: StudentInput): Promise<void> {
   const cappedStudent = withGraphCaps(student)
   const session = driver.session()
   try {
-    // Update core properties on the student node
+    // MERGE, not MATCH: if the projection is missing — the graph was rebuilt,
+    // an Aura outage dropped the signup-time write, the node was purged — a
+    // MATCH silently updated nothing. Postgres changed, the graph did not, and
+    // nothing reported it. MERGE recreates the node instead, which makes every
+    // profile save a repair opportunity. `label`/`type`/`name` are set here too
+    // so a node born from this path is complete rather than a bare id.
     await session.run(
-      `MATCH (s:Student {id: $id})
-       SET s.major          = $major,
+      `MERGE (s:Student {id: $id})
+       SET s.label          = $name,
+           s.type           = 'student',
+           s.name           = $name,
+           s.major          = $major,
            s.gpa            = $gpa,
            s.graduationYear = $graduationYear,
            s.bio            = $bio,
            s.interests      = $interests,
            s.linkedinUrl    = $linkedinUrl`,
-      { id: cappedStudent.id, major: cappedStudent.major, gpa: cappedStudent.gpa,
+      { id: cappedStudent.id, name: cappedStudent.name, major: cappedStudent.major,
+        gpa: cappedStudent.gpa,
         graduationYear: cappedStudent.graduationYear, bio: cappedStudent.bio,
         interests: cappedStudent.interests, linkedinUrl: cappedStudent.linkedinUrl ?? null }
     )
@@ -225,15 +274,94 @@ export async function createConnectionInNeo4j(userId1: string, userId2: string):
   }
 }
 
-// Permanently removes a student's graph node and every relationship attached to it.
+// Permanently removes a graph node (student or professor) and every relationship attached to it.
 export async function deleteStudentNode(userId: string): Promise<void> {
   const session = driver.session()
   try {
     await session.run(
-      `MATCH (s:Student {id: $userId})
+      `MATCH (s {id: $userId})
        DETACH DELETE s`,
       { userId }
     )
+  } finally {
+    session.close()
+  }
+}
+
+// Creates a Professor node in Neo4j and links them to Interest nodes.
+export async function createProfessorNode(prof: ProfessorInput): Promise<string> {
+  const session = driver.session()
+  try {
+    await session.run(
+      `MERGE (p:Professor {id: $id})
+       SET p.label       = $name,
+           p.type        = 'professor',
+           p.name        = $name,
+           p.department  = $department,
+           p.interests   = $interests,
+           p.bio         = $bio,
+           p.linkedinUrl = $linkedinUrl`,
+      {
+        id: prof.id,
+        name: prof.name,
+        department: prof.department,
+        interests: prof.interests,
+        bio: prof.bio || null,
+        linkedinUrl: prof.linkedinUrl || null,
+      }
+    )
+
+    for (const interest of prof.interests) {
+      await session.run(
+        `MERGE (i:Interest {type: 'interest', label: $interest})
+         ON CREATE SET i.id = 'interest-' + toLower(replace($interest, ' ', '-'))
+         WITH i MATCH (p:Professor {id: $id})
+         MERGE (p)-[:INTERESTED_IN]->(i)`,
+        { id: prof.id, interest }
+      )
+    }
+
+    return prof.id
+  } finally {
+    session.close()
+  }
+}
+
+// Updates an existing Professor node in Neo4j.
+export async function updateProfessorNode(prof: ProfessorInput): Promise<void> {
+  const session = driver.session()
+  try {
+    await session.run(
+      `MATCH (p:Professor {id: $id})
+       SET p.department  = $department,
+           p.interests   = $interests,
+           p.bio         = $bio,
+           p.linkedinUrl = $linkedinUrl`,
+      {
+        id: prof.id,
+        department: prof.department,
+        interests: prof.interests,
+        bio: prof.bio || null,
+        linkedinUrl: prof.linkedinUrl || null,
+      }
+    )
+
+    // Remove stale relationships
+    await session.run(
+      `MATCH (p:Professor {id: $id})-[r:INTERESTED_IN]->() DELETE r`,
+      { id: prof.id }
+    )
+
+    // Re-create relationships
+    for (const interest of prof.interests) {
+      await session.run(
+        `MERGE (i:Interest {type: 'interest', label: $interest})
+         ON CREATE SET i.id = 'interest-' + toLower(replace($interest, ' ', '-'))
+         WITH i MATCH (p:Professor {id: $id})
+         MERGE (p)-[:INTERESTED_IN]->(i)`,
+        { id: prof.id, interest }
+      )
+    }
   } finally {
     session.close()
   }
@@ -272,10 +400,16 @@ export async function ensureNodeIds() {
  * new profile data is private.
  */
 const PUBLIC_DETAIL_FIELDS: Record<string, readonly string[]> = {
-  student:   ["major", "year_grad"],
+  // `graduationYear` is the property every writer actually sets — createStudentNode,
+  // updateStudentNode and the reconcile script all use that name. `year_grad`
+  // was allowlisted but never written by anything except mockGraphData, so the
+  // hover card's "Class of …" line rendered against mock data and silently
+  // disappeared against real data. Both are listed: the real key, plus the mock
+  // key so the offline/fallback graph keeps rendering identically.
+  student:   ["major", "graduationYear", "year_grad"],
   club:      ["members", "goal", "focus"],
   company:   ["role", "open_roles"],
-  professor: ["focus", "research"],
+  professor: ["focus", "research", "department", "interests"],
   interest:  ["focus"],
 }
 
@@ -345,7 +479,10 @@ export async function getShortestPath(fromId: string, toId: string): Promise<{ n
 interface Recommendation {
   id:              string
   name:            string
+  /** A student's major, or a professor's department — whichever the node carries. */
   major:           string
+  /** "student" | "professor" — lets the UI label a professor as such. */
+  type:            string
   sharedClubs:     number
   sharedInterests: number
   sameMajor:       boolean
@@ -356,19 +493,32 @@ export async function getRecommendations(userId: string): Promise<Recommendation
   const session = driver.session()
   try {
     const result = await session.run(
-      `MATCH (me:Student {id: $userId}), (other:Student)
-       WHERE other.id <> $userId
+      // Both sides match :Student OR :Professor. Previously both were pinned to
+      // :Student, which made professors invisible in recommendations in BOTH
+      // directions — they received none, and never appeared in anyone else's.
+      //
+      // Scoring notes for mixed pairs: professors have no MEMBER_OF edges, so
+      // sharedClubs is naturally 0 for them without special-casing. sameMajor
+      // now requires a non-empty major on both sides, so two professors (whose
+      // major is null and whose field lives in `department`) are not scored as
+      // "same major" on a pair of NULLs. Shared interests therefore carry the
+      // student↔professor signal, which is the intended relationship anyway.
+      `MATCH (me) WHERE (me:Student OR me:Professor) AND me.id = $userId
+       MATCH (other) WHERE (other:Student OR other:Professor)
+         AND other.id <> $userId
          AND NOT (me)-[:CONNECTED_TO]-(other)
        WITH me, other,
          size([(me)-[:MEMBER_OF]->(c)<-[:MEMBER_OF]-(other) | c])        AS sharedClubs,
          size([(me)-[:INTERESTED_IN]->(i)<-[:INTERESTED_IN]-(other) | i]) AS sharedInterests,
-         CASE WHEN me.major = other.major THEN 1 ELSE 0 END               AS sameMajor
+         CASE WHEN me.major IS NOT NULL AND me.major <> ''
+                   AND me.major = other.major THEN 1 ELSE 0 END          AS sameMajor
        WITH other, sharedClubs, sharedInterests, sameMajor,
             sharedClubs * 3 + sharedInterests * 2 + sameMajor * 2 AS score
        WHERE score > 0
        RETURN other.id    AS id,
               other.label AS name,
-              other.major AS major,
+              COALESCE(other.major, other.department, '') AS major,
+              COALESCE(other.type, 'student')             AS type,
               sharedClubs, sharedInterests,
               toBoolean(sameMajor) AS sameMajor,
               score
@@ -380,6 +530,7 @@ export async function getRecommendations(userId: string): Promise<Recommendation
       id:              r.get("id")              as string,
       name:            r.get("name")            as string,
       major:           r.get("major")           as string,
+      type:            r.get("type")            as string,
       sharedClubs:     Number(r.get("sharedClubs")),
       sharedInterests: Number(r.get("sharedInterests")),
       sameMajor:       r.get("sameMajor")       as boolean,

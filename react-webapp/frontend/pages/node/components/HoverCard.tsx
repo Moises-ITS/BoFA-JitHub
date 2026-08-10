@@ -45,7 +45,11 @@ const HoverCard = memo(function HoverCard({ node, x, y }: HoverCardProps) {
 
   if (type === "student") {
     if (details?.major) lines.push({ icon: "📚", text: String(details.major) });
-    if (details?.year_grad) lines.push({ icon: "🎓", text: `Class of ${details.year_grad}` });
+    // graduationYear is what real backend nodes carry; year_grad only ever
+    // existed in the mock fixtures. Reading both means the line renders whether
+    // the graph came from Neo4j or the offline fallback.
+    const gradYear = details?.graduationYear ?? details?.year_grad;
+    if (gradYear) lines.push({ icon: "🎓", text: `Class of ${gradYear}` });
     if (details?.bio) {
       const bio = String(details.bio);
       lines.push({ icon: "💬", text: bio.length > 62 ? `${bio.slice(0, 60)}…` : bio });

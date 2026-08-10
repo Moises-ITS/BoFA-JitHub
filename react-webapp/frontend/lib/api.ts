@@ -6,30 +6,39 @@
  * --------------------
  * Before this module, `const API = import.meta.env.VITE_API_URL ?? "<port>"` was
  * copy-pasted into 20+ files — and the hardcoded fallbacks DISAGREED with each
- * other (5175, 3001, and "" for the very same backend; 5175 is actually the
- * frontend's own Vite dev port, so that fallback pointed API calls back at the
+ * other (5175, 3001, and "" for the very same backend; 5175 was the frontend's
+ * own Vite dev port at the time, so that fallback pointed API calls back at the
  * frontend). One typo'd port meant one silently broken page, discoverable only
  * by clicking through the app. Centralizing the origin means there is exactly
  * one place to be right.
  *
  * WHAT TALKS TO WHAT
  * ------------------
- * - API_BASE_URL       → the Express backend (auth, profiles, graph, opportunities).
- *                        Dev default: http://localhost:3001 (see backend src/index.ts).
- * - EDEN_API_BASE_URL  → the EDEN FastAPI service (club events, RSVP, heatmap data).
- *                        Dev default: http://localhost:8000 (FastAPI's default).
- * In production both are injected at build time via Vercel env vars
- * (VITE_API_URL / VITE_EVENTS_API_URL); the localhost fallbacks only ever apply
- * on a developer machine running `vite` without a .env.local.
+ * - API_BASE_URL        → the Express backend (auth, profiles, graph, opportunities).
+ *                         Dev default: http://localhost:3001 (see backend src/index.ts).
+ * - EVENTS_API_BASE_URL → club events, RSVPs, heatmap data. Now the SAME Express
+ *                         backend, under its /api prefix.
+ * In production API_BASE_URL is injected at build time via the Vercel env var
+ * VITE_API_URL; the localhost fallback only ever applies on a developer machine
+ * running `vite` without a .env.local.
  */
 
 /** Express backend origin (auth, profiles, graph, opportunities). */
 export const API_BASE_URL: string =
   import.meta.env.VITE_API_URL ?? "http://localhost:3001"
 
-/** EDEN FastAPI origin (club events, RSVPs, attendance heatmaps). */
-export const EDEN_API_BASE_URL: string =
-  import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000"
+/**
+ * Base for the events/RSVP/clubs endpoints.
+ *
+ * These used to live in a separate FastAPI service ("EDEN") on port 8000, read
+ * from VITE_EVENTS_API_URL. That service talked to the same Postgres this
+ * backend already uses, was never deployed, and — because VITE_EVENTS_API_URL
+ * was set in no environment — every build silently pointed the Events page at
+ * http://localhost:8000. Deriving the base from API_BASE_URL means there is now
+ * exactly ONE origin to configure, and no way for the events half of the app to
+ * be pointed somewhere the rest of it isn't.
+ */
+export const EVENTS_API_BASE_URL: string = `${API_BASE_URL}/api`
 
 /**
  * Every request gives up after this long instead of hanging a spinner forever.
@@ -61,25 +70,37 @@ export interface ApiErrorBody {
  */
 export async function apiFetch<T>(
   path: string,
-  token: string,
+  token?: string | null,
   init?: RequestInit
 ): Promise<{ ok: boolean; status: number; data: T }> {
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`
+  }
   return jsonFetch<T>(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: { Authorization: `Bearer ${token}`, ...init?.headers },
+    headers: { ...headers, ...init?.headers },
   })
 }
 
 /**
- * Same envelope as apiFetch, but for the EDEN FastAPI service (events, RSVPs,
- * trending clubs). No Bearer header — those endpoints are public today; if
- * EDEN ever grows auth, add it HERE once instead of at every call site.
+ * Same envelope as apiFetch, but for the events/RSVP/clubs endpoints.
+ *
+ * The token is optional because the feed is public: browsing events, clubs, and
+ * attendee counts needs no session. Writes (submitting an event, RSVPing) DO —
+ * pass the token for those and the server attributes the write to that student.
  */
-export async function edenFetch<T>(
+export async function eventsFetch<T>(
   path: string,
+  token?: string | null,
   init?: RequestInit
 ): Promise<{ ok: boolean; status: number; data: T }> {
-  return jsonFetch<T>(`${EDEN_API_BASE_URL}${path}`, init)
+  const headers: Record<string, string> = {}
+  if (token) headers["Authorization"] = `Bearer ${token}`
+  return jsonFetch<T>(`${EVENTS_API_BASE_URL}${path}`, {
+    ...init,
+    headers: { ...headers, ...init?.headers },
+  })
 }
 
 /** Bearer header object for the rare call that can't use apiFetch (e.g. SSE streams that need the raw Response). */

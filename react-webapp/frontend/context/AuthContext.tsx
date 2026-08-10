@@ -50,6 +50,8 @@ export interface User {
   year: string | null
   is_eboard?: boolean
   eboard_club_id?: number | null
+  userType?: string
+  department?: string | null
 }
 
 /** Payload for PUT /api/auth/profile — an existing user editing their own profile. graduationYear is required here (see backend route). */
@@ -65,6 +67,7 @@ export interface ProfileUpdate {
   skills: string[]
   looking_for: string[]
   year: string | null
+  department?: string | null
 }
 
 /**
@@ -118,6 +121,8 @@ interface AuthContextValue {
   retryAuth: () => void
   login: (email: string, password: string) => Promise<void>
   signup: (data: SignupData) => Promise<void>
+  loginCustom: (email: string, password: string) => Promise<void>
+  signupCustom: (data: any) => Promise<void>
   logout: () => void
   updateProfile: (data: ProfileUpdate) => Promise<void>
   syncProfile: (data: SyncData) => Promise<void>
@@ -245,7 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /** PUT /api/auth/profile — an existing user editing their own profile. */
   const updateProfile = useCallback(
     async (data: ProfileUpdate) => {
-      const t = await getSessionToken()
+      const t = token
       if (!t) throw new Error("Not authenticated")
       const { ok, data: result } = await apiFetch<User & ApiErrorBody>(
         "/api/auth/profile",
@@ -254,11 +259,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       )
       if (!ok) throw new Error(result.error ?? "Update failed")
       cachedUserRef.current = result
-      setToken(t)
       setUser(result)
     },
-    [getSessionToken]
+    [token]
   )
+
+  const loginCustom = useCallback(async (email: string, password: string) => {
+    setLoading(true)
+    try {
+      const { ok, data } = await apiFetch<{ token: string; user: User } & ApiErrorBody>(
+        "/api/auth/login-custom",
+        null,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }
+      )
+      if (!ok) throw new Error(data.error ?? "Login failed")
+      // A 200 with no token means we didn't reach this API at all — e.g.
+      // VITE_API_URL pointing at the Vite dev server, which answers every path
+      // with index.html. Without this guard we stored the string "undefined"
+      // as the session token and "succeeded" into a signed-out app.
+      if (!data.token) throw new Error("Unexpected response from the auth server")
+      localStorage.setItem("jithub.custom-token", data.token)
+      setToken(data.token)
+      setUser(data.user)
+      setNeedsSetup(false)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const signupCustom = useCallback(async (signupData: any) => {
+    setLoading(true)
+    try {
+      const { ok, data } = await apiFetch<{ token: string; user: User } & ApiErrorBody>(
+        "/api/auth/register-custom",
+        null,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(signupData),
+        }
+      )
+      if (!ok) throw new Error(data.error ?? "Signup failed")
+      if (!data.token) throw new Error("Unexpected response from the auth server")
+      localStorage.setItem("jithub.custom-token", data.token)
+      setToken(data.token)
+      setUser(data.user)
+      setNeedsSetup(false)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   /**
    * Core session-resolution effect: whenever Clerk's sign-in state settles, resolve
@@ -276,6 +330,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false
 
     async function resolveSession() {
+      const customToken = localStorage.getItem("jithub.custom-token")
+      if (customToken) {
+        try {
+          const { ok, data } = await apiFetch<User & ApiErrorBody>("/api/auth/me", customToken)
+          if (ok && !cancelled) {
+            cachedUserRef.current = data
+            setUser(data)
+            setToken(customToken)
+            setNeedsSetup(false)
+            setLoading(false)
+            return
+          }
+        } catch (err) {
+          console.error("Custom token validation failed, falling back", err)
+        }
+        localStorage.removeItem("jithub.custom-token")
+      }
+
       if (!isLoaded || !clerkUserLoaded) return // Clerk hasn't finished loading yet; wait for the next effect run.
 
       if (!isSignedIn) {
@@ -381,6 +453,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // tabs nobody is looking at.
   useEffect(() => {
     if (!isSignedIn) return
+    if (token?.startsWith("custom_")) return
     const id = setInterval(async () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return
       try {
@@ -392,7 +465,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }, TOKEN_REFRESH_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [isSignedIn, getSessionToken])
+  }, [isSignedIn, getSessionToken, token])
 
   /** Clears local state immediately for a snappy UI, then tells Clerk to end the session. */
   function logout() {
@@ -401,6 +474,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null)
     setNeedsSetup(false)
     setAuthError(false)
+    localStorage.removeItem("jithub.custom-token")
     void signOut()
   }
 
@@ -425,6 +499,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         retryAuth,
         login,
         signup,
+        loginCustom,
+        signupCustom,
         logout,
         updateProfile,
         syncProfile,

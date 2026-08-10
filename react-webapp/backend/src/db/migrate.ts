@@ -194,6 +194,33 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       );
     `,
   },
+  {
+    name: "013_user_type_and_department",
+    sql: `
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS user_type VARCHAR DEFAULT 'student',
+        ADD COLUMN IF NOT EXISTS department VARCHAR;
+    `,
+  },
+  {
+    // 013 could not do this. `ADD COLUMN IF NOT EXISTS ... DEFAULT 'student'`
+    // is a no-op when the column already exists — and it did, added earlier
+    // without a default. The DEFAULT was therefore never applied, so every row
+    // (and every future INSERT that omitted the column, which includes
+    // /api/auth/sync) landed with user_type = NULL. Verified against the live
+    // database: information_schema reported column_default = NULL.
+    //
+    // Ordering matters: backfill BEFORE SET NOT NULL, or the constraint is
+    // rejected by any surviving NULL. Each statement is independently
+    // re-runnable, which matters because runMigrations() replays every
+    // migration on every boot and only warns on failure.
+    name: "014_user_type_default_and_backfill",
+    sql: `
+      UPDATE users SET user_type = 'student' WHERE user_type IS NULL;
+      ALTER TABLE users ALTER COLUMN user_type SET DEFAULT 'student';
+      ALTER TABLE users ALTER COLUMN user_type SET NOT NULL;
+    `,
+  },
 ]
 
 export async function runMigrations() {

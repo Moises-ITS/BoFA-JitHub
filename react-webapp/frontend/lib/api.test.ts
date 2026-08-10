@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { apiFetch, edenFetch, authHeaders, API_BASE_URL, EDEN_API_BASE_URL } from './api'
+import { apiFetch, eventsFetch, authHeaders, API_BASE_URL, EVENTS_API_BASE_URL } from './api'
 
 type FetchMock = ReturnType<typeof vi.fn>
 
@@ -90,15 +90,31 @@ describe('apiFetch', () => {
   })
 })
 
-describe('edenFetch', () => {
-  it('hits the EDEN origin and sends NO Authorization header', async () => {
+describe('eventsFetch', () => {
+  it('hits the backend /api prefix and sends NO Authorization header when unauthenticated', async () => {
     const mock = stubFetch({ ok: true, status: 200, body: [] })
 
-    await edenFetch('/events/upcoming?limit=3')
+    await eventsFetch('/events/upcoming?limit=3')
 
     const [url, init] = mock.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe(`${EDEN_API_BASE_URL}/events/upcoming?limit=3`)
+    expect(url).toBe(`${EVENTS_API_BASE_URL}/events/upcoming?limit=3`)
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined()
+  })
+
+  it('attaches the Bearer token for authenticated writes', async () => {
+    const mock = stubFetch({ ok: true, status: 201, body: {} })
+
+    await eventsFetch('/events/community', 'tok', { method: 'POST' })
+
+    const [, init] = mock.mock.calls[0] as [string, RequestInit]
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok')
+  })
+
+  it('derives the events base from the single backend origin', () => {
+    // Guards the regression this rename fixed: the events half of the app used
+    // to read its own env var, which was set nowhere and silently pointed at
+    // localhost:8000 in every build.
+    expect(EVENTS_API_BASE_URL).toBe(`${API_BASE_URL}/api`)
   })
 })
 

@@ -23,7 +23,9 @@ export default defineConfig({
 
   server: {
     host: '0.0.0.0',
-    port: 5175,
+    // 3000, not a 517x port: Windows reserves the whole 5093-5657 block for
+    // Hyper-V/WSL NAT, so binding 5173/5175 fails with EACCES on dev machines.
+    port: 3000,
     strictPort: true,
   },
 

@@ -23,8 +23,10 @@ export default function ProtectedRoute() {
   const { user, loading, needsProfileSetup, authError, retryAuth } = useAuth()
   const { isSignedIn, isLoaded } = useClerkAuth()
 
+  const isCustomAuth = !!(user && (user.userType === "guest" || user.userType === "professor"))
+
   // Wait for both Clerk and our context to finish loading
-  if (!isLoaded || loading) {
+  if (!isCustomAuth && (!isLoaded || loading)) {
     return (
       <div style={centerStyle}>
         <div style={spinnerStyle} />
@@ -33,13 +35,13 @@ export default function ProtectedRoute() {
     )
   }
 
-  // Not signed in with Clerk at all → landing page
-  if (!isSignedIn) return <Navigate to="/" replace />
+  // Not signed in with Clerk at all and not custom authenticated -> landing page
+  if (!isSignedIn && !isCustomAuth) return <Navigate to="/" replace />
 
-  // Clerk session exists but backend explicitly said no profile → profile setup
-  if (needsProfileSetup) return <Navigate to="/setup" replace />
+  // Clerk session exists but backend explicitly said no profile -> profile setup
+  if (!isCustomAuth && needsProfileSetup) return <Navigate to="/setup" replace />
 
-  // Signed in with Clerk but backend unreachable / returned error → show retry
+  // Signed in but backend unreachable / returned error -> show retry
   if (!user) {
     if (authError) {
       return (

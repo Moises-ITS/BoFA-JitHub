@@ -23,6 +23,9 @@ scraping personal emails. If you later decide you want officer data too,
 get explicit opt-in from officers first, or at minimum keep it in a
 non-embedded lookup table rather than in the vector store.
 
+###Activate Virtual Environment from rag folder
+.venv\\Scripts\\Activate.ps1
+
 Run:  pip install requests beautifulsoup4
       python3 scrape_njit_orgs.py
 """

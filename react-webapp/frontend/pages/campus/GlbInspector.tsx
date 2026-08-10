@@ -8,7 +8,7 @@ import * as THREE from "three"
  *
  * How to use:
  * 1. Place campus.glb in react-webapp/frontend/public/models/cadmapper-newark-new-jersey-us.glb
- * 2. Run the dev server and visit http://localhost:5175/inspect
+ * 2. Run the dev server and visit http://localhost:3000/inspect
  * 3. Click anywhere on the model — the x/y/z coordinates print on-screen
  *    AND in the browser console as a JSON object you can copy.
  * 4. Screenshot the page or copy the console output and share it with Claude.

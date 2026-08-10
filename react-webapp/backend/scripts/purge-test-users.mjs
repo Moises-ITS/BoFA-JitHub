@@ -14,35 +14,73 @@ for (const candidate of [".env.local", ".env"]) {
 }
 
 const APPLY = process.argv.includes("--apply")
+// --all targets EVERY user row. The default prefix match only ever caught users
+// whose id looked like "student-<studentId>" (the shape scripts/seed.js writes).
+// Accounts created through the app get a uuid, so the prefix match silently
+// matched nothing for them — hence the explicit opt-in for a full clear-out.
+const ALL = process.argv.includes("--all")
 const ID_PREFIX = "student-"
 
 const databaseUrl = process.env.DATABASE_URL
 const neo4jUri = process.env.NEO4J_URI
-const neo4jUser = process.env.NEO4J_USER
+// NEO4J_USERNAME is the name Aura uses in the credentials file it hands you;
+// accept both so this script works with the same .env as the server.
+const neo4jUser = process.env.NEO4J_USER ?? process.env.NEO4J_USERNAME
 const neo4jPassword = process.env.NEO4J_PASSWORD
 
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required")
 }
 if (!neo4jUri || !neo4jUser || !neo4jPassword) {
-  throw new Error("NEO4J_URI, NEO4J_USER, and NEO4J_PASSWORD are required")
+  throw new Error("NEO4J_URI, NEO4J_USER (or NEO4J_USERNAME), and NEO4J_PASSWORD are required")
 }
+
+// Print WHERE this is pointed before doing anything. The single most expensive
+// mistake here is running it against production while believing it is staging.
+function describeTarget(url) {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.hostname}:${parsed.port || "5432"}${parsed.pathname}`
+  } catch {
+    return "(unparseable DATABASE_URL)"
+  }
+}
+console.log(`[cleanup] postgres : ${describeTarget(databaseUrl)}`)
+console.log(`[cleanup] neo4j    : ${neo4jUri}`)
+console.log(`[cleanup] selector : ${ALL ? "--all (EVERY user row)" : `id/graph_node_id LIKE '${ID_PREFIX}%'`}`)
+console.log(`[cleanup] mode     : ${APPLY ? "APPLY (destructive)" : "dry run"}`)
+
+// SSL policy mirrors src/config/postgres.ts. It has to: the simpler
+// `!== "false"` rule here meant an unset PG_SSL_REJECT_UNAUTHORIZED defaulted
+// to strict verification, and Railway's proxy presents a self-signed chain —
+// so this script could not connect to the very database the server talks to
+// happily. Railway-like hosts relax verification unless explicitly overridden.
+const parsedDbUrl = new URL(databaseUrl)
+const sslDisabled = process.env.PG_SSL === "disable"
+const rejectRaw = process.env.PG_SSL_REJECT_UNAUTHORIZED?.trim().toLowerCase()
+const isRailwayLikeHost =
+  parsedDbUrl.hostname.endsWith(".rlwy.net") || parsedDbUrl.hostname.includes("railway.internal")
+const rejectUnauthorized = rejectRaw != null ? rejectRaw !== "false" : !isRailwayLikeHost
 
 const pg = new Pool({
   connectionString: databaseUrl,
-  ssl: process.env.PG_SSL === "disable" ? false : { rejectUnauthorized: process.env.PG_SSL_REJECT_UNAUTHORIZED !== "false" },
+  ssl: sslDisabled ? false : { rejectUnauthorized },
 })
 
 const neo = neo4j.driver(neo4jUri, neo4j.auth.basic(neo4jUser, neo4jPassword))
 
 async function main() {
-  const userRows = await pg.query(
-    `SELECT id, email, name, graph_node_id, clerk_id
-     FROM users
-     WHERE id LIKE $1 OR graph_node_id LIKE $1
-     ORDER BY id ASC`,
-    [`${ID_PREFIX}%`]
-  )
+  const userRows = ALL
+    ? await pg.query(
+        `SELECT id, email, name, graph_node_id, clerk_id FROM users ORDER BY id ASC`
+      )
+    : await pg.query(
+        `SELECT id, email, name, graph_node_id, clerk_id
+         FROM users
+         WHERE id LIKE $1 OR graph_node_id LIKE $1
+         ORDER BY id ASC`,
+        [`${ID_PREFIX}%`]
+      )
 
   const ids = userRows.rows.map((r) => String(r.id))
   console.log(`[cleanup] matched postgres test users: ${ids.length}`)
@@ -60,8 +98,8 @@ async function main() {
 
   const neoSession = neo.session()
   const neoCountRes = await neoSession.run(
-    `MATCH (s:Student)
-     WHERE s.id IN $ids
+    `MATCH (s)
+     WHERE (s:Student OR s:Professor) AND s.id IN $ids
      RETURN count(s) AS count`,
     { ids }
   )
@@ -99,9 +137,11 @@ async function main() {
 
   const neoDeleteSession = neo.session()
   try {
+    // Professors live under a :Professor label, not :Student — matching only
+    // :Student left their nodes behind as orphans after the Postgres row went.
     await neoDeleteSession.run(
-      `MATCH (s:Student)
-       WHERE s.id IN $ids
+      `MATCH (s)
+       WHERE (s:Student OR s:Professor) AND s.id IN $ids
        DETACH DELETE s`,
       { ids }
     )

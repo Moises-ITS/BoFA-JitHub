@@ -7,7 +7,7 @@
 # None of those steps could ever have worked.
 #
 # This version leans on playwright.config.ts's `webServer` block, which starts
-# the Vite dev server on 5175 and waits for it — so the workflow needs no
+# the Vite dev server on 3000 and waits for it — so the workflow needs no
 # manual build/start/wait choreography at all. The specs mock every backend
 # call with page.route(), so no backend or database is needed either.
 #

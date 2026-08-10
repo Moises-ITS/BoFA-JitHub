@@ -18,7 +18,7 @@ import type { UserProfile } from "../events/utils/eventScoring";
 import type { AttendeeInfo } from "../events/components/EventDetailModal";
 import type { EdenEvent, TrendingClub } from "../events/types/events";
 
-import { apiFetch, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
+import { apiFetch, authHeaders, EVENTS_API_BASE_URL as EVENTS_API } from "@/lib/api";
 import { readJsonCache, writeJsonCache } from "@/lib/localCache";
 // Overview cache: 5-minute TTL so a page revisit paints instantly without
 // showing stale-beyond-usefulness data. Storage mechanics (TTL, parse guards,
@@ -257,14 +257,15 @@ export default function Home() {
 
   // Batch-fetch RSVP status for visible events
   useEffect(() => {
-    if (!topEventIds.length || !user?.id) return;
+    if (!topEventIds.length || !user?.id || !token) return;
 
     let cancelled = false;
 
+    // Whose statuses these are comes from the token, not the body.
     fetch(`${EVENTS_API}/rsvp/batch-status`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: user.id, event_ids: topEventIds }),
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify({ event_ids: topEventIds }),
     })
       .then(r => r.json())
       .then((data: Record<string, string>) => {
@@ -279,40 +280,38 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [topEventIds, topEventIdsKey, user?.id]);
+  }, [topEventIds, topEventIdsKey, user?.id, token]);
 
   async function handleRsvpToggle(eventId: number) {
-    if (!user) return;
+    if (!user || !token) return;
     const current = rsvpMap[eventId] ?? null;
     const newStatus = current === "going" ? null : "going";
     setRsvpMap(prev => ({ ...prev, [eventId]: newStatus }));
     try {
-      if (newStatus === null) {
-        await fetch(`${EVENTS_API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, { method: "DELETE" });
-      } else {
-        await fetch(`${EVENTS_API}/rsvp/${eventId}`, {
+      const res = newStatus === null
+        ? await fetch(`${EVENTS_API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, {
+          method: "DELETE",
+          headers: authHeaders(token),
+        })
+        : await fetch(`${EVENTS_API}/rsvp/${eventId}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders(token) },
           body: JSON.stringify({
-            user_id: user.id, user_name: user.name,
+            user_name: user.name,
             user_major: user.major ?? null,
             user_interests: JSON.stringify(user.interests ?? []),
             user_clubs: JSON.stringify(user.clubs ?? []),
             status: "going",
           }),
         });
-      }
+      if (!res.ok) throw new Error(`RSVP failed with ${res.status}`);
+      // The write returns the fresh attendee snapshot — no follow-up fetch.
+      const data = (await res.json()) as AttendeeInfo;
+      setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
+      if (selectedEvent?.event_id === eventId) setModalAttendees(data);
     } catch {
       setRsvpMap(prev => ({ ...prev, [eventId]: current }));
     }
-
-    fetch(`${EVENTS_API}/rsvp/${eventId}/attendees`)
-      .then(r => r.json())
-      .then((data: AttendeeInfo) => {
-        setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
-        if (selectedEvent?.event_id === eventId) setModalAttendees(data);
-      })
-      .catch(() => {});
   }
 
   return (

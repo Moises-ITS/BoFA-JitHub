@@ -9,7 +9,7 @@ import { OPPORTUNITY_TYPE_ICON } from "../opportunities/types/opportunities";
 import { useAuth } from "@/context/AuthContext";
 import EditProfileModal from "../node/components/EditProfileModal";
 
-import { apiFetch, EDEN_API_BASE_URL as EVENTS_API } from "@/lib/api";
+import { apiFetch, authHeaders, EVENTS_API_BASE_URL as EVENTS_API } from "@/lib/api";
 
 type ProfileEvent = {
   event_id: number;
@@ -86,13 +86,19 @@ export default function Profile() {
       return;
     }
 
+    if (!token) {
+      setYourEvents([]);
+      setEventsLoading(false);
+      return;
+    }
+
     setEventsLoading(true);
-    fetch(`${EVENTS_API}/rsvp/user/${encodeURIComponent(user.id)}`)
+    fetch(`${EVENTS_API}/rsvp/user/${encodeURIComponent(user.id)}`, { headers: authHeaders(token) })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Failed to load events"))))
       .then((data: ProfileEvent[]) => setYourEvents(Array.isArray(data) ? data : []))
       .catch(() => setYourEvents([]))
       .finally(() => setEventsLoading(false));
-  }, [user?.id]);
+  }, [user?.id, token]);
 
   const sortedEvents = useMemo(() => {
     const now = new Date();

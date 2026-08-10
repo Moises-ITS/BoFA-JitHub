@@ -1,7 +1,7 @@
 import { Router, Response } from "express"
 import { db } from "../config/postgres.js"
 import { requireAuth, AuthRequest } from "../middleware/auth.js"
-import { createConnectionInNeo4j, createStudentNode, removeConnectionFromNeo4j, getRecommendations } from "../services/graphService.js"
+import { createConnectionInNeo4j, createProfessorNode, createStudentNode, removeConnectionFromNeo4j, getRecommendations } from "../services/graphService.js"
 import { connectionActionRateLimiter } from "../middleware/authRateLimit.js"
 import { requireSafeId, toBoundedPositiveInt } from "../middleware/security.js"
 
@@ -10,28 +10,72 @@ const router = Router()
 // All connection routes require auth
 router.use(requireAuth)
 
-async function ensureConnectionNodes(userIds: string[]) {
+/**
+ * Repairs the graph projection for the users about to be connected, and reports
+ * which of them may hold a graph relationship at all.
+ *
+ * WHY THE TYPE CHECK: this used to call createStudentNode() for every id it was
+ * given, regardless of what kind of account it was. Two bugs followed from that.
+ *
+ *  1. Professors got a SECOND node. `MERGE (s:Student {id: $id})` matches on
+ *     label AND id, so it never found the existing `:Professor` node and
+ *     created a `:Student` one carrying the same id. getNodes() returns both,
+ *     so the graph payload gained duplicate ids — enough to break D3's keying
+ *     and make hover cards show whichever copy won.
+ *  2. Guests got a node at all. Signup deliberately keeps them out of the graph
+ *     (see /api/auth/register-custom); this path silently put them back in, so
+ *     the two disagreed about whether guests are discoverable.
+ *
+ * Returns the subset of ids that are graph-eligible. Guests are excluded, which
+ * is what lets the caller skip the Neo4j edge entirely rather than issuing a
+ * MATCH that silently matches nothing.
+ */
+async function ensureConnectionNodes(userIds: string[]): Promise<Set<string>> {
   const result = await db.query(
-    `SELECT id, name, major, gpa, graduation_year, bio, clubs, companies, interests, linkedin_url
+    `SELECT id, name, major, gpa, graduation_year, bio, clubs, companies,
+            interests, linkedin_url, department, user_type
      FROM users
      WHERE id = ANY($1)`,
     [userIds]
   )
 
+  const graphEligible = new Set<string>()
+
   for (const row of result.rows) {
-    await createStudentNode({
-      id: row.id,
-      name: row.name ?? "Student",
-      major: row.major ?? "",
-      gpa: row.gpa == null ? null : Number(row.gpa),
-      graduationYear: row.graduation_year ?? null,
-      bio: row.bio ?? "",
-      clubs: Array.isArray(row.clubs) ? row.clubs : [],
-      companies: Array.isArray(row.companies) ? row.companies : [],
-      interests: Array.isArray(row.interests) ? row.interests : [],
-      linkedinUrl: row.linkedin_url ?? null,
-    })
+    // NULL user_type is treated as 'student', matching the `|| "student"`
+    // default used throughout the auth routes for rows predating migration 014.
+    const userType = row.user_type ?? "student"
+    const interests = Array.isArray(row.interests) ? row.interests : []
+
+    if (userType === "guest") continue
+
+    if (userType === "professor") {
+      await createProfessorNode({
+        id: row.id,
+        name: row.name ?? "Professor",
+        department: row.department ?? "",
+        interests,
+        bio: row.bio,
+        linkedinUrl: row.linkedin_url,
+      })
+    } else {
+      await createStudentNode({
+        id: row.id,
+        name: row.name ?? "Student",
+        major: row.major ?? "",
+        gpa: row.gpa == null ? null : Number(row.gpa),
+        graduationYear: row.graduation_year ?? null,
+        bio: row.bio ?? "",
+        clubs: Array.isArray(row.clubs) ? row.clubs : [],
+        companies: Array.isArray(row.companies) ? row.companies : [],
+        interests,
+        linkedinUrl: row.linkedin_url ?? null,
+      })
+    }
+    graphEligible.add(row.id)
   }
+
+  return graphEligible
 }
 
 // GET /api/connections/status?userId=X — connection status with another user
@@ -188,9 +232,15 @@ router.post("/accept", connectionActionRateLimiter, async (req: AuthRequest, res
       return
     }
 
-    // Create bidirectional relationship in Neo4j
-    await ensureConnectionNodes([safeFromUserId, toUserId])
-    await createConnectionInNeo4j(safeFromUserId, toUserId)
+    // Create bidirectional relationship in Neo4j. Postgres already recorded the
+    // acceptance above and is the source of truth for connections — the graph
+    // edge is a projection, so a guest on either side simply means no edge
+    // rather than a failed request. Skipping is deliberate: issuing the MATCH
+    // anyway would silently match nothing and look like it had worked.
+    const graphEligible = await ensureConnectionNodes([safeFromUserId, toUserId])
+    if (graphEligible.has(safeFromUserId) && graphEligible.has(toUserId)) {
+      await createConnectionInNeo4j(safeFromUserId, toUserId)
+    }
 
     // Notify original sender that their request was accepted.
     const accepter = await db.query("SELECT name FROM users WHERE id = $1", [toUserId])

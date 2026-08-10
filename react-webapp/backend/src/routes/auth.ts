@@ -3,7 +3,14 @@ import { v4 as uuidv4 } from "uuid"
 import { createClerkClient } from "@clerk/backend"
 import { db } from "../config/postgres.js"
 import { requireAuth, AuthRequest } from "../middleware/auth.js"
-import { createStudentNode, deleteStudentNode, updateStudentNode } from "../services/graphService.js"
+import {
+  createStudentNode,
+  deleteStudentNode,
+  updateStudentNode,
+  createProfessorNode,
+  updateProfessorNode,
+} from "../services/graphService.js"
+import { safeGraphWrite } from "../services/graphService.js"
 import { verifyClerkSessionToken } from "../utils/clerkToken.js"
 import { syncRateLimiter, profileUpdateRateLimiter } from "../middleware/authRateLimit.js"
 import {
@@ -12,6 +19,8 @@ import {
   sanitizeStringArray,
   sanitizeText,
 } from "../middleware/security.js"
+import { generateSessionToken } from "../utils/customToken.js"
+import bcrypt from "bcryptjs"
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
@@ -22,7 +31,7 @@ const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 // forgetting one silently dropped the field from some responses.
 const SELECT_PROFILE = `
   SELECT id, name, email, major, gpa, graduation_year, bio,
-         clubs, companies, interests, linkedin_url, skills, looking_for, year
+         clubs, companies, interests, linkedin_url, skills, looking_for, year, user_type, department
   FROM users WHERE id = $1
 `
 
@@ -49,6 +58,8 @@ function formatUser(user: Record<string, unknown>, { includePrivate }: { include
     skills: (user.skills as string[] | null) ?? [],
     looking_for: (user.looking_for as string[] | null) ?? [],
     year: (user.year as string | null) ?? null,
+    userType: user.user_type,
+    department: user.department,
     ...(includePrivate ? { email: user.email, gpa: user.gpa } : {}),
   }
 }
@@ -71,6 +82,134 @@ function toNullableInt(value: unknown): number | null {
 
 
 const router = Router()
+
+router.post("/register-custom", async (req: Request, res: Response) => {
+  const { name, email, password, userType, department, interest } = req.body
+
+  if (!name || !email || !password || !userType) {
+    res.status(400).json({ error: "Name, email, password and user type are required" })
+    return
+  }
+
+  if (userType !== "guest" && userType !== "professor") {
+    res.status(400).json({ error: "Invalid user type" })
+    return
+  }
+
+  const normalizedEmail = email.trim().toLowerCase()
+  if (!normalizedEmail || !normalizedEmail.includes("@")) {
+    res.status(400).json({ error: "A valid email is required" })
+    return
+  }
+
+  try {
+    const existing = await db.query("SELECT id FROM users WHERE email = $1", [normalizedEmail])
+    if (existing.rows.length > 0) {
+      res.status(400).json({ error: "Email already registered" })
+      return
+    }
+
+    const id = uuidv4()
+    const passwordHash = await bcrypt.hash(password, 10)
+    const departmentValue = department ? sanitizeText(department, 120) : null
+    
+    // Support either single string or array of strings for interests/interest
+    const interestList = interest 
+      ? (Array.isArray(interest) ? interest : [interest]).map(i => sanitizeText(i, 80)) 
+      : []
+
+    // Postgres FIRST — it owns identity. The graph projection is attempted
+    // afterwards and is allowed to fail; see safeGraphWrite() for the full
+    // reasoning. graph_node_id starts NULL and is only set once the projection
+    // actually lands, which is what makes it a reliable reconciliation marker.
+    await db.query(
+      `INSERT INTO users
+         (id, email, name, password_hash, user_type, department, interests, graph_node_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)`,
+      [
+        id,
+        normalizedEmail,
+        name.trim(),
+        passwordHash,
+        userType,
+        departmentValue,
+        interestList,
+      ]
+    )
+
+    // Guests are deliberately absent from the graph — they are not discoverable
+    // and have no connections, so there is nothing to project.
+    if (userType === "professor") {
+      const graphNodeId = await safeGraphWrite(
+        { op: "createProfessorNode", userId: id },
+        () => createProfessorNode({
+          id,
+          name: name.trim(),
+          department: departmentValue || "",
+          interests: interestList,
+        })
+      )
+      if (graphNodeId) {
+        await db.query("UPDATE users SET graph_node_id = $1 WHERE id = $2", [graphNodeId, id])
+      }
+    }
+
+    const userResult = await db.query(SELECT_PROFILE, [id])
+    const token = generateSessionToken(id)
+    res.status(201).json({
+      token,
+      user: formatUser(userResult.rows[0], { includePrivate: true }),
+    })
+  } catch (err) {
+    console.error("Custom registration error:", err)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+router.post("/login-custom", async (req: Request, res: Response) => {
+  const { email, password } = req.body
+
+  if (!email || !password) {
+    res.status(400).json({ error: "Email and password are required" })
+    return
+  }
+
+  const normalizedEmail = email.trim().toLowerCase()
+
+  try {
+    const result = await db.query(
+      "SELECT id, password_hash FROM users WHERE email = $1 AND (user_type = 'guest' OR user_type = 'professor')",
+      [normalizedEmail]
+    )
+
+    if (result.rows.length === 0) {
+      res.status(401).json({ error: "Invalid email or password" })
+      return
+    }
+
+    const { id, password_hash } = result.rows[0]
+    if (!password_hash) {
+      res.status(401).json({ error: "Invalid email or password" })
+      return
+    }
+
+    const match = await bcrypt.compare(password, password_hash)
+    if (!match) {
+      res.status(401).json({ error: "Invalid email or password" })
+      return
+    }
+
+    const userResult = await db.query(SELECT_PROFILE, [id])
+    const token = generateSessionToken(id)
+    res.json({
+      token,
+      user: formatUser(userResult.rows[0], { includePrivate: true }),
+    })
+  } catch (err) {
+    console.error("Custom login error:", err)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
 
 router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
   const token = req.headers.authorization?.slice(7)
@@ -155,25 +294,19 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
     const yearValue = sanitizeText(year, 30) || null
     const linkedinUrlValue = sanitizeOptionalHttpsUrl(linkedinUrl)
 
-    const graphNodeId = await createStudentNode({
-      id,
-      name: normalizedName,
-      major: majorValue,
-      gpa: gpaValue,
-      graduationYear: graduationYearValue,
-      bio: bioValue,
-      clubs: clubList,
-      companies: companyList,
-      interests: interestList,
-      linkedinUrl: linkedinUrlValue,
-    })
-
+    // Postgres FIRST. This route is the ONLY thing standing between a
+    // Clerk-authenticated student and a usable account — if it fails they are
+    // stranded at /setup with no profile row. Neo4j must therefore never be
+    // able to block it. graph_node_id stays NULL until the projection lands.
     await db.query(
+      // user_type is set explicitly rather than leaning on the column default.
+      // This route is the only way a Clerk student is created, and "these rows
+      // are students" should be readable here, not inferred from a migration.
       `INSERT INTO users
          (id, email, name, major, gpa, graduation_year, bio, clubs,
           companies, interests, graph_node_id, linkedin_url, skills,
-          looking_for, year, clerk_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+          looking_for, year, clerk_id, user_type)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULL,$11,$12,$13,$14,$15,'student')`,
       [
         id,
         normalizedEmail,
@@ -185,7 +318,6 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
         clubList,
         companyList,
         interestList,
-        graphNodeId,
         linkedinUrlValue,
         skillList,
         lookingForList,
@@ -193,6 +325,25 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
         clerkId,
       ]
     )
+
+    const graphNodeId = await safeGraphWrite(
+      { op: "createStudentNode", userId: id },
+      () => createStudentNode({
+        id,
+        name: normalizedName,
+        major: majorValue,
+        gpa: gpaValue,
+        graduationYear: graduationYearValue,
+        bio: bioValue,
+        clubs: clubList,
+        companies: companyList,
+        interests: interestList,
+        linkedinUrl: linkedinUrlValue,
+      })
+    )
+    if (graphNodeId) {
+      await db.query("UPDATE users SET graph_node_id = $1 WHERE id = $2", [graphNodeId, id])
+    }
 
     const user = await db.query(SELECT_PROFILE, [id])
     console.info("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "new_user_created", userId: id, ip: req.ip })
@@ -254,79 +405,128 @@ router.get("/interests", requireAuth, async (_req: Request, res: Response) => {
 })
 
 router.put("/profile", requireAuth, profileUpdateRateLimiter, async (req: AuthRequest, res: Response) => {
-  const { gpa, major, graduationYear, bio, clubs, companies, interests, linkedinUrl, skills, looking_for, year } = req.body
-
-  const majorValue = sanitizeText(major, 120)
-  const bioValue = sanitizeText(bio, 2000) || null
-  const yearValue = sanitizeText(year, 30) || null
-  if (!majorValue || !graduationYear) {
-    res.status(400).json({ error: "major and graduationYear are required" })
-    return
-  }
-
-  const clubList = toStringArray(clubs)
-  const companyList = toStringArray(companies)
-  const interestList = toStringArray(interests)
-  const skillList = toStringArray(skills)
-  const lookingForList = toStringArray(looking_for)
-  const gpaValue = toNullableNumber(gpa)
-  const graduationYearValue = toNullableInt(graduationYear)
-  const linkedinUrlValue = sanitizeOptionalHttpsUrl(linkedinUrl)
-
-  if (graduationYearValue === null) {
-    res.status(400).json({ error: "graduationYear must be a valid year" })
-    return
-  }
+  const { gpa, major, graduationYear, bio, clubs, companies, interests, linkedinUrl, skills, looking_for, year, department } = req.body
 
   try {
-    const existing = await db.query("SELECT name FROM users WHERE id = $1", [req.userId])
+    const existing = await db.query("SELECT name, user_type FROM users WHERE id = $1", [req.userId])
     if (existing.rows.length === 0) {
       res.status(404).json({ error: "User not found" })
       return
     }
 
-    await db.query(
-      `UPDATE users
-       SET major = $1,
-           gpa = $2,
-           graduation_year = $3,
-           bio = $4,
-           clubs = $5,
-           companies = $6,
-           interests = $7,
-           linkedin_url = $8,
-           skills = $9,
-           looking_for = $10,
-           year = $11
-       WHERE id = $12`,
-      [
-        majorValue,
-        gpaValue,
-        graduationYearValue,
-        bioValue,
-        clubList,
-        companyList,
-        interestList,
-        linkedinUrlValue,
-        skillList,
-        lookingForList,
-        yearValue,
-        req.userId,
-      ]
-    )
+    const userType = existing.rows[0].user_type || "student"
 
-    await updateStudentNode({
-      id: req.userId!,
-      name: existing.rows[0].name,
-      major: majorValue,
-      gpa: gpaValue,
-      graduationYear: graduationYearValue,
-      bio: bioValue ?? "",
-      clubs: clubList,
-      companies: companyList,
-      interests: interestList,
-      linkedinUrl: linkedinUrlValue,
-    })
+    if (userType === "student") {
+      const majorValue = sanitizeText(major, 120)
+      const bioValue = sanitizeText(bio, 2000) || null
+      const yearValue = sanitizeText(year, 30) || null
+      if (!majorValue || !graduationYear) {
+        res.status(400).json({ error: "major and graduationYear are required" })
+        return
+      }
+
+      const clubList = toStringArray(clubs)
+      const companyList = toStringArray(companies)
+      const interestList = toStringArray(interests)
+      const skillList = toStringArray(skills)
+      const lookingForList = toStringArray(looking_for)
+      const gpaValue = toNullableNumber(gpa)
+      const graduationYearValue = toNullableInt(graduationYear)
+      const linkedinUrlValue = sanitizeOptionalHttpsUrl(linkedinUrl)
+
+      if (graduationYearValue === null) {
+        res.status(400).json({ error: "graduationYear must be a valid year" })
+        return
+      }
+
+      await db.query(
+        `UPDATE users
+         SET major = $1,
+             gpa = $2,
+             graduation_year = $3,
+             bio = $4,
+             clubs = $5,
+             companies = $6,
+             interests = $7,
+             linkedin_url = $8,
+             skills = $9,
+             looking_for = $10,
+             year = $11
+         WHERE id = $12`,
+        [
+          majorValue,
+          gpaValue,
+          graduationYearValue,
+          bioValue,
+          clubList,
+          companyList,
+          interestList,
+          linkedinUrlValue,
+          skillList,
+          lookingForList,
+          yearValue,
+          req.userId,
+        ]
+      )
+
+      await updateStudentNode({
+        id: req.userId!,
+        name: existing.rows[0].name,
+        major: majorValue,
+        gpa: gpaValue,
+        graduationYear: graduationYearValue,
+        bio: bioValue ?? "",
+        clubs: clubList,
+        companies: companyList,
+        interests: interestList,
+        linkedinUrl: linkedinUrlValue,
+      })
+    } else if (userType === "professor") {
+      const bioValue = sanitizeText(bio, 2000) || null
+      const linkedinUrlValue = sanitizeOptionalHttpsUrl(linkedinUrl)
+      const departmentValue = department ? sanitizeText(department, 120) : null
+      const interestList = toStringArray(interests)
+
+      await db.query(
+        `UPDATE users
+         SET department = COALESCE($1, department),
+             interests = $2,
+             bio = $3,
+             linkedin_url = $4
+         WHERE id = $5`,
+        [
+          departmentValue,
+          interestList,
+          bioValue,
+          linkedinUrlValue,
+          req.userId,
+        ]
+      )
+
+      await updateProfessorNode({
+        id: req.userId!,
+        name: existing.rows[0].name,
+        department: departmentValue || "",
+        interests: interestList,
+        bio: bioValue,
+        linkedinUrl: linkedinUrlValue,
+      })
+    } else if (userType === "guest") {
+      const bioValue = sanitizeText(bio, 2000) || null
+      const linkedinUrlValue = sanitizeOptionalHttpsUrl(linkedinUrl)
+
+      await db.query(
+        `UPDATE users
+         SET bio = $1,
+             linkedin_url = $2
+         WHERE id = $3`,
+        [
+          bioValue,
+          linkedinUrlValue,
+          req.userId,
+        ]
+      )
+    }
 
     const updated = await db.query(SELECT_PROFILE, [req.userId])
     res.json(formatUser(updated.rows[0], { includePrivate: true }))
@@ -344,20 +544,27 @@ router.delete("/account", requireAuth, profileUpdateRateLimiter, async (req: Aut
   }
 
   try {
-    const userResult = await db.query("SELECT id, clerk_id FROM users WHERE id = $1", [userId])
+    const userResult = await db.query("SELECT id, clerk_id, user_type FROM users WHERE id = $1", [userId])
     if (userResult.rows.length === 0) {
       res.status(404).json({ error: "User not found" })
       return
     }
 
+    const userType = userResult.rows[0].user_type || "student"
     const clerkId = userResult.rows[0].clerk_id as string | null
-    if (!clerkId) {
-      res.status(409).json({ error: "Account is not linked to Clerk" })
-      return
+
+    if (userType === "student") {
+      if (!clerkId) {
+        res.status(409).json({ error: "Account is not linked to Clerk" })
+        return
+      }
+      await clerk.users.deleteUser(clerkId)
     }
 
-    await clerk.users.deleteUser(clerkId)
-    await deleteStudentNode(userId)
+    // Guests are not added to Neo4j, but students and professors are.
+    if (userType !== "guest") {
+      await deleteStudentNode(userId)
+    }
 
     const client = await db.connect()
     try {

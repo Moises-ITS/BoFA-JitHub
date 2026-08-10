@@ -15,5 +15,8 @@
     "postinstall": "npm install --prefix react-webapp/backend",
     "build": "npm run build --prefix react-webapp/backend",
     "start": "npm run start --prefix react-webapp/backend"
+  },
+  "dependencies": {
+    "headroom-ai": "^0.22.4"
   }
 }

@@ -11,6 +11,10 @@ export interface NodeDetails {
   goal?:        string;
   company?:     string;
   role?:        string;
+  // The real backend property (createStudentNode / updateStudentNode write it).
+  // Numeric off Neo4j, string in the mock fixtures — hence the union.
+  graduationYear?: string | number;
+  // Legacy alias, still used by data/mockGraphData.ts. Read as a fallback only.
   year_grad?:   string;
   research?:    string;
   open_roles?:  string;

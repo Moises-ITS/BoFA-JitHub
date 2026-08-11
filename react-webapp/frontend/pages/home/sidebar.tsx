@@ -1,10 +1,14 @@
 import { NavLink } from "react-router-dom";
 import { motion } from "motion/react";
-import { Home, Calendar, Briefcase, Network, User, Flag } from "lucide-react";
+import { Home, Calendar, Users, Briefcase, Network, User, Flag } from "lucide-react";
 
 const baseNavItems = [
   { icon: Home, label: "Home", path: "/home" },
   { icon: Calendar, label: "Events", path: "/events" },
+  // Directly below Events and above Opportunities (AC 1). Active-tab highlight
+  // and styling come from the shared .map below — nothing else in this file
+  // needed to change (AC 3).
+  { icon: Users, label: "Organizations", path: "/organizations" },
   { icon: Briefcase, label: "Opportunities", path: "/opportunities" },
   // Quarantined: hide the Research section button until the section is ready for users.
   // { icon: FlaskConical, label: "Research", path: "/research" },

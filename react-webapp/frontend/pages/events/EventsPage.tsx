@@ -584,6 +584,27 @@ export default function EventsPage() {
 
     return baseEvents;
   }, [view, trendingEvents, upcomingRaw, profile, searchQuery, selectedClub]);
+
+  // Anything whose date is behind us drops out of the main feed and into its own
+  // section. Dates are compared as YYYY-MM-DD strings (the shape the API returns)
+  // so an event stays listed for the whole of its own day rather than vanishing
+  // at midnight UTC while it is still running. Events with no date are treated as
+  // upcoming — "TBD" is a plan, not a past event.
+  const { activeEvents, passedEvents } = useMemo(() => {
+    const today = new Date().toISOString().split("T")[0];
+    const active: EdenEvent[] = [];
+    const passed: EdenEvent[] = [];
+    for (const event of displayEvents) {
+      if (event.date && event.date < today) passed.push(event);
+      else active.push(event);
+    }
+    // Most recently finished first — the ones people are still looking for.
+    passed.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+    return { activeEvents: active, passedEvents: passed };
+  }, [displayEvents]);
+
+  const [showPassed, setShowPassed] = useState(false);
+
   const displayEventIds = useMemo(
     () => displayEvents.map((event) => event.event_id),
     [displayEvents],
@@ -724,7 +745,10 @@ export default function EventsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
+          {/* space-y-6 (24px), not space-y-4: at 16px the event cards and the
+              filter row sat close enough to read as one block. This matches the
+              grid's own gap-6 so the column and its neighbours share a rhythm. */}
+          <div className="lg:col-span-2 space-y-6">
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1" style={{ width: "fit-content", border: "1px solid var(--border-default)" }}>
@@ -744,7 +768,7 @@ export default function EventsPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
               <div
                 style={{
                   position: "relative",
@@ -818,7 +842,10 @@ export default function EventsPage() {
             </div>
 
             {loading && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>}
-            {!loading && displayEvents.length === 0 && (
+            {/* Only a true empty state — if everything matching the filters has
+                already happened, the Passed events section below speaks for
+                itself rather than being contradicted by "No events found". */}
+            {!loading && activeEvents.length === 0 && passedEvents.length === 0 && (
               <div className="text-center py-16" style={{ color: "var(--text-muted)" }}>
                 <p className="text-4xl mb-3">📅</p>
                 <p className="font-medium text-white">
@@ -833,7 +860,7 @@ export default function EventsPage() {
                 </p>
               </div>
             )}
-            {displayEvents.map((event, i) => (
+            {activeEvents.map((event, i) => (
               <EventCard
                 key={event.event_id}
                 event={event}
@@ -846,13 +873,69 @@ export default function EventsPage() {
                 onSelect={(e) => { setSelectedEvent(e); setSelectedEventCanRsvp(true); }}
               />
             ))}
+
+            {passedEvents.length > 0 && (
+              // No inline margin here: the parent's space-y utility owns the
+              // rhythm between sections, and an inline value would override it
+              // and desynchronise this block from every sibling.
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowPassed((prev) => !prev)}
+                  aria-expanded={showPassed}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    border: "1px solid var(--border-default)",
+                    backgroundColor: "var(--bg-surface)",
+                    color: "var(--text-muted)",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span style={{ color: "var(--text-primary)" }}>
+                    Passed events
+                    <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>
+                      {" "}· {passedEvents.length}
+                    </span>
+                  </span>
+                  <span aria-hidden="true">{showPassed ? "▲" : "▼"}</span>
+                </button>
+
+                {showPassed && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "20px", opacity: 0.72 }}>
+                    {passedEvents.map((event, i) => (
+                      <EventCard
+                        key={event.event_id}
+                        event={event}
+                        index={i}
+                        profile={profile}
+                        rsvpStatus={rsvpMap[event.event_id] ?? null}
+                        attendees={attendeeMap[event.event_id]}
+                        // No RSVP control: the event is over, so "Are you going?"
+                        // is a question that can no longer be answered.
+                        onRsvpToggle={undefined}
+                        connectionIds={connectionIds}
+                        onSelect={(e) => { setSelectedEvent(e); setSelectedEventCanRsvp(false); }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Sidebar */}
           <div style={{ display: "flex", flexDirection: "column", gap: "40px" }}>
             <HeatmapCalendar />
             <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
-              <div className="flex items-center gap-2" style={{ marginBottom: "12px" }}>
+              <div className="flex items-center gap-2" style={{ marginBottom: "16px" }}>
                 <TrendingUp className="w-4 h-4" style={{ color: "var(--brand-primary)" }} />
                 <h3 className="font-semibold text-white text-sm">Trending This Semester</h3>
               </div>
@@ -871,7 +954,9 @@ export default function EventsPage() {
               {topRisers.map((c, i) => <SidebarClubRow key={c.club_name} club={c} index={i} showScore />)}
             </div>
             <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
-              <div className="flex items-center gap-2" style={{ marginBottom: "4px" }}>
+              {/* 16px to match the two cards above it — at 4px the first row's
+                  avatar nearly touched the heading. */}
+              <div className="flex items-center gap-2" style={{ marginBottom: "16px" }}>
                 <Flame className="w-4 h-4" style={{ color: "var(--status-error)" }} />
                 <h3 className="font-semibold text-white text-sm">Top Events of the Semester</h3>
               </div>

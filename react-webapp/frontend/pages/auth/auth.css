@@ -582,20 +582,26 @@
   box-shadow: 0 0 0 0.25rem var(--brand-primary-soft);
 }
 
+/* Matched to .auth-btn-brand in AuthBackdrop.css. Clerk's button used the old
+   app gradient at a 1rem radius, which sat beside the professor/guest form's
+   flat #d7263d at 10px and read as two different products depending on which
+   role you picked. Same shape, same fill, same shadow. */
 .auth-clerk-shell .cl-formButtonPrimary {
-  min-height: 3.15rem;
+  min-height: 48px;
   border: 0;
-  border-radius: 1rem;
-  background: var(--brand-gradient);
+  border-radius: 10px;
+  background: #d7263d;
   color: #fff;
-  box-shadow: var(--shadow-brand);
-  font-size: 0.96rem;
+  box-shadow: 0 8px 28px rgba(215, 38, 61, 0.35);
+  font-size: 15px;
   font-weight: 700;
+  letter-spacing: 0.2px;
+  text-transform: none;
 }
 
 .auth-clerk-shell .cl-formButtonPrimary:hover {
-  background: var(--brand-gradient);
-  filter: brightness(1.02);
+  background: #e8354c;
+  filter: none;
 }
 
 .auth-clerk-shell .cl-dividerLine {

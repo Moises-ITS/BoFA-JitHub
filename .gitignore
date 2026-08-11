@@ -34,3 +34,8 @@ ig_cookies.json
 # Machine-local tooling state, not project config.
 .tokensave/
 .claude/settings.local.json
+
+.claude
+.backups
+shared
+claude.md

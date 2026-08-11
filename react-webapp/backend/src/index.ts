@@ -38,9 +38,11 @@ const [
   chatMemMod,
   buildingsMod,
   eventsMod,
+  orgsMod,
   { attachEventsSocket, closeEventsSocket },
   { startScheduler },
   { runMigrations },
+  { syncClubTypes },
   { ensureNodeIds },
   { apiGlobalRateLimiter, apiWriteRateLimiter },
   { sanitizeRequestInputs },
@@ -62,9 +64,11 @@ const [
   import("./routes/chatMemory.js"),
   import("./routes/buildings.js"),
   import("./routes/events.js"),
+  import("./routes/organizations.js"),
   import("./realtime/eventsSocket.js"),
   import("./scrapers/runner.js"),
   import("./db/migrate.js"),
+  import("./services/clubTypeSync.js"),
   import("./services/graphService.js"),
   import("./middleware/authRateLimit.js"),
   import("./middleware/security.js"),
@@ -79,6 +83,19 @@ try {
 } catch (err: unknown) {
   const msg = err instanceof Error ? err.message : String(err)
   console.error("Startup migration/setup failed:", msg)
+}
+
+// Reconcile clubs.type against the name classifier. Must run AFTER
+// runMigrations() (it writes to the column migration 015 adds) and is awaited so
+// the directory is correct before the first request. Its own try/catch: a
+// classifier or DB hiccup here must not stop the backend from booting — the
+// read-time fallback in serializeClub keeps every API response correct anyway.
+// Disable with CLUB_TYPE_SYNC=off; see services/clubTypeSync.ts.
+try {
+  await syncClubTypes()
+} catch (err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err)
+  console.error("[orgs][type-sync] failed (continuing boot):", msg)
 }
 
 // Run the opportunities migration on startup
@@ -159,6 +176,11 @@ app.use("/api/buildings", buildingsMod.default)
 // /api/clubs. Previously served by the standalone EDEN FastAPI service on port
 // 8000, which read this same database; see services/eventsService.ts.
 app.use("/api", eventsMod.default)
+
+// Organizations directory (clubs, sororities, fraternities) + per-user stars.
+// Its own mount point rather than a new family inside the events router above,
+// which owns bare /api and would make /api/clubs/* ordering fragile.
+app.use("/api/organizations", orgsMod.default)
 
 // EDEN e-board analytics — PARKED for v2/v3, mounted only behind an explicit
 // flag. History: these routes were previously wired only in an orphaned second

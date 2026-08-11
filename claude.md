@@ -17,7 +17,7 @@ dev: npx expo starts
 
 - Do not commit directly to main or main-dev.
 - Do not migrate at all
-- Do not add/commit/push/PR files outside `shpe-app` folder
+- Do not add/commit/push/PR files outside `react-webapp` folder
 
 ## Deeper docs
 

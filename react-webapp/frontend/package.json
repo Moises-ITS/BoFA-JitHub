@@ -19,7 +19,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "videos:optimize": "node scripts/optimize-videos.mjs",
+    "videos:optimize:apply": "node scripts/optimize-videos.mjs --apply"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.4",

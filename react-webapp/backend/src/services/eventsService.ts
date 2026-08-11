@@ -33,6 +33,7 @@ import {
   serializeClubCollection,
   type ClubRow,
 } from "./clubDirectory.js"
+import { classifyOrgType } from "./orgClassifier.js"
 
 /**
  * The academic term the feed is scoped to.
@@ -386,9 +387,11 @@ export async function getEventById(eventId: number) {
 
 // ── Club directory ───────────────────────────────────────────────────────────
 
+// `c.type` is qualified even though nothing is joined here: `type` is an
+// unreserved keyword, so it is legal bare, but this SELECT gets copied.
 async function loadClubs(): Promise<ClubRow[]> {
   const { rows } = await db.query<ClubRow>(
-    "SELECT club_id, name, instagram_handle, follower_count, bio FROM clubs ORDER BY name ASC"
+    "SELECT c.club_id, c.name, c.instagram_handle, c.follower_count, c.bio, c.type FROM clubs c ORDER BY c.name ASC"
   )
   return rows
 }
@@ -656,9 +659,14 @@ export async function createCommunityEvent(
 
     let clubId: number | null = match?.club_id ?? null
     if (clubId == null) {
+      // Classify at insert time. This is the only INSERT INTO clubs in the
+      // backend, so it is the only place a row can be born without a type;
+      // clubTypeSync would fix it on the next boot and serializeClub would
+      // classify it on read regardless, but setting it here means the
+      // Organizations type filter is correct for a brand-new club immediately.
       const inserted = await client.query(
-        "INSERT INTO clubs (name, is_active) VALUES ($1, TRUE) RETURNING club_id",
-        [clubName]
+        "INSERT INTO clubs (name, is_active, type) VALUES ($1, TRUE, $2) RETURNING club_id",
+        [clubName, classifyOrgType(resolveCanonicalClubName(clubName))]
       )
       clubId = inserted.rows[0].club_id as number
     }

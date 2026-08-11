@@ -11,6 +11,9 @@ import Home from "./pages/home/Home"
 import ReportIssuePage from "./pages/home/ReportIssuePage"
 import Profile from "./pages/profile/profile"
 import EventsPage from "./pages/events/EventsPage"
+// Eager, like Events: the directory is a primary nav destination with no heavy
+// dependencies, so a lazy chunk would buy nothing but a loading flash.
+import OrganizationsPage from "./pages/organizations/OrganizationsPage"
 import OpportunitiesPage from "./pages/opportunities/OpportunitiesPage"
 import LandingPage from "./pages/landing/LandingPage"
 import ProtectedRoute from "./components/ProtectedRoute"
@@ -175,6 +178,10 @@ export default function App() {
                 <Route path="/report-issue" element={<ReportIssuePage />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/events" element={<EventsPage />} />
+                {/* Inside this block on purpose: it inherits the enclosing
+                    ProtectedRoute, so the directory is signed-in-only like every
+                    other nav destination (Resolution R1 / AC 2). */}
+                <Route path="/organizations" element={<OrganizationsPage />} />
                 <Route path="/opportunities" element={<OpportunitiesPage />} />
                 <Route path="/research" element={
                   <ErrorBoundary>

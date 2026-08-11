@@ -12,6 +12,7 @@
     "graph:reconcile": "tsx scripts/reconcile-graph.ts",
     "graph:reconcile:apply": "tsx scripts/reconcile-graph.ts --apply",
     "users:purge": "node scripts/purge-test-users.mjs",
+    "clubs:check-coverage": "tsx scripts/check-club-name-coverage.ts",
     "security:scan-secrets": "node scripts/scan-secrets.mjs",
     "test": "vitest run",
     "test:watch": "vitest",

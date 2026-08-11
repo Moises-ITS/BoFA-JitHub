@@ -15,12 +15,19 @@
  * a duplicate will look distinct to the client.
  */
 
+import { classifyOrgType, type OrgType } from "./orgClassifier.js"
+
+export type { OrgType }
+
 export interface ClubRow {
   club_id: number
   name: string
   instagram_handle: string | null
   follower_count: number | null
   bio: string | null
+  /** clubs.type. Nullable: migration 015 may have warned-and-no-opped, and a
+   *  row created since the last boot has not been through clubTypeSync yet. */
+  type?: string | null
 }
 
 export interface SerializedClub {
@@ -30,8 +37,28 @@ export interface SerializedClub {
   aliases: string[]
   instagram_handle: string | null
   logo_url: string
+  /** clubs.bio — the org description. null when the scrape had none (AC 27). */
+  bio: string | null
+  /** Never null: falls back to classifyOrgType when the column is unset. */
+  type: OrgType
+  /** normalizeClubText(canonical name) — THE dedup group key. Stars, search and
+   *  trending all group on this, so it is serialised rather than recomputed by
+   *  each caller (three independent recomputations is three chances to drift). */
+  org_key: string
 }
 
+/**
+ * ALIAS TABLE — expanding this is safe; changing a `display_name` is not.
+ *
+ * getClubDisplayName feeds the Events page club dropdown AND the Events sidebar
+ * podium (eventsService.getClubsTrending), which the Organizations feature is
+ * required to leave behaviourally identical. So every entry added for the
+ * organizations directory sets `display_name` to the row's own name — the added
+ * value is purely in `aliases`, which only affect matching and search.
+ *
+ * Entries whose `display_name` is a real abbreviation (ACM, IEEE, ...) predate
+ * this feature and are unchanged.
+ */
 const CLUB_METADATA: Record<string, { display_name: string; aliases: string[] }> = {
   "Association for Computing Machinery": { display_name: "ACM", aliases: ["ACM"] },
   "Institute of Electrical and Electronics Engineers": { display_name: "IEEE", aliases: ["IEEE"] },
@@ -41,15 +68,101 @@ const CLUB_METADATA: Record<string, { display_name: string; aliases: string[] }>
   "American Society of Civil Engineers": { display_name: "ASCE", aliases: ["ASCE"] },
   "American Society of Mechanical Engineers": { display_name: "ASME", aliases: ["ASME"] },
   "American Institute of Chemical Engineers": { display_name: "AIChE", aliases: ["AIChE"] },
-  "Biomedical Engineering Society": { display_name: "BMES", aliases: ["BMES"] },
   "Google Developer Student Club": { display_name: "GDSC", aliases: ["GDSC", "Google Student Developer Club"] },
   "Student Government Association": { display_name: "SGA", aliases: ["SGA"] },
   "Latino American Student Organization": { display_name: "LASO", aliases: ["LASO"] },
   "Muslim Student Association": { display_name: "MSA", aliases: ["MSA"] },
-  "Women in Computer Science": { display_name: "WiCS", aliases: ["WiCS"] },
   "Hispanic Association of Computing College Students": {
     display_name: "HACCS",
     aliases: ["HACCS", "Hispanic and Latine Association of Computing College Students"],
+  },
+
+  // ── Added for the Organizations directory ──────────────────────────────────
+  // Every entry below exists because an onboarding NJIT_CLUBS option names an
+  // organisation that the `clubs` table spells differently, so a connection's
+  // profile string resolved to nothing (or worse, to the wrong row) without it.
+  // Found by `npm run clubs:check-coverage` against the live 204-row table.
+  // NOTE the display_name === key convention explained above: these must not
+  // change how any club renders on the Events page.
+  "Caribbean Students Organization": {
+    display_name: "Caribbean Students Organization",
+    aliases: ["Caribbean Student Association", "CaribSO"],
+  },
+  "Chinese Undergraduate Student Association": {
+    display_name: "Chinese Undergraduate Student Association",
+    aliases: ["Chinese Student Association", "CUSA"],
+  },
+  "Engineers Without Borders": {
+    display_name: "Engineers Without Borders",
+    // The onboarding form says "Engineering"; the org is "Engineers".
+    aliases: ["Engineering Without Borders", "EWB"],
+  },
+  "Entrepreneur Society": {
+    display_name: "Entrepreneur Society",
+    aliases: ["Entrepreneurship Club"],
+  },
+  "NJIT Esports": {
+    display_name: "NJIT Esports",
+    aliases: ["ESports Club", "Esports Club", "Esports"],
+  },
+  "Finance and Actuarial Society": {
+    display_name: "Finance and Actuarial Society",
+    aliases: ["Finance Club"],
+  },
+  "Association of Indian Students": {
+    display_name: "Association of Indian Students",
+    aliases: ["Indian Student Association", "AIS"],
+  },
+  "Korean Students Association": {
+    display_name: "Korean Students Association",
+    // One character apart ("Student" vs "Students"), which is exactly enough to
+    // defeat substring matching.
+    aliases: ["Korean Student Association", "KSA"],
+  },
+  "Highlander Chess Club": {
+    display_name: "Highlander Chess Club",
+    aliases: ["Chess Club"],
+  },
+  "New Jersey Institute of Technology Soccer Club": {
+    display_name: "New Jersey Institute of Technology Soccer Club",
+    aliases: ["Soccer Club", "NJIT Soccer Club"],
+  },
+  "NJIT Volleyball Club": {
+    display_name: "NJIT Volleyball Club",
+    aliases: ["Volleyball Club"],
+  },
+  "NJIT Tennis Club": {
+    display_name: "NJIT Tennis Club",
+    // Without this exact alias, "Tennis Club" partial-matches BOTH this row and
+    // "Table Tennis Club", and which one wins is a preference-heuristic coin flip.
+    aliases: ["Tennis Club"],
+  },
+  "Theatre Arts & Technology Program": {
+    display_name: "Theatre Arts & Technology Program",
+    aliases: ["Theatre Arts Group", "Theater Arts Group"],
+  },
+  "Women in Computing Society": {
+    display_name: "Women in Computing Society",
+    // Replaces a "Women in Computer Science" -> WiCS entry that pointed at a
+    // canonical name no row has ever carried; the real row is this one.
+    aliases: ["Women in Computer Science", "WiCS"],
+  },
+  "NJIT Biomedical Engineering Society": {
+    display_name: "NJIT Biomedical Engineering Society",
+    // Replaces a "Biomedical Engineering Society" -> BMES entry whose canonical
+    // name no row has ever carried. Without an exact alias, "Biomedical
+    // Engineering Society" partial-matches this row AND "Graduate Biomedical
+    // Engineering Society", and the preference heuristic picked the GRADUATE
+    // chapter — i.e. undergraduates were being matched to the wrong org.
+    aliases: ["BMES", "Biomedical Engineering Society"],
+  },
+  "Society of Physics Students": {
+    display_name: "Society of Physics Students",
+    aliases: ["Physics Club"],
+  },
+  "NJIT Information & Cybersecurity Club": {
+    display_name: "NJIT Information & Cybersecurity Club",
+    aliases: ["Cyber Defense Organization", "Cybersecurity Club"],
   },
 }
 
@@ -135,6 +248,12 @@ function preferred(clubs: ClubRow[]): ClubRow {
   return clubs.reduce((best, club) => (comparePreference(club, best) > 0 ? club : best))
 }
 
+/** The stored clubs.type, but only when it is one of the three legal values. */
+function storedOrgType(raw: string | null | undefined): OrgType | null {
+  const value = (raw ?? "").trim().toLowerCase()
+  return value === "club" || value === "sorority" || value === "fraternity" ? value : null
+}
+
 export function serializeClub(club: ClubRow, extraAliases: Array<string | null | undefined> = []): SerializedClub {
   const canonicalName = resolveCanonicalClubName(club.name)
   return {
@@ -144,7 +263,20 @@ export function serializeClub(club: ClubRow, extraAliases: Array<string | null |
     aliases: getClubAliases(canonicalName, club.instagram_handle, extraAliases),
     instagram_handle: club.instagram_handle,
     logo_url: `/club_pics/${club.club_id}.jpg`,
+    bio: club.bio ?? null,
+    // The stored column wins; classifying on read is a FALLBACK so the API can
+    // never emit a null type on a database where migration 015 warned-and-
+    // no-opped or where CLUB_TYPE_SYNC=off. organizationsService counts how
+    // often this path is taken and logs the total once per cache fill — a
+    // non-zero count is the signal that the schema change did not land.
+    type: storedOrgType(club.type) ?? classifyOrgType(canonicalName),
+    org_key: normalizeClubText(canonicalName),
   }
+}
+
+/** True when serializeClub would have to classify this row on read. */
+export function needsTypeFallback(club: ClubRow): boolean {
+  return storedOrgType(club.type) === null
 }
 
 /** Collapse duplicate rows for the same organisation into one directory entry. */

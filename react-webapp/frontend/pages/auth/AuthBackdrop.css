@@ -1,0 +1,420 @@
+/*
+ * AuthBackdrop.css — the video-mosaic shell behind the landing and auth screens.
+ * Ported from the "Jithub Auth" design (claude.ai/design). Design tokens are
+ * literal here rather than pulled from the app's CSS variables: this surface is
+ * signed-out and deliberately does not follow the in-app theme.
+ */
+
+.auth-backdrop {
+  --ab-bg: #0b0b0e;
+  --ab-brand: #d7263d;
+  --ab-brand-hover: #e8354c;
+  --ab-brand-soft: rgba(215, 38, 61, 0.16);
+  --ab-ink: #fdfcfb;
+  --ab-accent: #ff8285;
+
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  overflow: hidden;
+  background: var(--ab-bg);
+  font-family: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* ── Mosaic ─────────────────────────────────────────────────────────────── */
+/* Oversized and offset so the drifting rows never expose an edge. */
+.auth-backdrop__mosaic {
+  position: absolute;
+  top: -4vh;
+  left: -8vw;
+  width: 120vw;
+  height: 112vh;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transform: scale(1.04);
+  pointer-events: none;
+}
+
+.auth-backdrop__row {
+  display: flex;
+  gap: 16px;
+  /* Promote each row to its own compositor layer so the drift is a GPU
+     transform rather than a main-thread repaint. */
+  will-change: transform;
+}
+
+/*
+ * The blur lives HERE, per tile, not on .auth-backdrop__mosaic.
+ *
+ * The design applies `filter` to the mosaic wrapper, which is correct in a
+ * static canvas but pathological once the rows animate: a filtered ancestor
+ * forces the browser to re-rasterize the entire 120vw × 112vh blurred surface
+ * on every frame of the drift. In-browser that stalled the compositor badly
+ * enough to hang screenshot capture with no video playing at all.
+ *
+ * Per-tile, each blur is cached on its own layer and the row animation just
+ * moves those layers. The visible difference is that blur no longer bleeds
+ * across the 16px gaps — which, under two scrims, is imperceptible.
+ */
+.auth-backdrop__tile {
+  flex: 0 0 auto;
+  width: 24vw;
+  height: 26vh;
+  position: relative;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.07);
+  /* Poster still, set inline per tile. Painted under the <video> so the tile is
+     never an empty rectangle — it shows the frame immediately and the clip
+     fades in over it once decoded. background-color stays as the fallback for
+     when no poster exists yet. */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  filter: var(--ab-tile-filter, none);
+}
+
+.auth-backdrop__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+@keyframes ab-drift-left {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-5vw); }
+}
+
+@keyframes ab-drift-right {
+  from { transform: translateX(-5vw); }
+  to   { transform: translateX(0); }
+}
+
+/*
+ * Stops the row drift under the preference. Note this rule cannot stop the
+ * clips themselves — CSS has no reach into media playback, so that decision
+ * lives in AuthBackdrop.tsx (RESPECT_REDUCED_MOTION, currently false: the
+ * clips keep playing while the grid itself holds still).
+ */
+@media (prefers-reduced-motion: reduce) {
+  .auth-backdrop__row {
+    animation: none !important;
+  }
+}
+
+/* ── Scrims ─────────────────────────────────────────────────────────────── */
+.auth-backdrop__scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ── Chrome ─────────────────────────────────────────────────────────────── */
+.auth-backdrop__topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 44px;
+  z-index: 3;
+}
+
+/* The NJIT logo, replacing the design's abstract rotated square.
+ *
+ * Sized by height with `width: auto` so the intrinsic 2.5:1 ratio decides the
+ * width — a future logo swap then can't end up squashed.
+ *
+ * 32px, not the 28px that would match the wordmark's cap height: this asset is
+ * a two-line lockup ("NJIT" over "New Jersey Institute of Technology"), and
+ * below ~30px the second line stops being legible at all. 32px keeps the NJIT
+ * itself crisp, which is the part that has to read.
+ *
+ * The brightness lift exists because the asset's red is roughly #CC0000 — on
+ * the near-black --ab-bg (#0b0b0e) it sits around a 3:1 contrast ratio and
+ * reads muddy. A small lift brings it closer to the --ab-brand red already used
+ * by the buttons on this screen without visibly recolouring the mark.
+ */
+.auth-backdrop__mark {
+  height: 32px;
+  width: auto;
+  display: block;
+  flex-shrink: 0;
+  filter: brightness(1.22) saturate(1.08);
+}
+
+.auth-backdrop__wordmark {
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: -0.5px;
+  color: var(--ab-ink);
+}
+
+.auth-backdrop__eyebrow {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-left: 6px;
+  padding-top: 3px;
+}
+
+.auth-backdrop__footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding: 22px;
+  z-index: 3;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  color: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+  text-align: center;
+}
+
+/* ── Content well ───────────────────────────────────────────────────────── */
+/*
+ * min-height rather than height: the Clerk widget is considerably taller than
+ * the design's mock form, and a fixed 100vh would clip its footer on short
+ * laptop screens with no way to scroll to it.
+ */
+.auth-backdrop__content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 96px 24px 72px;
+  box-sizing: border-box;
+}
+
+/* ── Glass card ─────────────────────────────────────────────────────────── */
+.auth-card-glass {
+  width: 408px;
+  max-width: calc(100vw - 48px);
+  background: rgba(15, 14, 18, 0.72);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 18px;
+  padding: 36px 36px 30px;
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.55),
+    0 2px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+/* Clerk renders its own card; this variant widens to fit it without letting
+   the widget's own chrome double up on ours. */
+.auth-card-glass--wide {
+  width: 464px;
+}
+
+/* Centres the landing card's copy. Deliberately scoped to the heading and its
+   subtitle rather than set on the card: the role buttons below carry a tag
+   chip plus a two-line label that must stay left-aligned to read as a list,
+   and the "← Back" control belongs on the left edge. Centring the whole card
+   would drag all three into the middle. */
+.auth-card-glass--centered h1,
+.auth-card-glass--centered .auth-card-sub {
+  text-align: center;
+}
+
+.auth-card-glass h1 {
+  margin: 0 0 6px;
+  font-size: 27px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  color: var(--ab-ink, #fdfcfb);
+  text-wrap: pretty;
+}
+
+.auth-card-glass .auth-card-sub {
+  margin: 0 0 28px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.auth-btn-brand {
+  height: 50px;
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  background: #d7263d;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 8px 28px rgba(215, 38, 61, 0.35);
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+.auth-btn-brand:hover { background: #e8354c; }
+.auth-btn-brand:active { transform: translateY(1px); }
+.auth-btn-brand:disabled { opacity: 0.6; cursor: default; }
+
+.auth-btn-ghost {
+  height: 50px;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ab-ink, #fdfcfb);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+.auth-btn-ghost:hover { background: rgba(255, 255, 255, 0.12); }
+.auth-btn-ghost:active { transform: translateY(1px); }
+
+.auth-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0 0 18px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+}
+.auth-back-btn:hover { color: var(--ab-ink, #fdfcfb); }
+
+/* ── Role picker ────────────────────────────────────────────────────────── */
+.auth-role-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.auth-role-btn:hover {
+  border-color: rgba(215, 38, 61, 0.7);
+  background: rgba(215, 38, 61, 0.1);
+}
+
+.auth-role-tag {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: rgba(215, 38, 61, 0.16);
+  color: #ff8285;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.auth-role-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ab-ink, #fdfcfb);
+}
+
+.auth-role-desc {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.auth-role-badge {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #ff8285;
+  background: rgba(215, 38, 61, 0.14);
+  padding: 4px 9px;
+  border-radius: 6px;
+}
+
+/* ── Narrow screens ─────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .auth-backdrop__topbar { padding: 20px 20px; }
+  .auth-backdrop__eyebrow { display: none; }
+  .auth-card-glass { padding: 28px 22px 24px; }
+  .auth-backdrop__tile { width: 42vw; height: 22vh; }
+}
+
+/* ── Form fields ────────────────────────────────────────────────────────── */
+/* Scoped to the ported design rather than reusing .auth-form's inputs: those
+   are sized for the old card (larger radii, app theme variables) and would
+   read as a different form language inside this one. */
+.auth-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.auth-field {
+  height: 46px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ab-ink, #fdfcfb);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.auth-field::placeholder {
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.auth-field:focus {
+  border-color: rgba(215, 38, 61, 0.8);
+  box-shadow: 0 0 0 3px rgba(215, 38, 61, 0.22);
+}
+
+.auth-footnote {
+  margin: 22px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  text-wrap: pretty;
+}
+
+.auth-footnote a {
+  color: #ff5a5f;
+  text-decoration: none;
+}
+
+.auth-footnote a:hover {
+  color: #ff8285;
+  text-decoration: underline;
+}

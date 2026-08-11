@@ -18,12 +18,14 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
     "@clerk/backend": "^2.33.1",
     "@types/ws": "^8.18.1",
     "bcryptjs": "^2.4.3",
     "cheerio": "^1.2.0",
     "compression": "^1.8.0",
     "cors": "^2.8.5",
+    "csv-parse": "^7.0.2",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
     "express-rate-limit": "^7.5.1",

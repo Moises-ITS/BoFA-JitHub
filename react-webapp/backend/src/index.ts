@@ -173,6 +173,15 @@ if (process.env.ENABLE_EDEN === "true") {
   console.log("[config] EDEN routes mounted at /api/eden (ENABLE_EDEN=true)")
 }
 
+// Jiti v2 — the Claude Haiku 4.5 NJIT-clubs chatbot. Flagged off by default:
+// it calls a metered external API and needs ANTHROPIC_API_KEY + Redis
+// configured before it's safe to expose. See src/services/jitiService.ts.
+if (process.env.JITI_ENABLED === "true") {
+  const jitiMod = await import("./routes/jiti.js")
+  app.use("/api/jiti", jitiMod.default)
+  console.log("[config] Jiti routes mounted at /api/jiti (JITI_ENABLED=true)")
+}
+
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API endpoint not found" })
 })

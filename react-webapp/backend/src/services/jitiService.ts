@@ -121,6 +121,23 @@ const DEVICE_ID_RE = /^[a-zA-Z0-9:_-]{1,128}$/
 // assistant) — matches the frozen API contract. Anything beyond is ignored,
 // not rejected.
 const MAX_HISTORY_ENTRIES = 6
+/**
+ * Per-entry character cap on client-supplied history.
+ *
+ * Capping the entry COUNT alone is not enough. History is whatever the client
+ * posts, and the only other bound was express.json's 100kb body limit — so a
+ * request could legitimately carry ~83KB of history. Measured against the live
+ * API that costs 2¢ versus ~0¢ for a normal question: a single user's five
+ * daily prompts could burn 10¢ of the 65¢ global ceiling, and roughly seven
+ * such users would take Jiti offline for everyone that day. The money is capped
+ * by the ledger; availability was not.
+ *
+ * 2,000 chars is well clear of anything real: questions are capped at 500, and
+ * a 300-token answer is roughly 1,200 characters. Entries are truncated rather
+ * than rejected — history is a convenience the client sends, so silently
+ * trimming it degrades gracefully instead of failing a legitimate turn.
+ */
+const MAX_HISTORY_ENTRY_CHARS = 2_000
 
 /** Pure and synchronous — runs before any Redis call, per the frozen 400 contract. */
 export function validateChatInput(body: unknown): ChatInput {
@@ -143,7 +160,7 @@ export function validateChatInput(body: unknown): ChatInput {
     const role = (entry as Record<string, unknown>).role
     const content = (entry as Record<string, unknown>).content
     if ((role === "user" || role === "assistant") && typeof content === "string") {
-      history.push({ role, content })
+      history.push({ role, content: content.slice(0, MAX_HISTORY_ENTRY_CHARS) })
     }
   }
 

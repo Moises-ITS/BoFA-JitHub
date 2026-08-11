@@ -172,7 +172,7 @@ function requireAnthropic(): Anthropic {
 
 export async function chat(userId: string, input: ChatInput, now: Date = new Date()): Promise<ChatResult> {
   const client = requireAnthropic()
-  await initCorpus()
+  await initCorpus(INSTRUCTIONS)
 
   const userReserve = await quota.reserveUserQuota(userId, now)
   if (!userReserve.ok) {
@@ -220,8 +220,14 @@ export async function chat(userId: string, input: ChatInput, now: Date = new Dat
     })
     await quota.refundUserQuota(userId, now)
     await quota.refundGlobalSpend(spendReserve.reserve, now)
-    const message = err instanceof Error ? err.message : "Jiti is temporarily unavailable"
-    throw new UpstreamFailureError(message)
+    // The upstream error text never reaches the client. Anthropic SDK messages
+    // can carry request IDs, model names, and internal detail; the house rule
+    // (see the terminal handler in index.ts) is that full detail stays in the
+    // logs and clients get a stable, generic shape.
+    console.error("[jiti][upstream] detail", {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    throw new UpstreamFailureError("Jiti couldn't reach the AI service — try again")
   }
 
   const latencyMs = Date.now() - startedAt
@@ -233,11 +239,39 @@ export async function chat(userId: string, input: ChatInput, now: Date = new Dat
     cacheWrite: usage.cache_creation_input_tokens ?? 0,
   })
 
-  await quota.reconcileGlobalSpend(actualCostCents(usage), spendReserve.reserve, now)
+  // Reconciliation is best-effort ON PURPOSE. At this point Anthropic has
+  // already run and billed us, and the answer is in hand. If Redis blips here,
+  // letting the exception propagate would 500 the request — the student loses
+  // both their quota slot AND the answer we already paid for, which is the
+  // worst possible outcome. A ledger that is off by the reserve/actual delta
+  // for one request self-corrects at midnight when the key expires; a
+  // discarded paid-for answer does not. Log loudly and return the answer.
+  try {
+    await quota.reconcileGlobalSpend(actualCostCents(usage), spendReserve.reserve, now)
+  } catch (err) {
+    console.error("[jiti][spend] reconcile failed — ledger left at the reserved estimate", {
+      reserveCents: spendReserve.reserve,
+      actualCents: Math.round(actualCostCents(usage)),
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
 
   return {
     answer: extractAnswerText(response) || "I don't have that information right now.",
     remainingToday: Math.max(0, userReserve.limit - userReserve.used),
     resetAt: userReserve.resetAt,
   }
+}
+
+/**
+ * Boot-time warm-up, called from index.ts when JITI_ENABLED=true.
+ *
+ * Exists so the corpus gate runs against the SAME assembled prefix the live
+ * request path sends (instructions + club index) from a single place — index.ts
+ * should not have to know that the cached block is two pieces glued together.
+ * Throws when the corpus falls below the cacheable floor, which fails the boot
+ * rather than the first student's question.
+ */
+export async function warmUpJiti(): Promise<void> {
+  await initCorpus(INSTRUCTIONS)
 }

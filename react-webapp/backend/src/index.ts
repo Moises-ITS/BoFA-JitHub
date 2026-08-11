@@ -180,6 +180,16 @@ if (process.env.JITI_ENABLED === "true") {
   const jitiMod = await import("./routes/jiti.js")
   app.use("/api/jiti", jitiMod.default)
   console.log("[config] Jiti routes mounted at /api/jiti (JITI_ENABLED=true)")
+
+  // Build and token-check the cached corpus HERE, at boot, rather than letting
+  // it happen lazily on the first student's question. The check throws when the
+  // system block falls under Anthropic's 4,096-token minimum cacheable prefix —
+  // a corpus that never caches pays the cache-WRITE price on every request and
+  // quietly burns the daily budget. Doing it at boot turns that into a failed
+  // deploy you notice immediately; doing it lazily turns it into a 500 served
+  // to one unlucky student and a log line nobody reads.
+  const { warmUpJiti } = await import("./services/jitiService.js")
+  await warmUpJiti()
 }
 
 app.use("/api", (_req, res) => {

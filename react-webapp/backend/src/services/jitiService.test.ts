@@ -270,4 +270,33 @@ describe('chat — reconcile', () => {
     // Reserved 3 cents up front, reconciled down to the ~0.13-cent actual cost.
     expect(fakeRedis._store.get(ledgerKey)).toBe(0)
   })
+
+  it('still returns the answer when reconciliation itself fails', async () => {
+    // Anthropic has already run and billed us by this point. If a transient
+    // Redis error during reconcile were allowed to propagate, the request would
+    // 500 — the student loses their quota slot AND the answer we already paid
+    // for, which is strictly worse than a ledger that is off by the
+    // reserve/actual delta until the key expires at midnight.
+    createMock.mockResolvedValueOnce(successResponse())
+    // incrBy is called twice per turn: once to RESERVE the flat estimate, then
+    // again to reconcile against real usage. Only the second one may fail here —
+    // a reserve failure is a different path that legitimately aborts the turn.
+    const realIncrBy = fakeRedis.incrBy.bind(fakeRedis)
+    let incrByCalls = 0
+    const incrBySpy = vi.spyOn(fakeRedis, 'incrBy').mockImplementation(async (key, n) => {
+      incrByCalls += 1
+      if (incrByCalls === 2) throw new Error('READONLY replica')
+      return realIncrBy(key, n)
+    })
+
+    const result = await jiti.chat(
+      'user-reconcile-fail',
+      { question: 'hi', deviceId: 'device-1', history: [] },
+      NOW,
+    )
+
+    expect(result.answer).toBeTruthy()
+    expect(incrByCalls).toBe(2) // proves the reconcile was actually attempted
+    incrBySpy.mockRestore()
+  })
 })

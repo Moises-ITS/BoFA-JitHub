@@ -179,11 +179,15 @@ async function countBlockTokens(block: string): Promise<number> {
  * Idempotent: safe to call on every request (jitiService does), only does
  * real work once.
  */
-export async function initCorpus(): Promise<void> {
+export async function initCorpus(systemPrefix = ""): Promise<void> {
   if (cachedBlock !== null) return
 
   const { block, rowsIn, rowsExcluded } = buildCorpus()
-  const tokenCount = await countBlockTokens(block)
+  // Count the EXACT string that becomes the cached prefix — instruction block
+  // included — not just the corpus. Anthropic applies the 4,096-token minimum
+  // to the whole cached text block, so counting a subset would answer a
+  // slightly different question than the one the cache actually asks.
+  const tokenCount = await countBlockTokens(systemPrefix + block)
   const pass = tokenCount >= MIN_CACHEABLE_TOKENS
 
   console.log("[jiti][corpus]", { rowsIn, rowsExcluded, tokenCount, minRequired: MIN_CACHEABLE_TOKENS, pass })

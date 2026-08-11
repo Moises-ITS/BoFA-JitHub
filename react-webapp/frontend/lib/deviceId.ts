@@ -1,10 +1,17 @@
 /**
- * deviceId.ts — mints and persists a stable per-browser identifier used by
- * the Jiti chat widget's daily quota. The backend rate-limits "by device"
- * (in addition to any account-level limits) so a student can't reset their
- * 5-prompt daily cap just by opening a new tab or logging in again in the
- * same browser — localStorage is shared across same-origin tabs, so one
- * minted id is inherently consistent everywhere this browser profile goes.
+ * deviceId.ts — mints and persists a stable per-browser identifier sent with
+ * every Jiti chat request.
+ *
+ * IT IS NOT WHAT ENFORCES THE QUOTA. The backend counts prompts against the
+ * authenticated user id (see backend src/services/jitiQuotaService.ts); the
+ * device id is recorded for analytics only and is never read for a quota or
+ * capacity decision. Keying the limit on the device would have been weaker,
+ * not stronger — a student would get a fresh 5 prompts per browser, and an
+ * incognito window would reset it at will.
+ *
+ * What it does give us: localStorage is shared across same-origin tabs, so the
+ * displayed counter stays consistent when a student opens the app in a second
+ * tab, which is the behaviour this id was asked for.
  *
  * Follows the same read → validate → write shape as the rest of the app's
  * localStorage usage (see lib/localCache.ts for why every call is wrapped).

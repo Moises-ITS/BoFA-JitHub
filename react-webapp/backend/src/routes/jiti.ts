@@ -6,14 +6,52 @@
  * translate their typed errors into the frozen API contract's status codes.
  */
 
-import { Router, Response } from "express"
+import { Router, Response, NextFunction } from "express"
+import { db } from "../config/postgres.js"
 import { requireAuth, AuthRequest } from "../middleware/auth.js"
 import * as jiti from "../services/jitiService.js"
 import { getUserQuotaStatus } from "../services/jitiQuotaService.js"
 
 const router = Router()
 
-router.post("/chat", requireAuth, async (req: AuthRequest, res: Response) => {
+/**
+ * Jiti is for the NJIT community — students, faculty, and staff. Guest accounts
+ * do not get it.
+ *
+ * This is also the load-bearing abuse control. Anyone can self-serve a guest
+ * account at POST /api/auth/register-custom with no email verification, so
+ * while guests could reach the chatbot, a single person could mint accounts in
+ * a loop and each one carried a fresh 5-prompt quota. Per-IP limits are the
+ * wrong tool on a campus that NATs its students behind a handful of addresses,
+ * and the per-user quota is by definition useless when users are free. Denying
+ * guests removes the incentive entirely: a farmed account grants nothing.
+ *
+ * The daily global spend ceiling still caps the bill; this caps who can spend it.
+ *
+ * Applied to /status as well as /chat, deliberately — the widget hides itself
+ * when /status is not a 200, so a guest never even sees the launcher rather
+ * than seeing one that errors on first use.
+ */
+async function denyGuests(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { rows } = await db.query("SELECT user_type FROM users WHERE id = $1", [req.userId])
+    if (rows[0]?.user_type === "guest") {
+      res.status(403).json({
+        error: "Jiti is available to NJIT students, faculty, and staff.",
+        code: "GUEST_NOT_ALLOWED",
+      })
+      return
+    }
+    next()
+  } catch (err) {
+    // Fail CLOSED. This gate is an abuse control, and a database hiccup must
+    // not become the way around it.
+    console.error("[jiti][auth] guest check failed:", err)
+    res.status(503).json({ error: "Jiti is unavailable right now", code: "UPSTREAM_FAILURE" })
+  }
+}
+
+router.post("/chat", requireAuth, denyGuests, async (req: AuthRequest, res: Response) => {
   let input: jiti.ChatInput
   try {
     input = jiti.validateChatInput(req.body)
@@ -58,7 +96,7 @@ router.post("/chat", requireAuth, async (req: AuthRequest, res: Response) => {
   }
 })
 
-router.get("/status", requireAuth, async (req: AuthRequest, res: Response) => {
+router.get("/status", requireAuth, denyGuests, async (req: AuthRequest, res: Response) => {
   try {
     res.json(await getUserQuotaStatus(req.userId!))
   } catch (err) {

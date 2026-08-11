@@ -10,9 +10,9 @@ import { useState, useEffect } from "react";
 import type { GraphNode, GraphLink } from "../types/graphNodes";
 import { TYPE_COLOR, TYPE_EMOJI, TYPE_BADGE, DETAIL_ICONS } from "../constants/maps";
 import { getNodeId } from "../utils/getNodeId";
-import { useAuth } from "../../../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
-const API = import.meta.env.VITE_API_URL ?? "";
+import { apiFetch } from "@/lib/api";
 
 type ConnStatus = "none" | "pending-sent" | "pending-received" | "connected";
 
@@ -80,9 +80,9 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode, o
       setConnStatus("none");
       return;
     }
-    fetch(`${API}/api/connections/status?userId=${node.id}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : { status: "none" })
-      .then(data => {
+    apiFetch<{ status?: string; direction?: string }>(`/api/connections/status?userId=${node.id}`, token ?? "")
+      .then(({ ok, data: body }) => {
+        const data = ok ? body : { status: "none" };
         if (data.status === "accepted") setConnStatus("connected");
         else if (data.status === "pending" && data.direction === "sent")     setConnStatus("pending-sent");
         else if (data.status === "pending" && data.direction === "received") setConnStatus("pending-received");
@@ -95,9 +95,8 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode, o
   // Fetch recommendations when viewing own node
   useEffect(() => {
     if (!isOwnNode || !user) { setRecs([]); return; }
-    fetch(`${API}/api/connections/recommendations`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : [])
-      .then((data: Recommendation[]) => setRecs(data))
+    apiFetch<Recommendation[]>("/api/connections/recommendations", token ?? "")
+      .then(({ ok, data }) => setRecs(ok && Array.isArray(data) ? data : []))
       .catch(() => setRecs([]));
   }, [isOwnNode, user]);
 
@@ -106,10 +105,9 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode, o
     if (!user) return;
     setConnLoading(true);
     try {
-      const res = await fetch(`${API}/api/connections/request`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ toUserId }),
+      const res = await apiFetch(`/api/connections/request`, token ?? "", {
+        method: "POST",
+        body: JSON.stringify({ toUserId }),
       });
       if (res.ok) {
         if (node?.id === toUserId) setConnStatus("pending-sent");
@@ -129,10 +127,9 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode, o
     if (!node || !user) return;
     setConnLoading(true);
     try {
-      const res = await fetch(`${API}/api/connections/accept`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ fromUserId: node.id }),
+      const res = await apiFetch(`/api/connections/accept`, token ?? "", {
+        method: "POST",
+        body: JSON.stringify({ fromUserId: node.id }),
       });
       if (res.ok) {
         setConnStatus("connected");
@@ -146,10 +143,9 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode, o
     if (!node || !user) return;
     setConnLoading(true);
     try {
-      await fetch(`${API}/api/connections/reject`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ fromUserId: node.id }),
+      await apiFetch(`/api/connections/reject`, token ?? "", {
+        method: "POST",
+        body: JSON.stringify({ fromUserId: node.id }),
       });
       setConnStatus("none");
     } catch { /* silent */ }
@@ -160,9 +156,8 @@ export default function SidePanel({ node, nodes, links, onClose, onSelectNode, o
     if (!node || !user) return;
     setConnLoading(true);
     try {
-      const res = await fetch(`${API}/api/connections/by-user/${node.id}`, {
-        method:  "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await apiFetch(`/api/connections/by-user/${node.id}`, token ?? "", {
+        method: "DELETE",
       });
       if (res.ok) {
         setConnStatus("none");

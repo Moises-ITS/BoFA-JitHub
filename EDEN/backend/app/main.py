@@ -1,3 +1,15 @@
+"""
+RETIRED — DO NOT DEPLOY. See EDEN/README.md.
+
+The events/RSVP/clubs API this service exposed now lives in the Express backend
+at react-webapp/backend/src/routes/events.ts, served under /api/events, /api/rsvp
+and /api/clubs against the same Postgres this service used. The frontend no
+longer calls port 8000 at all.
+
+Kept only as reference for the scoring/scraper code alongside it. Starting this
+process serves a second, divergent copy of the events API against live data.
+"""
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError

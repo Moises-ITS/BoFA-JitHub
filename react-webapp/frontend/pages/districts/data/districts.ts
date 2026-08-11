@@ -1,4 +1,10 @@
-export interface Opportunity {
+// NAMING: this was previously called `Opportunity`, which collided with the
+// entirely different job/internship `Opportunity` type in
+// pages/opportunities/types/opportunities.ts. Same name + different shape is a
+// trap for anyone using editor auto-import — you get the wrong one silently.
+// `ResearchOpportunity` says exactly what this is: a research-lab posting shown
+// on the Research Districts page.
+export interface ResearchOpportunity {
   readonly id: string
   readonly title: string
   readonly description: string
@@ -12,7 +18,7 @@ export interface District {
   readonly color: string
   readonly glowColor: string
   readonly description: string
-  readonly opportunities: readonly Opportunity[]
+  readonly opportunities: readonly ResearchOpportunity[]
   readonly position: { readonly x: number; readonly y: number }
   readonly size: { readonly w: number; readonly h: number }
   readonly rotation: number
@@ -252,7 +258,7 @@ export const DISTRICTS: readonly District[] = [
   },
 ] as const
 
-export const DIFFICULTY_COLORS: Record<Opportunity["difficulty"], string> = {
+export const DIFFICULTY_COLORS: Record<ResearchOpportunity["difficulty"], string> = {
   Beginner: "#10B981",
   Intermediate: "#F59E0B",
   Advanced: "#EF4444",

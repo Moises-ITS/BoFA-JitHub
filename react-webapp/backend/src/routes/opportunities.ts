@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import { db } from '../config/postgres.js';
-import { requireAuth, type AuthRequest } from '../middlewear/auth.js';
+import { requireAuth, type AuthRequest } from '../middleware/auth.js';
 import { geocode } from '../scrapers/geocoder.js';
 import {
   sanitizeOptionalHttpsUrl,
   sanitizeStringArray,
   sanitizeText,
   toBoundedPositiveInt,
-} from '../middlewear/security.js';
-import { apiWriteRateLimiter } from '../middlewear/authRateLimit.js';
+} from '../middleware/security.js';
+import { apiWriteRateLimiter } from '../middleware/authRateLimit.js';
 
 const router = Router();
 
@@ -40,6 +40,12 @@ router.get('/', async (req, res) => {
        WHERE ($1::text IS NULL OR type = $1)
          AND lat IS NOT NULL
          AND lng IS NOT NULL
+         -- Community-submitted only. The board is student-run; rows left over
+         -- from the retired job-board scrapers (source = arbeitnow / remotive /
+         -- curated) stay in the table but are no longer served. Filtering here
+         -- rather than deleting keeps the change reversible — drop this line to
+         -- bring the old listings back.
+         AND source = 'community'
        ORDER BY scraped_at DESC
        LIMIT $2`,
       [type && type !== 'all' ? type : null, limit],

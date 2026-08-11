@@ -16,6 +16,26 @@ node_modules/
 dist/
 build/
 
+# Secrets / credentials — session cookies and auth exports must NEVER be committed.
+# ig_cookies.json once held a live Instagram sessionid (removed + rotated); this
+# rule exists so the scraper's cookie export can't be re-committed by accident.
+ig_cookies.json
+*cookies*.json
+
 # Misc
 .DS_Store
 *.log
+
+# Local DB/PII snapshots taken before destructive maintenance (purges, reseeds).
+# These contain real user rows — names, emails, password hashes — and must never
+# be committed. Keep them locally for as long as you need to roll back.
+.backups/
+
+# Machine-local tooling state, not project config.
+.tokensave/
+.claude/settings.local.json
+
+.claude
+.backups
+shared
+claude.md

@@ -1,16 +1,10 @@
 import type { Opportunity, TrackedApplication, ApplicationStatus } from '../types/opportunities';
-import type { SortType, UrgencyFilter } from '../hooks/useOpportunities';
 import ListingCard from './ListingCard';
 
 interface Props {
   opportunities: Opportunity[];
   tracked: TrackedApplication[];
   activeId: string | null;
-  sortBy: SortType;
-  urgencyFilter: UrgencyFilter;
-  sortOptions: { key: SortType; label: string }[];
-  urgencyOptions: { key: UrgencyFilter; label: string }[];
-  insightCards: readonly { label: string; value: number; tone: 'blue' | 'red' | 'green' }[];
   selectedOpportunity: Opportunity | null;
   selectedTracked?: TrackedApplication;
   focusedLabel: string | null;
@@ -19,8 +13,6 @@ interface Props {
   onSelect: (id: string) => void;
   onDeselect: () => void;
   onClearFilters: () => void;
-  onSortChange: (value: SortType) => void;
-  onUrgencyChange: (value: UrgencyFilter) => void;
   onTrackStatus: (id: string, status: ApplicationStatus) => void;
   onUnsave: (id: string) => void;
 }
@@ -29,11 +21,6 @@ export default function SmartFeed({
   opportunities,
   tracked,
   activeId,
-  sortBy,
-  urgencyFilter,
-  sortOptions,
-  urgencyOptions,
-  insightCards,
   selectedOpportunity,
   selectedTracked,
   focusedLabel,
@@ -42,8 +29,6 @@ export default function SmartFeed({
   onSelect,
   onDeselect,
   onClearFilters,
-  onSortChange,
-  onUrgencyChange,
   onTrackStatus,
   onUnsave,
 }: Props) {
@@ -71,53 +56,6 @@ export default function SmartFeed({
         <div className="opportunities-feed-heading">Opportunity Feed</div>
         <div className="opportunities-feed-subtitle">
           {visibleOpportunities.length} opportunit{visibleOpportunities.length !== 1 ? 'ies' : 'y'} available
-        </div>
-
-        <div className="opportunities-insight-grid">
-          {insightCards.map((card) => (
-            <div key={card.label} className={`opportunities-insight-card ${card.tone}`}>
-              <div className="opportunities-insight-value">{card.value}</div>
-              <div className="opportunities-insight-label">{card.label}</div>
-            </div>
-          ))}
-        </div>
-
-        <div className="opportunities-control-row">
-          <div className="opportunities-control-group">
-            <label className="opportunities-control-label" htmlFor="opportunities-sort">
-              Sort
-            </label>
-            <select
-              id="opportunities-sort"
-              className="opportunities-control-select"
-              value={sortBy}
-              onChange={(event) => onSortChange(event.target.value as SortType)}
-            >
-              {sortOptions.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="opportunities-control-group">
-            <label className="opportunities-control-label" htmlFor="opportunities-urgency">
-              Urgency
-            </label>
-            <select
-              id="opportunities-urgency"
-              className="opportunities-control-select"
-              value={urgencyFilter}
-              onChange={(event) => onUrgencyChange(event.target.value as UrgencyFilter)}
-            >
-              {urgencyOptions.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
 
         {(hasActiveFilters || focusedLabel) && (
@@ -220,19 +158,35 @@ export default function SmartFeed({
 
       <div className="opportunities-feed-list">
         {visibleOpportunities.length === 0 ? (
+          // Two genuinely different empty states. The feed is now entirely
+          // student-submitted, so "nothing here yet" is a normal early state —
+          // showing "no matches, reset your filters" when no filters are set
+          // sends students hunting for a filter that isn't there.
           <div className="opportunities-empty-state">
             <div className="opportunities-empty-orb" />
-            <div className="opportunities-empty-title">No opportunities match these filters</div>
-            <div className="opportunities-empty-copy">
-              Try broadening your location, urgency, or type filters to bring the map back to life.
-            </div>
-            <button
-              type="button"
-              className="opportunities-empty-action"
-              onClick={onClearFilters}
-            >
-              Reset filters
-            </button>
+            {hasActiveFilters ? (
+              <>
+                <div className="opportunities-empty-title">No opportunities match these filters</div>
+                <div className="opportunities-empty-copy">
+                  Try broadening your location, major, or type filters to bring the map back to life.
+                </div>
+                <button
+                  type="button"
+                  className="opportunities-empty-action"
+                  onClick={onClearFilters}
+                >
+                  Reset filters
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="opportunities-empty-title">No opportunities posted yet</div>
+                <div className="opportunities-empty-copy">
+                  This board is built by students. Share a scholarship, internship, or
+                  networking event you know about and it shows up here for everyone.
+                </div>
+              </>
+            )}
           </div>
         ) : (
           visibleOpportunities.map(o => (

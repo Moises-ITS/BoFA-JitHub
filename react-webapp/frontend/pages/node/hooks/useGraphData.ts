@@ -7,7 +7,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { GraphNode, GraphLink } from "../types/graphNodes";
 import { mockNodes, mockLinks } from "../data/mockGraphData";
-import { useAuth } from "../../../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/lib/api";
 
 interface GraphData {
   nodes:   GraphNode[];
@@ -80,10 +81,9 @@ export function useGraphData(): GraphData {
   const fetchedForUserIdRef = useRef<string | null>(null);
 
   const fetchGraphData = useCallback(async (force = false) => {
-    const API = import.meta.env.VITE_API_URL;
     const userId = user?.id ?? null;
 
-    if (!API || !token) {
+    if (!token) {
       // Keep current graph state stable while auth/API initializes.
       // This avoids brief mock-data swaps when token availability changes.
       return;
@@ -101,15 +101,14 @@ export function useGraphData(): GraphData {
 
     if (!force) setLoading(true);
     try {
-      const headers = { Authorization: `Bearer ${token}` };
       const [nodesRes, linksRes] = await Promise.all([
-        fetch(`${API}/api/graph/nodes`, { headers }),
-        fetch(`${API}/api/graph/links`, { headers }),
+        apiFetch<unknown[]>("/api/graph/nodes", token),
+        apiFetch<unknown[]>("/api/graph/links", token),
       ]);
       if (!nodesRes.ok) throw new Error(`Nodes fetch failed: ${nodesRes.status}`);
       if (!linksRes.ok) throw new Error(`Links fetch failed: ${linksRes.status}`);
-      const nodesData = await nodesRes.json();
-      const linksData = await linksRes.json();
+      const nodesData = nodesRes.data;
+      const linksData = linksRes.data;
 
       const normalizedNodes = Array.isArray(nodesData)
         ? nodesData.map((node, index) => normalizeNode(node, index))
@@ -130,8 +129,10 @@ export function useGraphData(): GraphData {
       setError(message);
       fetchedForUserIdRef.current = null;
     } finally {
-      if (force) return;
-      setLoading(false);
+      // A `return` inside finally would swallow any in-flight exception
+      // (no-unsafe-finally) — the conditional expresses the same intent
+      // (background refreshes never toggle the loading flag) safely.
+      if (!force) setLoading(false);
     }
   }, [token, user?.id, nodes.length, links.length]);
 

@@ -139,7 +139,7 @@ VITE_API_URL=http://localhost:3001
 
 ```
 PORT=3001
-FRONTEND_URL=http://localhost:5175
+FRONTEND_URL=http://localhost:3000
 
 # Neo4j AuraDB
 NEO4J_URI=neo4j+s://<your-instance>.databases.neo4j.io
@@ -156,6 +156,7 @@ DB_NAME=<database>
 
 # Clerk auth
 CLERK_SECRET_KEY=sk_test_...
+# Optional — enables local token verification instead of a call to Clerk
 CLERK_JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
 <paste PEM key here>
 -----END PUBLIC KEY-----"
@@ -212,7 +213,7 @@ Open **Terminal 2** from the `frontend/` folder:
 npm run dev
 ```
 
-Open **http://localhost:5175** — you will be redirected to `/login`.
+Open **http://localhost:3000** — you will be redirected to `/login`.
 
 ---
 
@@ -222,7 +223,7 @@ Open **http://localhost:5175** — you will be redirected to `/login`.
 
 | Command           | What it does                                   |
 |-------------------|------------------------------------------------|
-| `npm run dev`     | Start Vite dev server on http://localhost:5175 |
+| `npm run dev`     | Start Vite dev server on http://localhost:3000 |
 | `npm run build`   | Compile to `dist/` for production              |
 | `npm run preview` | Serve the production build locally             |
 | `npm run lint`    | Run ESLint                                     |
@@ -303,16 +304,17 @@ Open **http://localhost:5175** — you will be redirected to `/login`.
 
 | Variable       | Required | Local Value             | Description                    |
 |----------------|----------|-------------------------|--------------------------------|
-| `VITE_API_URL` | Yes      | `http://localhost:3001` | Backend base URL for API calls |
+| `VITE_API_URL` | Yes      | `http://localhost:3001` | Backend base URL for API calls. Must be the **backend** port (3001), never the Vite dev port — pointing it at the frontend makes every API call return `index.html` as a silent 200 |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Yes | `pk_test_...` | Clerk frontend key, passed to `<ClerkProvider>`. Public by design (ships in the browser bundle). This is NOT `CLERK_SECRET_KEY` or `CLERK_JWT_PUBLIC_KEY`, which are backend-only |
 
 ### `backend/.env`
 
 | Variable         | Required | Description                                          |
 |------------------|----------|------------------------------------------------------|
 | `PORT`           | No       | Express listen port. Defaults to `3001`              |
-| `FRONTEND_URL`   | Yes      | CORS allowed origin. `http://localhost:5175` locally |
-| `CLERK_SECRET_KEY` | Yes    | Clerk backend secret key                             |
-| `CLERK_JWT_PUBLIC_KEY` | Yes | Clerk JWT public key PEM (quoted, multi-line)      |
+| `FRONTEND_URL`   | Yes      | CORS allowed origin. `http://localhost:3000` locally |
+| `CLERK_SECRET_KEY` | Yes    | Clerk backend secret key (`sk_...`)                  |
+| `CLERK_JWT_PUBLIC_KEY` | No  | PEM (quoted, multi-line). Verifies session tokens locally; without it `utils/clerkToken.ts` falls back to `CLERK_SECRET_KEY` + a network call to Clerk. Recommended in production. Never put `pk_...`/`sk_...` here — those are rejected silently |
 | `NEO4J_URI`      | Yes      | Neo4j AuraDB connection URI (`neo4j+s://...`)        |
 | `NEO4J_USER`     | Yes      | Neo4j username                                       |
 | `NEO4J_PASSWORD` | Yes      | Neo4j password                                       |

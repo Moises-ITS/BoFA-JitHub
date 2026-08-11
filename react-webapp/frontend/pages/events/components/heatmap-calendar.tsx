@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { X, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
-const API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
+import { EVENTS_API_BASE_URL as API } from "@/lib/api";
+import { fmt12 } from "../utils/eventFormatting";
 const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const times = ["8am", "10am", "12pm", "2pm", "4pm", "6pm", "8pm", "10pm"];
 const timeHours = [8, 10, 12, 14, 16, 18, 20, 22];
@@ -14,14 +15,6 @@ interface SlotEvent {
   club_name: string;
   start_time: string | null;
   post_url: string | null;
-}
-
-function fmt12(time: string | null): string {
-  if (!time) return "";
-  const [h, m] = time.split(":").map(Number);
-  const period = h >= 12 ? "pm" : "am";
-  const hour = h % 12 || 12;
-  return m === 0 ? `${hour}${period}` : `${hour}:${String(m).padStart(2, "0")}${period}`;
 }
 
 function getMondayOfWeek(d: Date): string {

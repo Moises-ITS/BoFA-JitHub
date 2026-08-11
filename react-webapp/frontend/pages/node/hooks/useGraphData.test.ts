@@ -1,14 +1,32 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // hooks/useGraphData.test.ts
+//
+// Tests the hook's CURRENT contract:
+//  - it fetches only once an auth token exists (useAuth is mocked below —
+//    pulling in the real AuthProvider would drag Clerk into a unit test)
+//  - requests carry the Bearer token and hit the canonical API_BASE_URL
+//  - on any failure it falls back to mock data and surfaces the error
 // ─────────────────────────────────────────────────────────────────────────────
-
-//Test Data
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { useGraphData } from './useGraphData'
 import { mockNodes, mockLinks } from '../data/mockGraphData'
+import { API_BASE_URL } from '@/lib/api'
 import type { GraphNode, GraphLink } from '../types/graphNodes'
+
+// ── Auth mock ─────────────────────────────────────────────────────────────────
+// The hook only reads { token, user } from useAuth. A mutable holder lets each
+// test flip auth state without re-mocking the module.
+
+const authState: { token: string | null; user: { id: string } | null } = {
+  token: 'test-token',
+  user: { id: 'user-1' },
+}
+
+vi.mock('@/context/AuthContext', () => ({
+  useAuth: () => authState,
+}))
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -24,7 +42,7 @@ const apiLinks: GraphLink[] = [
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function mockFetchSuccess() {
-  vi.stubGlobal('fetch', vi.fn((url: string) => {
+  const fetchMock = vi.fn((url: string) => {
     if (url.endsWith('/api/graph/nodes')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(apiNodes) })
     }
@@ -32,7 +50,9 @@ function mockFetchSuccess() {
       return Promise.resolve({ ok: true, json: () => Promise.resolve(apiLinks) })
     }
     return Promise.reject(new Error(`Unexpected URL: ${url}`))
-  }))
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
 }
 
 function mockFetchFailure() {
@@ -49,7 +69,8 @@ function mockFetchNonOk() {
 
 describe('useGraphData', () => {
   beforeEach(() => {
-    vi.unstubAllEnvs()
+    authState.token = 'test-token'
+    authState.user = { id: 'user-1' }
     vi.unstubAllGlobals()
   })
 
@@ -57,24 +78,26 @@ describe('useGraphData', () => {
     vi.restoreAllMocks()
   })
 
-  // ── No API URL ──────────────────────────────────────────────────────────────
+  // ── No auth token yet ───────────────────────────────────────────────────────
 
-  it('uses mock data immediately when VITE_API_URL is not set', async () => {
-    vi.stubEnv('VITE_API_URL', '')
+  it('does not fetch until an auth token is available', async () => {
+    authState.token = null
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
 
     const { result } = renderHook(() => useGraphData())
 
-    await waitFor(() => expect(result.current.loading).toBe(false))
-
-    expect(result.current.nodes).toEqual(mockNodes)
-    expect(result.current.links).toEqual(mockLinks)
-    expect(result.current.error).toBeNull()
+    // The hook idles (stays in loading) rather than swapping in mock data —
+    // this prevents a flash of fake nodes while Clerk is still resolving.
+    await waitFor(() => expect(fetchMock).not.toHaveBeenCalled())
+    expect(result.current.loading).toBe(true)
+    expect(result.current.nodes).toEqual([])
+    expect(result.current.links).toEqual([])
   })
 
   // ── Successful API fetch ────────────────────────────────────────────────────
 
   it('returns nodes and links from the backend when API succeeds', async () => {
-    vi.stubEnv('VITE_API_URL', 'http://localhost:3001')
     mockFetchSuccess()
 
     const { result } = renderHook(() => useGraphData())
@@ -88,25 +111,26 @@ describe('useGraphData', () => {
     expect(result.current.error).toBeNull()
   })
 
-  it('calls the correct API endpoints', async () => {
-    vi.stubEnv('VITE_API_URL', 'http://localhost:3001')
-    const fetchMock = vi.fn((url: string) => {
-      if (url.includes('nodes')) return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
-    })
-    vi.stubGlobal('fetch', fetchMock)
+  it('calls the canonical endpoints with the Bearer token', async () => {
+    const fetchMock = mockFetchSuccess()
 
     const { result } = renderHook(() => useGraphData())
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3001/api/graph/nodes')
-    expect(fetchMock).toHaveBeenCalledWith('http://localhost:3001/api/graph/links')
+    // The hook goes through the shared apiFetch, which adds Content-Type and
+    // an abort signal on top of the Bearer header — assert on what matters
+    // (URL + auth) rather than pinning the whole init object, so helper
+    // internals can evolve without breaking this test.
+    const expectedInit = expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+    })
+    expect(fetchMock).toHaveBeenCalledWith(`${API_BASE_URL}/api/graph/nodes`, expectedInit)
+    expect(fetchMock).toHaveBeenCalledWith(`${API_BASE_URL}/api/graph/links`, expectedInit)
   })
 
   // ── Network failure fallback ────────────────────────────────────────────────
 
   it('falls back to mock data and sets error when fetch throws', async () => {
-    vi.stubEnv('VITE_API_URL', 'http://localhost:3001')
     mockFetchFailure()
 
     const { result } = renderHook(() => useGraphData())
@@ -119,7 +143,6 @@ describe('useGraphData', () => {
   })
 
   it('falls back to mock data and sets error when nodes endpoint returns non-ok status', async () => {
-    vi.stubEnv('VITE_API_URL', 'http://localhost:3001')
     mockFetchNonOk()
 
     const { result } = renderHook(() => useGraphData())
@@ -134,7 +157,6 @@ describe('useGraphData', () => {
   // ── Loading state ───────────────────────────────────────────────────────────
 
   it('starts in loading state and finishes loading after fetch completes', async () => {
-    vi.stubEnv('VITE_API_URL', 'http://localhost:3001')
     mockFetchSuccess()
 
     const { result } = renderHook(() => useGraphData())
@@ -145,7 +167,6 @@ describe('useGraphData', () => {
   })
 
   it('finishes loading even when backend is unreachable', async () => {
-    vi.stubEnv('VITE_API_URL', 'http://localhost:3001')
     mockFetchFailure()
 
     const { result } = renderHook(() => useGraphData())

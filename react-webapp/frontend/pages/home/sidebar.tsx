@@ -1,26 +1,31 @@
 import { NavLink } from "react-router-dom";
 import { motion } from "motion/react";
-import { Home, Calendar, Briefcase, Network, User, Bot, Activity, Flag } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
+import { Home, Calendar, Users, Briefcase, Network, User, Flag } from "lucide-react";
 
 const baseNavItems = [
   { icon: Home, label: "Home", path: "/home" },
   { icon: Calendar, label: "Events", path: "/events" },
+  // Directly below Events and above Opportunities (AC 1). Active-tab highlight
+  // and styling come from the shared .map below — nothing else in this file
+  // needed to change (AC 3).
+  { icon: Users, label: "Organizations", path: "/organizations" },
   { icon: Briefcase, label: "Opportunities", path: "/opportunities" },
   // Quarantined: hide the Research section button until the section is ready for users.
   // { icon: FlaskConical, label: "Research", path: "/research" },
   { icon: Network, label: "Campus Network", path: "/network" },
-  { icon: Bot, label: "Sandbox", path: "/sandbox" },
+  // Removed: the /sandbox Jiti AI chat is being rebuilt from scratch — see
+  // docs/JITI-SANDBOX.md for the full documentation of the previous system.
   { icon: User, label: "Profile", path: "/profile" },
   { icon: Flag, label: "Report Issue", path: "/report-issue" },
 ];
 
 
 export function Sidebar() {
-  const { user } = useAuth();
-  const navItems = user?.is_eboard
-    ? [...baseNavItems, { icon: Activity, label: "EDEN", path: "/eden" }]
-    : baseNavItems;
+  // EDEN (e-board analytics) is PARKED for v2 — see pages/eden/README.md.
+  // An e-board-only link used to render here (via useAuth().user.is_eboard),
+  // but no /eden route exists, so clicking it silently bounced users to the
+  // landing page. Don't show a door that opens onto a wall.
+  const navItems = baseNavItems;
   return (
     <aside
       className="fixed left-0 top-0 h-screen w-20 flex flex-col items-center py-6 z-50"

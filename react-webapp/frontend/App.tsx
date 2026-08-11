@@ -11,6 +11,9 @@ import Home from "./pages/home/Home"
 import ReportIssuePage from "./pages/home/ReportIssuePage"
 import Profile from "./pages/profile/profile"
 import EventsPage from "./pages/events/EventsPage"
+// Eager, like Events: the directory is a primary nav destination with no heavy
+// dependencies, so a lazy chunk would buy nothing but a loading flash.
+import OrganizationsPage from "./pages/organizations/OrganizationsPage"
 import OpportunitiesPage from "./pages/opportunities/OpportunitiesPage"
 import LandingPage from "./pages/landing/LandingPage"
 import ProtectedRoute from "./components/ProtectedRoute"
@@ -19,12 +22,17 @@ const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 
 // Lazy-load heavy pages to keep the initial bundle small.
 const CampusGraph = lazy(() => import("./pages/node/CampusGraph"))
-const SandboxPage = lazy(() => import("./pages/sandbox/SandboxPage"))
+// NOTE: the /sandbox Jiti AI chat page was removed 2026-07 for a ground-up
+// rebuild. The full system documentation (model, tool loop, prompts, quota,
+// endpoints) is preserved in docs/JITI-SANDBOX.md; the EDEN FastAPI engine
+// (/sandbox/chat/stream) and /api/chat-memory remain live for the rebuild.
 const DigitalTwin = lazy(() => import("./pages/map/DigitalTwin"))
 const CampusView = lazy(() => import("./pages/campus/CampusView"))
 const GlbInspector = lazy(() => import("./pages/campus/GlbInspector"))
 const ResearchDistricts = lazy(() => import("./pages/districts/ResearchDistricts"))
-const EdenPage = lazy(() => import("./pages/eden/EdenPage"))
+// NOTE: pages/eden (EdenPage/EdenTabs) is currently unrouted — its lazy import
+// was removed here when the route was dropped. The files remain in case the
+// section returns; delete them if that decision becomes permanent.
 
 function MissingClerkConfigScreen() {
   return (
@@ -151,19 +159,29 @@ export default function App() {
                   </Suspense>
                 </ErrorBoundary>
               } />
-              <Route path="/inspect" element={
-                <ErrorBoundary>
-                  <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0f1117", color:"#718096" }}>Loading Inspector…</div>}>
-                    <GlbInspector />
-                  </Suspense>
-                </ErrorBoundary>
-              } />
+              {/* /inspect is a 3D-model debugging tool for developers, not a student
+                  feature. Gating it behind import.meta.env.DEV means Vite strips the
+                  route (and its lazy chunk) from production builds entirely — students
+                  never download it, and it can't leak internal model data. */}
+              {import.meta.env.DEV && (
+                <Route path="/inspect" element={
+                  <ErrorBoundary>
+                    <Suspense fallback={<div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0f1117", color:"#718096" }}>Loading Inspector…</div>}>
+                      <GlbInspector />
+                    </Suspense>
+                  </ErrorBoundary>
+                } />
+              )}
 
               <Route element={<Layout />}>
                 <Route path="/home" element={<Home />} />
                 <Route path="/report-issue" element={<ReportIssuePage />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/events" element={<EventsPage />} />
+                {/* Inside this block on purpose: it inherits the enclosing
+                    ProtectedRoute, so the directory is signed-in-only like every
+                    other nav destination (Resolution R1 / AC 2). */}
+                <Route path="/organizations" element={<OrganizationsPage />} />
                 <Route path="/opportunities" element={<OpportunitiesPage />} />
                 <Route path="/research" element={
                   <ErrorBoundary>
@@ -197,20 +215,6 @@ export default function App() {
                         <CampusGraph />
                       </Suspense>
                     </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/sandbox"
-                  element={
-                    <Suspense
-                      fallback={
-                        <div style={{ color: "var(--text-muted)", padding: "40px" }}>
-                          Loading...
-                        </div>
-                      }
-                    >
-                      <SandboxPage />
-                    </Suspense>
                   }
                 />
               </Route>

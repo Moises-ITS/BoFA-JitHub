@@ -1,163 +1,108 @@
-import { useEffect } from "react"
-import { useNavigate, Link } from "react-router-dom"
-import { motion } from "motion/react"
-import { useAuth } from "../../context/AuthContext"
+/**
+ * LandingPage — steps 1 and 2 of the "Jithub Auth" design.
+ *
+ * The design models the whole signed-out experience as three steps inside one
+ * glass card: entry (sign up / sign in) → role (student / professor / guest) →
+ * form. Steps 1 and 2 live here; step 3 is /login/:role and /signup/:role,
+ * which render the SAME card over the SAME backdrop so the transition reads as
+ * one continuous flow rather than a page change.
+ *
+ * Step 3 is deliberately NOT the design's mock form: students authenticate
+ * through Clerk's hosted widget and professors/guests through our own
+ * credential endpoints. Those pages wear the design; they don't reimplement it.
+ */
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
+import AuthBackdrop from "@/pages/auth/AuthBackdrop";
+import "@/pages/auth/AuthBackdrop.css";
 
-const pills = ["Graph Networking", "Opportunity Discovery", "Campus Connect"]
+type Role = "student" | "professor" | "guest";
+type Step = "entry" | "role";
+type Mode = "login" | "signup";
+
+const ROLES: { tag: string; label: string; desc: string; value: Role }[] = [
+  { tag: "STU", label: "Student", desc: "Current NJIT undergrad or grad student", value: "student" },
+  { tag: "PRF", label: "Professor", desc: "Faculty, instructors, and staff", value: "professor" },
+  { tag: "GST", label: "Guest", desc: "Alumni, visitors, and campus partners", value: "guest" },
+];
 
 export default function LandingPage() {
-  const { user, loading } = useAuth()
-  const navigate = useNavigate()
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  const [step, setStep] = useState<Step>("entry");
+  const [mode, setMode] = useState<Mode>("login");
 
   useEffect(() => {
     if (!loading && user) {
-      navigate("/home", { replace: true })
+      navigate("/home", { replace: true });
     }
-  }, [user, loading, navigate])
+  }, [user, loading, navigate]);
+
+  function pick(role: Role) {
+    navigate(mode === "login" ? `/login/${role}` : `/signup/${role}`);
+  }
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: "var(--hero-gradient)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontFamily: "'Inter', sans-serif",
-      position: "relative",
-      overflow: "hidden",
-    }}>
-      {/* Radial glow */}
-      <div style={{
-        position: "absolute",
-        inset: 0,
-        background: "radial-gradient(ellipse 80% 60% at 50% 40%, rgba(215,25,32,0.18) 0%, transparent 70%)",
-        pointerEvents: "none",
-      }} />
-
-      <div style={{ textAlign: "center", position: "relative", zIndex: 1, padding: "0 24px" }}>
-        {/* Logo */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          style={{ marginBottom: 32 }}
-        >
-          <div style={{
-            display: "inline-flex",
-            width: 72,
-            height: 72,
-            borderRadius: 20,
-            background: "var(--brand-gradient)",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "var(--shadow-brand)",
-          }}>
-            <span style={{ color: "#fff", fontWeight: 700, fontSize: 22 }}>JH</span>
-          </div>
-        </motion.div>
-
-        {/* Headline */}
-        <motion.h1
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.15 }}
-          style={{
-            fontSize: "clamp(2.5rem, 6vw, 4rem)",
-            fontWeight: 700,
-            marginBottom: 16,
-            background: "linear-gradient(135deg, var(--text-primary) 40%, var(--text-muted))",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            lineHeight: 1.1,
-          }}
-        >
-          JitHub
-        </motion.h1>
-
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.25 }}
-          style={{
-            fontSize: "1.25rem",
-            color: "var(--text-secondary)",
-            marginBottom: 40,
-          }}
-        >
-          Your NJIT network, visualized.
-        </motion.p>
-
-        {/* Feature pills */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.35 }}
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            justifyContent: "center",
-            gap: 10,
-            marginBottom: 48,
-          }}
-        >
-          {pills.map((pill) => (
-            <span
-              key={pill}
-              style={{
-                padding: "6px 16px",
-                borderRadius: 999,
-                border: "1px solid var(--border-default)",
-                background: "rgba(255,255,255,0.04)",
-                color: "var(--text-muted)",
-                fontSize: "0.85rem",
-              }}
-            >
-              {pill}
-            </span>
-          ))}
-        </motion.div>
-
-        {/* CTAs */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.45 }}
-          style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}
-        >
-          <Link
-            to="/login"
-            style={{
-              padding: "12px 32px",
-              borderRadius: 10,
-              background: "var(--brand-gradient)",
-              color: "#fff",
-              fontWeight: 600,
-              fontSize: "0.95rem",
-              textDecoration: "none",
-              boxShadow: "var(--shadow-brand)",
-              transition: "opacity 0.2s",
-            }}
-          >
-            Sign In
-          </Link>
-          <Link
-            to="/signup"
-            style={{
-              padding: "12px 32px",
-              borderRadius: 10,
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid var(--border-default)",
-              color: "var(--text-primary)",
-              fontWeight: 600,
-              fontSize: "0.95rem",
-              textDecoration: "none",
-              transition: "background 0.2s",
-            }}
-          >
-            Create Account
-          </Link>
-        </motion.div>
+    <AuthBackdrop>
+      {/* --centered is scoped to the landing card on purpose. The same
+          .auth-card-glass is worn by /login/:role and /signup/:role, whose
+          headings sit above left-aligned form fields — centering those would
+          leave the label and its input disagreeing about where the eye starts. */}
+      <div className="auth-card-glass auth-card-glass--centered">
+        {step === "entry" ? (
+          <>
+            <h1>Your Campus in One place</h1>
+            <p className="auth-card-sub">
+              Everything happening at NJIT.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <button
+                type="button"
+                className="auth-btn-brand"
+                onClick={() => { setMode("signup"); setStep("role"); }}
+              >
+                Sign up
+              </button>
+              <button
+                type="button"
+                className="auth-btn-ghost"
+                onClick={() => { setMode("login"); setStep("role"); }}
+              >
+                Sign in
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <button type="button" className="auth-back-btn" onClick={() => setStep("entry")}>
+              ← Back
+            </button>
+            <h1>Who are you?</h1>
+            <p className="auth-card-sub" style={{ marginBottom: 24 }}>
+              {mode === "signup"
+                ? "Pick how you’ll join the network — it shapes your account."
+                : "Tell us how you signed up so we can find your account."}
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {ROLES.map((role) => (
+                <button
+                  key={role.value}
+                  type="button"
+                  className="auth-role-btn"
+                  onClick={() => pick(role.value)}
+                >
+                  <span className="auth-role-tag">{role.tag}</span>
+                  <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span className="auth-role-label">{role.label}</span>
+                    <span className="auth-role-desc">{role.desc}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
-    </div>
-  )
+    </AuthBackdrop>
+  );
 }

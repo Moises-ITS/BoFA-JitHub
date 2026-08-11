@@ -3,6 +3,9 @@ import path from "path"
 import dotenv from "dotenv"
 import fs from "fs"
 import type { CorsOptions } from "cors"
+// Type-only imports are erased at compile time, so they can't defeat the
+// "dotenv must run before any env-reading module" ordering below.
+import type { Request, Response, NextFunction } from "express"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -34,13 +37,18 @@ const [
   oppMod,
   chatMemMod,
   buildingsMod,
+  eventsMod,
+  orgsMod,
+  { attachEventsSocket, closeEventsSocket },
   { startScheduler },
   { runMigrations },
+  { syncClubTypes },
   { ensureNodeIds },
   { apiGlobalRateLimiter, apiWriteRateLimiter },
   { sanitizeRequestInputs },
   { observeApiTraffic },
   { enforceHttps },
+  { isAllowedCorsOrigin },
 ] = await Promise.all([
   import("express"),
   import("cors"),
@@ -55,13 +63,18 @@ const [
   import("./routes/opportunities.js"),
   import("./routes/chatMemory.js"),
   import("./routes/buildings.js"),
+  import("./routes/events.js"),
+  import("./routes/organizations.js"),
+  import("./realtime/eventsSocket.js"),
   import("./scrapers/runner.js"),
   import("./db/migrate.js"),
+  import("./services/clubTypeSync.js"),
   import("./services/graphService.js"),
-  import("./middlewear/authRateLimit.js"),
-  import("./middlewear/security.js"),
-  import("./middlewear/observability.js"),
-  import("./middlewear/transportSecurity.js"),
+  import("./middleware/authRateLimit.js"),
+  import("./middleware/security.js"),
+  import("./middleware/observability.js"),
+  import("./middleware/transportSecurity.js"),
+  import("./utils/origins.js"),
 ])
 
 try {
@@ -70,6 +83,19 @@ try {
 } catch (err: unknown) {
   const msg = err instanceof Error ? err.message : String(err)
   console.error("Startup migration/setup failed:", msg)
+}
+
+// Reconcile clubs.type against the name classifier. Must run AFTER
+// runMigrations() (it writes to the column migration 015 adds) and is awaited so
+// the directory is correct before the first request. Its own try/catch: a
+// classifier or DB hiccup here must not stop the backend from booting — the
+// read-time fallback in serializeClub keeps every API response correct anyway.
+// Disable with CLUB_TYPE_SYNC=off; see services/clubTypeSync.ts.
+try {
+  await syncClubTypes()
+} catch (err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err)
+  console.error("[orgs][type-sync] failed (continuing boot):", msg)
 }
 
 // Run the opportunities migration on startup
@@ -99,108 +125,18 @@ const app = express()
 app.disable("x-powered-by")
 app.set("trust proxy", 1)
 
-function normalizeOrigin(origin: string): string | null {
-  try {
-    const parsed = new URL(origin)
-    return `${parsed.protocol}//${parsed.host}`.toLowerCase()
-  } catch {
-    return null
-  }
-}
-
-function extractVercelLabel(value: string): string | null {
-  const normalized = normalizeOrigin(value)
-  if (!normalized) return null
-  try {
-    const host = new URL(normalized).hostname.toLowerCase()
-    if (!host.endsWith(".vercel.app")) return null
-    return host.slice(0, -".vercel.app".length)
-  } catch {
-    return null
-  }
-}
-
-function inferVercelProject(): string {
-  const explicit =
-    (process.env.FRONTEND_VERCEL_PROJECT ?? process.env.VERCEL_PROJECT_NAME ?? "")
-      .trim()
-      .toLowerCase()
-  if (explicit) return explicit
-
-  const labels = [
-    process.env.FRONTEND_URL,
-    process.env.FRONTEND_ORIGIN,
-    process.env.FRONTEND_URLS,
-  ]
-    .filter(Boolean)
-    .flatMap((value) => (value as string).split(","))
-    .map((value) => value.trim())
-    .map((value) => extractVercelLabel(value))
-    .filter((label): label is string => Boolean(label))
-
-  if (labels.length === 0) return ""
-  labels.sort((a, b) => a.length - b.length)
-  return labels[0]
-}
-
-const vercelProject = inferVercelProject()
-const vercelTeam =
-  (process.env.FRONTEND_VERCEL_TEAM ?? process.env.VERCEL_TEAM_SLUG ?? "")
-    .trim()
-    .toLowerCase()
-
-function isAllowedVercelOrigin(origin: string): boolean {
-  if (!vercelProject) return false
-
-  let parsed: URL
-  try {
-    parsed = new URL(origin)
-  } catch {
-    return false
-  }
-
-  if (parsed.protocol !== "https:") return false
-
-  const host = parsed.hostname.toLowerCase()
-  if (!host.endsWith(".vercel.app")) return false
-
-  if (host === `${vercelProject}.vercel.app`) return true
-  if (!host.startsWith(`${vercelProject}-`)) return false
-  if (!vercelTeam) return true
-
-  return host.endsWith(`-${vercelTeam}.vercel.app`)
-}
-
-const configuredOrigins = [
-  process.env.FRONTEND_URL,
-  process.env.FRONTEND_ORIGIN,
-  process.env.FRONTEND_URLS,
-]
-  .filter(Boolean)
-  .flatMap((value) => (value as string).split(","))
-  .map((origin) => origin.trim())
-  .map((origin) => normalizeOrigin(origin) ?? origin.toLowerCase())
-  .filter(Boolean)
-
-const allowedOrigins = new Set<string>([
-  ...configuredOrigins,
-  "http://localhost:5175",
-  "http://127.0.0.1:5175",
-])
-
+// Origin trust rules are shared with Clerk token verification (see
+// utils/origins.ts) — they used to be duplicated here and could drift.
 const corsOptions: CorsOptions = {
   origin(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     if (!origin) {
+      callback(null, true) // same-origin / curl / server-to-server: no Origin header
+      return
+    }
+    if (isAllowedCorsOrigin(origin)) {
       callback(null, true)
       return
     }
-
-    const normalized = normalizeOrigin(origin) ?? origin.toLowerCase()
-    if (allowedOrigins.has(normalized) || isAllowedVercelOrigin(origin)) {
-      callback(null, true)
-      return
-    }
-
     callback(new Error(`CORS blocked for origin ${origin}`))
   },
   credentials: true,
@@ -233,6 +169,51 @@ app.use("/api/connections", connMod.default)
 app.use("/api/opportunities", oppMod.default)
 app.use("/api/chat-memory", chatMemMod.default)
 app.use("/api/buildings", buildingsMod.default)
+
+// Campus events: the feed, student submissions, RSVPs, and the club directory.
+// Mounted at /api (not /api/events) because this one router owns three sibling
+// path families the frontend already calls: /api/events/*, /api/rsvp/*, and
+// /api/clubs. Previously served by the standalone EDEN FastAPI service on port
+// 8000, which read this same database; see services/eventsService.ts.
+app.use("/api", eventsMod.default)
+
+// Organizations directory (clubs, sororities, fraternities) + per-user stars.
+// Its own mount point rather than a new family inside the events router above,
+// which owns bare /api and would make /api/clubs/* ordering fragile.
+app.use("/api/organizations", orgsMod.default)
+
+// EDEN e-board analytics — PARKED for v2/v3, mounted only behind an explicit
+// flag. History: these routes were previously wired only in an orphaned second
+// entry point (server.ts, now deleted) and thus never actually served, while
+// the frontend still linked to them. The flag keeps the revival a one-env-var
+// operation without shipping half-finished endpoints to 2000 students today.
+// (The EDEN Pool object in config/postgres.ts is constructed either way but
+// never opens a connection unless these routes actually run a query.)
+if (process.env.ENABLE_EDEN === "true") {
+  const edenMod = await import("./routes/eden.js")
+  app.use("/api/eden", edenMod.default)
+  console.log("[config] EDEN routes mounted at /api/eden (ENABLE_EDEN=true)")
+}
+
+// Jiti v2 — the Claude Haiku 4.5 NJIT-clubs chatbot. Flagged off by default:
+// it calls a metered external API and needs ANTHROPIC_API_KEY + Redis
+// configured before it's safe to expose. See src/services/jitiService.ts.
+if (process.env.JITI_ENABLED === "true") {
+  const jitiMod = await import("./routes/jiti.js")
+  app.use("/api/jiti", jitiMod.default)
+  console.log("[config] Jiti routes mounted at /api/jiti (JITI_ENABLED=true)")
+
+  // Build and token-check the cached corpus HERE, at boot, rather than letting
+  // it happen lazily on the first student's question. The check throws when the
+  // system block falls under Anthropic's 4,096-token minimum cacheable prefix —
+  // a corpus that never caches pays the cache-WRITE price on every request and
+  // quietly burns the daily budget. Doing it at boot turns that into a failed
+  // deploy you notice immediately; doing it lazily turns it into a 500 served
+  // to one unlucky student and a log line nobody reads.
+  const { warmUpJiti } = await import("./services/jitiService.js")
+  await warmUpJiti()
+}
+
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API endpoint not found" })
 })
@@ -241,9 +222,79 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" })
 })
 
+// Terminal error handler — MUST be registered after every route. Without it,
+// anything thrown outside a route's own try/catch (e.g. the CORS callback's
+// Error, or a bug in middleware) falls to Express's default handler, which
+// prints an HTML stack trace to the client. Full details stay in server logs;
+// clients get a stable JSON shape they can actually parse.
+// (The unused `_next` parameter is required — Express identifies error
+// middleware by its 4-argument signature.)
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const isCorsRejection = err.message.startsWith("CORS blocked")
+  if (!isCorsRejection) {
+    console.error("[unhandled-route-error]", { path: req.originalUrl, message: err.message, stack: err.stack })
+  }
+  if (res.headersSent) return
+  res.status(isCorsRejection ? 403 : 500).json({
+    error: isCorsRejection ? "Origin not allowed" : "Internal server error",
+  })
+})
+
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`)
-  // Kick off scrapers after the server is listening
-  startScheduler()
+  // Opportunity scrapers — RETIRED. The opportunities board is student-submitted
+  // now (`/api/opportunities` serves `source = 'community'` only), so scraping
+  // job boards every 6h would write rows nothing renders while still spending
+  // outbound API calls and pool connections. Set ENABLE_SCRAPERS=true to run
+  // them again; see src/scrapers/README.md.
+  if (process.env.ENABLE_SCRAPERS === "true") {
+    console.warn("[scrapers] ENABLE_SCRAPERS=true — running retired opportunity scrapers")
+    startScheduler()
+  }
+})
+
+// Live events feed. Shares the HTTP server so it needs no second port and
+// inherits the same TLS termination in production.
+attachEventsSocket(server)
+
+// ── Process lifecycle ─────────────────────────────────────────────────────────
+// Railway (and any container platform) sends SIGTERM on redeploy/scale-down.
+// Without this, in-flight student requests are severed mid-response and pool
+// connections are abandoned for Postgres to time out on its side. Order
+// matters: stop accepting new connections first, let in-flight requests
+// finish, then release DB connections. The 10s force-exit guards against a
+// hung request blocking the redeploy forever (platforms hard-kill at ~30s).
+let shuttingDown = false
+async function shutdown(signal: string) {
+  if (shuttingDown) return
+  shuttingDown = true
+  console.log(`[lifecycle] ${signal} received — draining connections`)
+  const forceExit = setTimeout(() => {
+    console.error("[lifecycle] drain timed out after 10s — forcing exit")
+    process.exit(1)
+  }, 10_000)
+  forceExit.unref()
+  // Close WebSockets first: server.close() waits for existing connections to
+  // end, and an open socket never ends on its own — without this the drain
+  // always runs to the 10s force-exit.
+  closeEventsSocket()
+  server.close(async () => {
+    try {
+      await db.end()
+    } catch (err) {
+      console.error("[lifecycle] error closing Postgres pool:", err)
+    }
+    console.log("[lifecycle] shutdown complete")
+    process.exit(0)
+  })
+}
+process.on("SIGTERM", () => void shutdown("SIGTERM"))
+process.on("SIGINT", () => void shutdown("SIGINT"))
+
+// Log-and-continue: a rejected promise nobody awaited (e.g. a fire-and-forget
+// scraper insert) should be visible in logs, not crash 2000 students' backend.
+// Node's default behavior for unhandledRejection is a process crash.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason)
 })

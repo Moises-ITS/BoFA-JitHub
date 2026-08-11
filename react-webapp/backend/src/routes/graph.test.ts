@@ -7,6 +7,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import express from 'express'
 import request from 'supertest'
 
+// requireAuth reaches out to Clerk and Postgres at import time (config/postgres
+// throws without DATABASE_URL) — neither belongs in a route-logic test, so the
+// middleware is stubbed to pass every request through. Without this stub the
+// suite could not even be collected outside a fully-configured environment.
+vi.mock('../middleware/auth.js', () => ({
+  requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
+}))
+
 // Mock graphService before importing the router so the module is intercepted
 vi.mock('../services/graphService.js', () => ({
   getNodes:        vi.fn(),

@@ -47,10 +47,11 @@ NEO4J_URI=neo4j+s://...               # AuraDB URI
 NEO4J_USER=...
 NEO4J_PASSWORD=...
 
-FRONTEND_URL=http://localhost:5175
+FRONTEND_URL=http://localhost:3000
 PORT=3001
 
-CLERK_SECRET_KEY=sk_test_...          # From Clerk Dashboard > API Keys
+CLERK_SECRET_KEY=sk_test_...          # Required. From Clerk Dashboard > API Keys
+# Optional (see note below) — omit it and verification still works, just slower
 CLERK_JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
 <paste PEM key here, keep the quotes and line breaks>
 -----END PUBLIC KEY-----"
@@ -62,9 +63,18 @@ REDIS_URL=rediss://default:<password>@<host>:<port>
 # REDIS_URLS=rediss://... , rediss://...
 ```
 
-> **CLERK_JWT_PUBLIC_KEY** — get this from Clerk Dashboard > API Keys > "JWT Public Key".
-> It must be wrapped in double quotes in the `.env` file and include the `-----BEGIN/END PUBLIC KEY-----` header/footer lines exactly as shown above.
-> Without this, token verification will fail on every request.
+> **CLERK_JWT_PUBLIC_KEY** — OPTIONAL. Get it from Clerk Dashboard > API Keys > "JWT Public Key".
+> Wrap it in double quotes in the `.env` file and keep the `-----BEGIN/END PUBLIC KEY-----`
+> header/footer lines exactly as shown above.
+>
+> What it actually does: when set, `utils/clerkToken.ts` passes it as `jwtKey` so session
+> tokens are verified **locally**. When absent, verification falls back to `CLERK_SECRET_KEY`
+> and Clerk's API — correct, but a network round trip on the request path. Set it in
+> production; skip it locally if you like.
+>
+> Do NOT paste `pk_...` or `sk_...` here — those are the publishable and secret keys, a
+> different thing entirely. `normalizeJwtKey()` rejects them silently, so a mix-up shows up
+> as unexplained latency rather than an error.
 
 #### `frontend/.env.local`
 
@@ -94,7 +104,7 @@ cd react-webapp/frontend
 npm run dev:all
 ```
 
-Frontend: http://localhost:5175
+Frontend: http://localhost:3000
 Backend: http://localhost:3001
 
 ### Redis smoke test

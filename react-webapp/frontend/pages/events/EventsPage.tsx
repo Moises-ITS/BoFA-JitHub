@@ -1,34 +1,51 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
 import { TrendingUp, Zap, Flame, Search } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import { format } from "date-fns";
 import { HeatmapCalendar } from "./components/heatmap-calendar";
-import {
-  CATEGORY_STYLE, fmt12, ClubAvatar, CLUB_EMOJIS, getEventCategories, matchScore, EventDetailModal,
-} from "./components/EventDetailModal";
+import { EventDetailModal } from "./components/EventDetailModal";
+import { ClubAvatar } from "./components/ClubAvatar";
+import { CATEGORY_STYLE, CLUB_EMOJIS, fmt12, getEventCategories } from "./utils/eventFormatting";
+import { matchScore, type UserProfile } from "./utils/eventScoring";
 import SubmitEventModal, { type CommunityEventInput } from "./components/SubmitEventModal";
-import type { UserProfile, AttendeeInfo } from "./components/EventDetailModal";
+import type { AttendeeInfo } from "./components/EventDetailModal";
+import type { EdenEvent, TrendingClub } from "./types/events";
 import {
   type ClubDirectoryEntry,
   eventMatchesQuery,
   getClubOptionLabel,
 } from "./utils/clubMatching";
 
-const API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
-const AUTH_API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+import { apiFetch, authHeaders, EVENTS_API_BASE_URL as API } from "@/lib/api";
 
 function eventWebSocketUrl() {
   try {
     const url = new URL(API);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    url.pathname = "/events/ws";
+    // Append rather than replace: API already carries the backend's /api path
+    // prefix, and assigning pathname outright would drop it and point the
+    // socket at a route that does not exist.
+    url.pathname = `${url.pathname.replace(/\/$/, "")}/events/ws`;
     url.search = "";
     url.hash = "";
     return url.toString();
   } catch {
     return null;
   }
+}
+
+// Reconnect backoff. The previous fixed 2s retry meant that whenever the socket
+// was unreachable — which it always was in production, since the server had no
+// WebSocket transport installed — every open Events tab hammered the API twice
+// a second, indefinitely. Exponential with jitter so a server restart does not
+// bring the whole cohort back in a synchronized thundering herd.
+const WS_RECONNECT_MIN_MS = 1_000;
+const WS_RECONNECT_MAX_MS = 30_000;
+
+function reconnectDelay(attempt: number) {
+  const backoff = Math.min(WS_RECONNECT_MAX_MS, WS_RECONNECT_MIN_MS * 2 ** attempt);
+  return backoff / 2 + Math.random() * (backoff / 2);
 }
 
 // ─── Category filters ────────────────────────────────────────────────────────
@@ -63,8 +80,10 @@ function MatchSignal({ score }: { score: number }) {
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
-function useEvents(endpoint: string | null, refreshKey = 0) {
-  const [data, setData] = useState<any[]>([]);
+// Generic because the same fetch-shape serves event lists AND club-stat
+// lists (/events/clubs/trending) — the caller names the row type.
+function useEvents<T = EdenEvent>(endpoint: string | null, refreshKey = 0) {
+  const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(Boolean(endpoint));
 
   useEffect(() => {
@@ -84,7 +103,12 @@ function useEvents(endpoint: string | null, refreshKey = 0) {
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
-        setData(d.events ?? d);
+        // Every consumer treats this as an array. An error body — FastAPI's
+        // {"detail": ...} on a 4xx/5xx — would otherwise be stored verbatim and
+        // blow up the first .filter/.map downstream, turning a failed request
+        // into a blank page instead of an empty list.
+        const rows = d?.events ?? d;
+        setData(Array.isArray(rows) ? rows : []);
         setLoading(false);
       })
       .catch(() => {
@@ -104,12 +128,12 @@ function useEvents(endpoint: string | null, refreshKey = 0) {
 function EventCard({
   event, index, profile, rsvpStatus, attendees, onRsvpToggle, connectionIds, onSelect,
 }: {
-  event: any; index: number; profile: UserProfile;
+  event: EdenEvent; index: number; profile: UserProfile;
   rsvpStatus?: string | null;
   attendees?: AttendeeInfo;
   onRsvpToggle?: (eventId: number) => void;
   connectionIds?: Set<string>;
-  onSelect?: (event: any) => void;
+  onSelect?: (event: EdenEvent) => void;
 }) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const score = matchScore(event, profile);
@@ -216,8 +240,8 @@ function RankingAvatar({
   index,
   size = 28,
 }: {
-  clubId?: number;
-  clubName: string;
+  clubId?: number | null;
+  clubName?: string;
   index: number;
   size?: number;
 }) {
@@ -251,7 +275,7 @@ function RankingAvatar({
   );
 }
 
-function TrendingPodium({ clubs }: { clubs: any[] }) {
+function TrendingPodium({ clubs }: { clubs: TrendingClub[] }) {
   if (clubs.length < 3) return null;
   const podium = [
     { club: clubs[1], rank: 2, height: 58, bg: "rgba(255,255,255,0.08)", border: "var(--border-default)", delay: 0.02 },
@@ -284,7 +308,7 @@ function TrendingPodium({ clubs }: { clubs: any[] }) {
   );
 }
 
-function SidebarClubRow({ club, index, showScore }: { club: any; index: number; showScore?: boolean }) {
+function SidebarClubRow({ club, index, showScore }: { club: TrendingClub; index: number; showScore?: boolean }) {
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
@@ -304,7 +328,7 @@ function SidebarClubRow({ club, index, showScore }: { club: any; index: number; 
   );
 }
 
-function TopEventRow({ event, index, onSelect }: { event: any; index: number; onSelect: (e: any) => void }) {
+function TopEventRow({ event, index, onSelect }: { event: EdenEvent; index: number; onSelect: (e: EdenEvent) => void }) {
   const primaryCategory = getEventCategories(event)[0];
   const catStyle = primaryCategory ? (CATEGORY_STYLE[primaryCategory] ?? { bg: "rgba(255,255,255,0.06)", color: "var(--text-muted)" }) : null;
   return (
@@ -358,14 +382,14 @@ export default function EventsPage() {
 
   const { data: upcomingRaw, loading: upcomingLoading } = useEvents(upcomingUrl, refreshNonce);
   const { data: trendingEvents, loading: trendingLoading } = useEvents(trendingUrl, refreshNonce);
-  const { data: sidebarTrending } = useEvents("/events/clubs/trending?limit=5", refreshNonce);
-  const { data: topRisers } = useEvents("/events/clubs/top-risers?limit=5", refreshNonce);
+  const { data: sidebarTrending } = useEvents<TrendingClub>("/events/clubs/trending?limit=5", refreshNonce);
+  const { data: topRisers } = useEvents<TrendingClub>("/events/clubs/top-risers?limit=5", refreshNonce);
   const { data: topEvents } = useEvents("/events/top-risers?limit=5", refreshNonce);
 
   const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
   const [attendeeMap, setAttendeeMap] = useState<Record<number, AttendeeInfo>>({});
   const [connectionIds, setConnectionIds] = useState<Set<string>>(new Set());
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [selectedEvent, setSelectedEvent] = useState<EdenEvent | null>(null);
   const [selectedEventCanRsvp, setSelectedEventCanRsvp] = useState(true);
   const [modalAttendees, setModalAttendees] = useState<AttendeeInfo | null>(null);
   const selectedEventId = selectedEvent?.event_id ?? null;
@@ -377,24 +401,52 @@ export default function EventsPage() {
     let socket: WebSocket | null = null;
     let reconnectTimer: number | null = null;
     let closedByPage = false;
+    let attempt = 0;
 
     const connect = () => {
       socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        // Only a connection that actually opened resets the backoff. Resetting
+        // on each attempt instead would collapse the backoff back to ~1s
+        // whenever the server rejects the handshake outright.
+        attempt = 0;
+        // A socket that was down may have missed an event.created entirely, so
+        // resync the feed on every (re)connect rather than trusting that the
+        // list rendered before the drop is still current.
+        setRefreshNonce((prev) => prev + 1);
+      };
+
       socket.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data);
           if (payload?.type === "event.created") {
             setRefreshNonce((prev) => prev + 1);
+          } else if (payload?.type === "rsvp.changed" && typeof payload.event_id === "number") {
+            // Patch just this event's attendee block. Bumping refreshNonce here
+            // instead would refetch every list on the page each time any
+            // student anywhere tapped "going".
+            const next: AttendeeInfo = {
+              count: payload.count ?? 0,
+              preview: Array.isArray(payload.preview) ? payload.preview : [],
+            };
+            setAttendeeMap((prev) => ({ ...prev, [payload.event_id]: next }));
           }
         } catch {
           // Ignore malformed websocket payloads.
         }
       };
+
+      // Without an onerror handler a failed handshake surfaces as an unhandled
+      // error in the console on every retry. onclose still fires after it, so
+      // reconnect scheduling stays in one place below.
+      socket.onerror = () => { };
+
       socket.onclose = () => {
         socket = null;
-        if (!closedByPage) {
-          reconnectTimer = window.setTimeout(connect, 2000);
-        }
+        if (closedByPage) return;
+        reconnectTimer = window.setTimeout(connect, reconnectDelay(attempt));
+        attempt += 1;
       };
     };
 
@@ -450,7 +502,7 @@ export default function EventsPage() {
       .then((response) => response.json())
       .then((data) => {
         if (cancelled || data?.error) return;
-        setSelectedEvent((prev: any) => (
+        setSelectedEvent((prev) => (
           prev?.event_id === selectedEventId
             ? { ...prev, ...data }
             : prev
@@ -491,14 +543,13 @@ export default function EventsPage() {
   }, [selectedEventAttendees, selectedEventId]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !token) return;
 
     let cancelled = false;
 
-    fetch(`${AUTH_API}/api/connections`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then((data: { id: string }[]) => {
-        if (!cancelled) {
+    apiFetch<{ id: string }[]>("/api/connections", token)
+      .then(({ ok, data }) => {
+        if (!cancelled && ok && Array.isArray(data)) {
           setConnectionIds(new Set(data.map((connection) => connection.id)));
         }
       })
@@ -511,9 +562,9 @@ export default function EventsPage() {
 
   const displayEvents = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
-    let baseEvents: any[] = [];
+    let baseEvents: EdenEvent[] = [];
     if (view === "trending") {
-      baseEvents = trendingEvents.filter((e: any) => !e.date || e.date >= today);
+      baseEvents = trendingEvents.filter((e) => !e.date || e.date >= today);
     } else if (view === "top-match") {
       baseEvents = [...upcomingRaw]
         .map(e => ({ ...e, _score: matchScore(e, profile) }))
@@ -524,17 +575,38 @@ export default function EventsPage() {
     }
 
     if (selectedClub) {
-      baseEvents = baseEvents.filter((event: any) => event.club_id === selectedClub.club_id);
+      baseEvents = baseEvents.filter((event) => event.club_id === selectedClub.club_id);
     }
 
     if (searchQuery.trim()) {
-      baseEvents = baseEvents.filter((event: any) => eventMatchesQuery(event, searchQuery));
+      baseEvents = baseEvents.filter((event) => eventMatchesQuery(event, searchQuery));
     }
 
     return baseEvents;
   }, [view, trendingEvents, upcomingRaw, profile, searchQuery, selectedClub]);
+
+  // Anything whose date is behind us drops out of the main feed and into its own
+  // section. Dates are compared as YYYY-MM-DD strings (the shape the API returns)
+  // so an event stays listed for the whole of its own day rather than vanishing
+  // at midnight UTC while it is still running. Events with no date are treated as
+  // upcoming — "TBD" is a plan, not a past event.
+  const { activeEvents, passedEvents } = useMemo(() => {
+    const today = new Date().toISOString().split("T")[0];
+    const active: EdenEvent[] = [];
+    const passed: EdenEvent[] = [];
+    for (const event of displayEvents) {
+      if (event.date && event.date < today) passed.push(event);
+      else active.push(event);
+    }
+    // Most recently finished first — the ones people are still looking for.
+    passed.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+    return { activeEvents: active, passedEvents: passed };
+  }, [displayEvents]);
+
+  const [showPassed, setShowPassed] = useState(false);
+
   const displayEventIds = useMemo(
-    () => displayEvents.map((event: any) => event.event_id),
+    () => displayEvents.map((event) => event.event_id),
     [displayEvents],
   );
   const displayEventIdsKey = useMemo(
@@ -569,14 +641,16 @@ export default function EventsPage() {
   }, [displayEventIds, displayEventIdsKey]);
 
   useEffect(() => {
-    if (!displayEventIds.length || !user?.id) return;
+    if (!displayEventIds.length || !user?.id || !token) return;
 
     let cancelled = false;
 
+    // The server derives whose statuses these are from the token; user_id is no
+    // longer sent, so one student cannot read another's RSVPs.
     fetch(`${API}/rsvp/batch-status`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: user.id, event_ids: displayEventIds }),
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify({ event_ids: displayEventIds }),
     })
       .then(r => r.json())
       .then((data: Record<string, string>) => {
@@ -591,47 +665,49 @@ export default function EventsPage() {
     return () => {
       cancelled = true;
     };
-  }, [displayEventIds, displayEventIdsKey, user?.id]);
+  }, [displayEventIds, displayEventIdsKey, user?.id, token]);
 
   async function handleRsvpToggle(eventId: number) {
-    if (!user) return;
+    if (!user || !token) return;
     const current = rsvpMap[eventId] ?? null;
     const newStatus = current === "going" ? null : "going";
     setRsvpMap(prev => ({ ...prev, [eventId]: newStatus }));
     try {
-      if (newStatus === null) {
-        await fetch(`${API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, { method: "DELETE" });
-      } else {
-        await fetch(`${API}/rsvp/${eventId}`, {
+      const res = newStatus === null
+        ? await fetch(`${API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, {
+          method: "DELETE",
+          headers: authHeaders(token),
+        })
+        : await fetch(`${API}/rsvp/${eventId}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders(token) },
           body: JSON.stringify({
-            user_id: user.id, user_name: user.name,
+            user_name: user.name,
             user_major: user.major ?? null,
             user_interests: JSON.stringify(user.interests ?? []),
             user_clubs: JSON.stringify(user.clubs ?? []),
             status: "going",
           }),
         });
-      }
+      if (!res.ok) throw new Error(`RSVP failed with ${res.status}`);
+      // Both write endpoints return the fresh attendee snapshot, so the count
+      // updates from the same response instead of a follow-up round trip.
+      const data = (await res.json()) as AttendeeInfo;
+      setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
+      if (selectedEvent?.event_id === eventId) setModalAttendees(data);
     } catch {
+      // Roll the optimistic toggle back — the server rejected it.
       setRsvpMap(prev => ({ ...prev, [eventId]: current }));
     }
-    fetch(`${API}/rsvp/${eventId}/attendees`)
-      .then(r => r.json())
-      .then((data: AttendeeInfo) => {
-        setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
-        if (selectedEvent?.event_id === eventId) setModalAttendees(data);
-      })
-      .catch(() => { });
   }
 
   async function handleCreateEvent(payload: CommunityEventInput) {
+    if (!token) throw new Error("Sign in to submit an event");
     setSubmitLoading(true);
     try {
       const res = await fetch(`${API}/events/community`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders(token) },
         body: JSON.stringify(payload),
       });
       const body = await res.json().catch(() => ({}));
@@ -669,7 +745,10 @@ export default function EventsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
+          {/* space-y-6 (24px), not space-y-4: at 16px the event cards and the
+              filter row sat close enough to read as one block. This matches the
+              grid's own gap-6 so the column and its neighbours share a rhythm. */}
+          <div className="lg:col-span-2 space-y-6">
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1" style={{ width: "fit-content", border: "1px solid var(--border-default)" }}>
@@ -689,7 +768,7 @@ export default function EventsPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
               <div
                 style={{
                   position: "relative",
@@ -763,7 +842,10 @@ export default function EventsPage() {
             </div>
 
             {loading && <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading...</p>}
-            {!loading && displayEvents.length === 0 && (
+            {/* Only a true empty state — if everything matching the filters has
+                already happened, the Passed events section below speaks for
+                itself rather than being contradicted by "No events found". */}
+            {!loading && activeEvents.length === 0 && passedEvents.length === 0 && (
               <div className="text-center py-16" style={{ color: "var(--text-muted)" }}>
                 <p className="text-4xl mb-3">📅</p>
                 <p className="font-medium text-white">
@@ -778,7 +860,7 @@ export default function EventsPage() {
                 </p>
               </div>
             )}
-            {displayEvents.map((event, i) => (
+            {activeEvents.map((event, i) => (
               <EventCard
                 key={event.event_id}
                 event={event}
@@ -791,13 +873,69 @@ export default function EventsPage() {
                 onSelect={(e) => { setSelectedEvent(e); setSelectedEventCanRsvp(true); }}
               />
             ))}
+
+            {passedEvents.length > 0 && (
+              // No inline margin here: the parent's space-y utility owns the
+              // rhythm between sections, and an inline value would override it
+              // and desynchronise this block from every sibling.
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowPassed((prev) => !prev)}
+                  aria-expanded={showPassed}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    border: "1px solid var(--border-default)",
+                    backgroundColor: "var(--bg-surface)",
+                    color: "var(--text-muted)",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span style={{ color: "var(--text-primary)" }}>
+                    Passed events
+                    <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>
+                      {" "}· {passedEvents.length}
+                    </span>
+                  </span>
+                  <span aria-hidden="true">{showPassed ? "▲" : "▼"}</span>
+                </button>
+
+                {showPassed && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "20px", opacity: 0.72 }}>
+                    {passedEvents.map((event, i) => (
+                      <EventCard
+                        key={event.event_id}
+                        event={event}
+                        index={i}
+                        profile={profile}
+                        rsvpStatus={rsvpMap[event.event_id] ?? null}
+                        attendees={attendeeMap[event.event_id]}
+                        // No RSVP control: the event is over, so "Are you going?"
+                        // is a question that can no longer be answered.
+                        onRsvpToggle={undefined}
+                        connectionIds={connectionIds}
+                        onSelect={(e) => { setSelectedEvent(e); setSelectedEventCanRsvp(false); }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Sidebar */}
           <div style={{ display: "flex", flexDirection: "column", gap: "40px" }}>
             <HeatmapCalendar />
             <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
-              <div className="flex items-center gap-2" style={{ marginBottom: "12px" }}>
+              <div className="flex items-center gap-2" style={{ marginBottom: "16px" }}>
                 <TrendingUp className="w-4 h-4" style={{ color: "var(--brand-primary)" }} />
                 <h3 className="font-semibold text-white text-sm">Trending This Semester</h3>
               </div>
@@ -816,7 +954,9 @@ export default function EventsPage() {
               {topRisers.map((c, i) => <SidebarClubRow key={c.club_name} club={c} index={i} showScore />)}
             </div>
             <div style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)", borderRadius: "12px", padding: "24px" }}>
-              <div className="flex items-center gap-2" style={{ marginBottom: "4px" }}>
+              {/* 16px to match the two cards above it — at 4px the first row's
+                  avatar nearly touched the heading. */}
+              <div className="flex items-center gap-2" style={{ marginBottom: "16px" }}>
                 <Flame className="w-4 h-4" style={{ color: "var(--status-error)" }} />
                 <h3 className="font-semibold text-white text-sm">Top Events of the Semester</h3>
               </div>

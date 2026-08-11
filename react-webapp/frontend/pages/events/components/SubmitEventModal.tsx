@@ -14,7 +14,6 @@ export interface CommunityEventInput {
   event_room?: string;
   virtual: boolean;
   has_free_food: boolean;
-  is_open_to_public: boolean;
   event_link?: string;
   description?: string;
 }
@@ -23,6 +22,10 @@ const INITIAL_FORM = {
   clubName: '',
   eventName: '',
   eventCategories: ['workshop'],
+  // Categories typed by the submitter that aren't in the fixed list. Held
+  // separately from eventCategories so unchecking one can remove it from the
+  // grid entirely — a preset merely unchecks, a custom one disappears.
+  customCategories: [] as string[],
   collaborators: [] as string[],
   corporatePartners: [] as string[],
   date: '',
@@ -32,7 +35,6 @@ const INITIAL_FORM = {
   eventRoom: '',
   virtual: false,
   hasFreeFood: false,
-  isOpenToPublic: true,
   eventLink: '',
   description: '',
 };
@@ -58,7 +60,20 @@ export default function SubmitEventModal({
   const [error, setError] = useState<string | null>(null);
   const [collaboratorDraft, setCollaboratorDraft] = useState('');
   const [corporatePartnerDraft, setCorporatePartnerDraft] = useState('');
+  const [customCategoryDraft, setCustomCategoryDraft] = useState('');
   const selectedClub = clubs.find((club) => club.name === form.clubName) ?? null;
+
+  // Preset categories plus anything the submitter typed, rendered as one grid so
+  // a custom category is indistinguishable from a built-in once added.
+  const presetValues = new Set(categories.map((category) => category.value));
+  const categoryOptions = [
+    ...categories.map((category) => ({ ...category, custom: false })),
+    ...form.customCategories.map((label) => ({
+      label,
+      value: label.trim().toLowerCase(),
+      custom: true,
+    })),
+  ];
   const availableCollaboratorOptions = clubs.filter((club) => (
     !clubNamesEquivalent(club.name, form.clubName)
     && !form.collaborators.some((collaborator) => clubNamesEquivalent(collaborator, club.name))
@@ -70,6 +85,7 @@ export default function SubmitEventModal({
       setError(null);
       setCollaboratorDraft('');
       setCorporatePartnerDraft('');
+      setCustomCategoryDraft('');
     }
   }, [open]);
 
@@ -98,6 +114,58 @@ export default function SubmitEventModal({
       collaborators: [...prev.collaborators, nextCollaborator],
     }));
     setCollaboratorDraft('');
+  }
+
+  function addCustomCategory() {
+    const label = customCategoryDraft.trim();
+    if (!label) {
+      setCustomCategoryDraft('');
+      return;
+    }
+    const value = label.toLowerCase();
+
+    // Typing the name of a preset just selects that preset instead of creating a
+    // near-duplicate ("Workshop" alongside the built-in "workshop"), which would
+    // otherwise split the same category into two on the events feed.
+    if (presetValues.has(value)) {
+      setForm((prev) => ({
+        ...prev,
+        eventCategories: prev.eventCategories.includes(value)
+          ? prev.eventCategories
+          : [...prev.eventCategories, value],
+      }));
+      setCustomCategoryDraft('');
+      return;
+    }
+
+    if (form.customCategories.some((existing) => existing.trim().toLowerCase() === value)) {
+      setCustomCategoryDraft('');
+      return;
+    }
+
+    // Added categories are selected immediately — someone who took the trouble
+    // to type one means it to apply.
+    setForm((prev) => ({
+      ...prev,
+      customCategories: [...prev.customCategories, label],
+      eventCategories: [...prev.eventCategories, value],
+    }));
+    setCustomCategoryDraft('');
+  }
+
+  function toggleCategory(value: string, checked: boolean, custom: boolean) {
+    setForm((prev) => ({
+      ...prev,
+      eventCategories: checked
+        ? [...prev.eventCategories, value]
+        : prev.eventCategories.filter((existing) => existing !== value),
+      // Unchecking a custom category removes it from the grid entirely; there is
+      // no list to restore it from, so leaving an unchecked orphan chip behind
+      // would be clutter the submitter cannot clear.
+      customCategories: custom && !checked
+        ? prev.customCategories.filter((label) => label.trim().toLowerCase() !== value)
+        : prev.customCategories,
+    }));
   }
 
   function addCorporatePartner() {
@@ -140,11 +208,17 @@ export default function SubmitEventModal({
       date: form.date,
       start_time: form.startTime,
       end_time: form.endTime || undefined,
-      campus_location: form.campusLocation.trim() || undefined,
-      event_room: form.eventRoom.trim() || undefined,
+      // A virtual event has no campus location or room. The inputs are hidden
+      // rather than cleared so unchecking "Virtual event" restores whatever was
+      // already typed — which means their values must be dropped HERE, or a
+      // stale in-person location would ride along on a virtual submission.
+      campus_location: form.virtual ? undefined : form.campusLocation.trim() || undefined,
+      event_room: form.virtual ? undefined : form.eventRoom.trim() || undefined,
       virtual: form.virtual,
       has_free_food: form.hasFreeFood,
-      is_open_to_public: form.isOpenToPublic,
+      // is_open_to_public is no longer collected. The API defaults it to true
+      // (see EDEN routers/events.py), so omitting it keeps every submission
+      // public without asking a question nobody was answering meaningfully.
       event_link: form.eventLink.trim() || undefined,
       description: form.description.trim() || undefined,
     };
@@ -383,19 +457,17 @@ export default function SubmitEventModal({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <span style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 700 }}>Categories</span>
             <div style={categoryGridStyle}>
-              {categories.map((category) => {
+              {categoryOptions.map((category) => {
                 const checked = form.eventCategories.includes(category.value);
                 return (
-                  <label key={category.value} style={checked ? checkedCategoryChipStyle : categoryChipStyle}>
+                  <label
+                    key={`${category.custom ? 'custom' : 'preset'}:${category.value}`}
+                    style={checked ? checkedCategoryChipStyle : categoryChipStyle}
+                  >
                     <input
                       type="checkbox"
                       checked={checked}
-                      onChange={(event) => setForm((prev) => ({
-                        ...prev,
-                        eventCategories: event.target.checked
-                          ? [...prev.eventCategories, category.value]
-                          : prev.eventCategories.filter((value) => value !== category.value),
-                      }))}
+                      onChange={(event) => toggleCategory(category.value, event.target.checked, category.custom)}
                       style={{ margin: 0 }}
                     />
                     <span>{category.label}</span>
@@ -403,33 +475,64 @@ export default function SubmitEventModal({
                 );
               })}
             </div>
-            <span style={helperTextStyle}>Select every category that fits this event.</span>
+
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'stretch' }}>
+              <input
+                value={customCategoryDraft}
+                onChange={(event) => setCustomCategoryDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  // Enter inside a form submits it by default; this field adds a
+                  // category instead, so the modal cannot be submitted early by
+                  // someone finishing a word.
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addCustomCategory();
+                  }
+                }}
+                placeholder="Custom category"
+                style={{ ...fieldStyle, flex: 1 }}
+              />
+              <button type="button" onClick={addCustomCategory} style={secondaryButtonStyle}>
+                Add
+              </button>
+            </div>
+
+            <span style={helperTextStyle}>
+              Select every category that fits this event, or add your own if none apply.
+            </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 700 }}>
-                {form.virtual ? 'Virtual location' : 'Campus location'}
-              </span>
-              <input
-                value={form.campusLocation}
-                onChange={(event) => setForm((prev) => ({ ...prev, campusLocation: event.target.value }))}
-                placeholder={form.virtual ? 'Zoom / Teams / Discord' : 'Campus Center'}
-                required={!form.virtual}
-                style={fieldStyle}
-              />
-            </label>
+          {/*
+            Hidden outright for virtual events rather than relabelled — a virtual
+            event has no campus location or room, so asking for them invites
+            confusion. State is intentionally NOT cleared: unchecking "Virtual
+            event" brings the fields back with whatever was already typed. The
+            values are dropped at submit time instead (see handleSubmit).
+          */}
+          {!form.virtual && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 700 }}>Campus location</span>
+                <input
+                  value={form.campusLocation}
+                  onChange={(event) => setForm((prev) => ({ ...prev, campusLocation: event.target.value }))}
+                  placeholder="Campus Center"
+                  required
+                  style={fieldStyle}
+                />
+              </label>
 
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <span style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 700 }}>Room</span>
-              <input
-                value={form.eventRoom}
-                onChange={(event) => setForm((prev) => ({ ...prev, eventRoom: event.target.value }))}
-                placeholder="Atrium / Room 112"
-                style={fieldStyle}
-              />
-            </label>
-          </div>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 700 }}>Room</span>
+                <input
+                  value={form.eventRoom}
+                  onChange={(event) => setForm((prev) => ({ ...prev, eventRoom: event.target.value }))}
+                  placeholder="Atrium / Room 112"
+                  style={fieldStyle}
+                />
+              </label>
+            </div>
+          )}
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <span style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 700 }}>Event link</span>
@@ -469,14 +572,6 @@ export default function SubmitEventModal({
                 onChange={(event) => setForm((prev) => ({ ...prev, hasFreeFood: event.target.checked }))}
               />
               <span>Free food</span>
-            </label>
-            <label style={checkboxCardStyle}>
-              <input
-                type="checkbox"
-                checked={form.isOpenToPublic}
-                onChange={(event) => setForm((prev) => ({ ...prev, isOpenToPublic: event.target.checked }))}
-              />
-              <span>Open to public</span>
             </label>
           </div>
 

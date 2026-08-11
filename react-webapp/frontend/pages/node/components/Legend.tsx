@@ -3,7 +3,7 @@
 // Bottom-left legend showing node type colors
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { memo } from "react";
+import { memo } from "react";
 import type { NodeType } from "../types/graphNodes";
 import { TYPE_COLOR } from "../constants/maps";
 

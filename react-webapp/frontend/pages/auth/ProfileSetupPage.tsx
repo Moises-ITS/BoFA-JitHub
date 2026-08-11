@@ -1,11 +1,11 @@
-import { useState, useEffect, FormEvent } from "react"
+import { useState, useEffect, type FormEvent } from "react"
 import { useNavigate, Navigate } from "react-router-dom"
 import { useUser, useAuth as useClerkAuth } from "@clerk/clerk-react"
-import { useAuth } from "../../context/AuthContext"
-import type { SyncData } from "../../context/AuthContext"
+import { useAuth } from "@/context/AuthContext"
+import type { SyncData } from "@/context/AuthContext"
 import "./auth.css"
 
-const API = import.meta.env.VITE_API_URL ?? ""
+import { apiFetch } from "@/lib/api"
 
 const STEPS = ["Academic", "Campus Life", "Profile"] as const
 type Step = 0 | 1 | 2
@@ -204,10 +204,8 @@ export default function ProfileSetupPage() {
   // Merge hardcoded baseline with any custom interests from other users
   useEffect(() => {
     if (!token) return
-    fetch(`${API}/api/auth/interests`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : [])
+    apiFetch<string[]>("/api/auth/interests", token)
+      .then(({ ok, data }) => (ok && Array.isArray(data) ? data : []))
       .then((fetched: string[]) => {
         const merged = Array.from(new Set([...KNOWN_INTERESTS, ...fetched])).sort()
         setAvailableInterests(merged)

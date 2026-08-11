@@ -4,9 +4,51 @@ from sqlalchemy import text
 from pydantic import BaseModel
 from typing import List, Optional
 from app.database import get_db
+from app.realtime import event_socket_manager
 from app import models
 
 router = APIRouter(prefix="/rsvp", tags=["rsvp"])
+
+# Preview list length. Kept as a constant because get_attendees,
+# batch_attendees, and the realtime rsvp.changed payload must agree — a client
+# that receives a 5-name preview over the socket and a 20-name preview from the
+# REST call would flicker between the two on every reconnect.
+PREVIEW_LIMIT = 20
+
+
+def _attendee_snapshot(db: Session, event_id: int) -> dict:
+    """Current 'going' count + preview for one event, shaped exactly like the
+    GET /rsvp/{event_id}/attendees body the frontend already renders."""
+    rows = (
+        db.query(models.EventRSVP.user_id, models.EventRSVP.user_name, models.EventRSVP.user_major)
+        .filter(
+            models.EventRSVP.event_id == event_id,
+            models.EventRSVP.status == "going",
+        )
+        .all()
+    )
+    return {
+        "count": len(rows),
+        "preview": [
+            {"user_id": r.user_id, "user_name": r.user_name or "Anonymous", "user_major": r.user_major or ""}
+            for r in rows[:PREVIEW_LIMIT]
+        ],
+    }
+
+
+async def _broadcast_rsvp_change(db: Session, event_id: int) -> None:
+    """Push the authoritative attendee snapshot to every connected client.
+
+    Deliberately sends the whole snapshot rather than a +1/-1 delta: a client
+    that missed a message while reconnecting would otherwise drift permanently
+    out of sync, and there is no sequence number to detect that.
+    """
+    snapshot = _attendee_snapshot(db, event_id)
+    await event_socket_manager.broadcast({
+        "type": "rsvp.changed",
+        "event_id": event_id,
+        **snapshot,
+    })
 
 
 class RSVPBody(BaseModel):
@@ -70,7 +112,7 @@ def get_user_rsvps(user_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{event_id}")
-def upsert_rsvp(event_id: int, body: RSVPBody, db: Session = Depends(get_db)):
+async def upsert_rsvp(event_id: int, body: RSVPBody, db: Session = Depends(get_db)):
     """Create or update an RSVP for an event."""
     db.execute(
         text("""
@@ -95,36 +137,28 @@ def upsert_rsvp(event_id: int, body: RSVPBody, db: Session = Depends(get_db)):
         }
     )
     db.commit()
+    # Broadcast AFTER commit — publishing first would let a fast client refetch
+    # and read the pre-commit state, showing a count that then jumps backwards.
+    await _broadcast_rsvp_change(db, event_id)
     return {"ok": True}
 
 
 @router.delete("/{event_id}/{user_id}")
-def delete_rsvp(event_id: int, user_id: str, db: Session = Depends(get_db)):
+async def delete_rsvp(event_id: int, user_id: str, db: Session = Depends(get_db)):
     """Remove an RSVP."""
     db.query(models.EventRSVP).filter(
         models.EventRSVP.event_id == event_id,
         models.EventRSVP.user_id == user_id,
     ).delete()
     db.commit()
+    await _broadcast_rsvp_change(db, event_id)
     return {"ok": True}
 
 
 @router.get("/{event_id}/attendees")
 def get_attendees(event_id: int, db: Session = Depends(get_db)):
-    """Return attendee count and a preview list (up to 5)."""
-    rows = (
-        db.query(models.EventRSVP.user_id, models.EventRSVP.user_name, models.EventRSVP.user_major)
-        .filter(
-            models.EventRSVP.event_id == event_id,
-            models.EventRSVP.status == "going",
-        )
-        .all()
-    )
-    preview = [
-        {"user_id": r.user_id, "user_name": r.user_name or "Anonymous", "user_major": r.user_major or ""}
-        for r in rows[:20]
-    ]
-    return {"count": len(rows), "preview": preview}
+    """Return attendee count and a preview list."""
+    return _attendee_snapshot(db, event_id)
 
 
 @router.post("/batch-attendees")
@@ -156,7 +190,7 @@ def batch_attendees(body: BatchAttendeesBody, db: Session = Depends(get_db)):
     for row in rows:
         entry = attendee_map[str(row.event_id)]
         entry["count"] += 1
-        if len(entry["preview"]) < 20:
+        if len(entry["preview"]) < PREVIEW_LIMIT:
             entry["preview"].append({
                 "user_id": row.user_id,
                 "user_name": row.user_name or "Anonymous",

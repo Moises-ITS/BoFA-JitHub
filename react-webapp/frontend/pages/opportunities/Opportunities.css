@@ -831,7 +831,7 @@
 }
 
 
-.opportunities-location-filter {
+.opportunities-major-filter {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -839,7 +839,7 @@
 }
 
 
-.opportunities-location-label {
+.opportunities-major-label {
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--muted);
@@ -848,7 +848,7 @@
 }
 
 
-.opportunities-location-select {
+.opportunities-major-select {
   width: 100%;
   border: 1px solid var(--border);
   background: rgba(12, 16, 28, 0.96);
@@ -862,12 +862,12 @@
 }
 
 
-.opportunities-location-select:hover {
+.opportunities-major-select:hover {
   border-color: #4a5568;
 }
 
 
-.opportunities-location-select:focus {
+.opportunities-major-select:focus {
   border-color: rgba(59, 130, 246, 0.65);
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.28);
   background: rgba(15, 20, 36, 0.98);
@@ -926,55 +926,10 @@
 }
 
 
-.opportunities-insight-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-
-.opportunities-insight-card {
-  border-radius: 14px;
-  padding: 10px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(10, 14, 24, 0.78);
-}
-
-
-.opportunities-insight-card.blue {
-  box-shadow: inset 0 1px 0 rgba(96, 165, 250, 0.12);
-}
-
-
-.opportunities-insight-card.red {
-  box-shadow: inset 0 1px 0 rgba(248, 113, 113, 0.12);
-}
-
-
-.opportunities-insight-card.green {
-  box-shadow: inset 0 1px 0 rgba(74, 222, 128, 0.12);
-}
-
-
-.opportunities-insight-value {
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: var(--text);
-  margin-bottom: 2px;
-}
-
-
-.opportunities-insight-label {
-  font-size: 0.66rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-
+/* Single column: Sort was removed, leaving Urgency as the only control here. */
 .opportunities-control-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -1577,7 +1532,6 @@
     padding: 18px;
   }
 
-  .opportunities-insight-grid,
   .opportunities-control-row {
     grid-template-columns: 1fr;
   }

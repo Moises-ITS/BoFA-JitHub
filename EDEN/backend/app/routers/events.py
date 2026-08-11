@@ -1,5 +1,4 @@
 from datetime import date, datetime, time, timezone
-import json
 
 SEMESTER_START = date(2026, 1, 1)
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -7,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
+from app.realtime import event_socket_manager
 from app import models
 from app.club_directory import (
     find_matching_club,
@@ -19,41 +19,21 @@ from app.club_directory import (
 router = APIRouter(prefix="/events", tags=["events"])
 
 
-class EventSocketManager:
-    def __init__(self):
-        self.active_connections: set[WebSocket] = set()
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.add(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.discard(websocket)
-
-    async def broadcast(self, payload: dict):
-        if not self.active_connections:
-            return
-        message = json.dumps(payload)
-        stale: list[WebSocket] = []
-        for websocket in list(self.active_connections):
-            try:
-                await websocket.send_text(message)
-            except Exception:
-                stale.append(websocket)
-        for websocket in stale:
-            self.disconnect(websocket)
-
-
-event_socket_manager = EventSocketManager()
-
-
 @router.websocket("/ws")
 async def events_ws(websocket: WebSocket):
+    """Live events feed. The client never needs to send anything — the
+    receive_text() loop exists purely to observe the disconnect."""
     await event_socket_manager.connect(websocket)
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    finally:
+        # `finally`, not just `except WebSocketDisconnect`: any other error in
+        # the loop (a proxy severing the connection, a cancelled task on
+        # shutdown) would otherwise leave a dead socket in the broadcast set
+        # forever, and every future broadcast pays to discover it is dead.
         event_socket_manager.disconnect(websocket)
 
 
@@ -644,7 +624,12 @@ def get_clubs_top_risers(limit: int = Query(5, le=20), db: Session = Depends(get
     } for i, r in enumerate(results)]
 
 
-@router.get("/{event_id}")
+# `:int` matters for diagnosis, not just tidiness. Without it this catch-all
+# also matches literal paths like /events/ws, so when the WebSocket upgrade
+# fails and the request falls through to the HTTP router, the client gets a
+# 422 "ws is not a valid integer" instead of an honest 404 — which is exactly
+# how the broken realtime feed disguised itself.
+@router.get("/{event_id:int}")
 def get_event(event_id: int, db: Session = Depends(get_db)):
     """Full detail for a single event including collaborators and sponsors."""
     result = (

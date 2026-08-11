@@ -1,5 +1,9 @@
 fastapi
-uvicorn
+# uvicorn[standard], NOT bare uvicorn. Bare uvicorn depends only on click+h11
+# and has no WebSocket implementation, so every upgrade request to /events/ws
+# is rejected ("No supported WebSocket library detected") and the live events
+# feed silently degrades to a reconnect loop. The extra pulls in `websockets`.
+uvicorn[standard]
 sqlalchemy
 psycopg2-binary
 python-dotenv

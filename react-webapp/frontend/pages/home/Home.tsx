@@ -2,99 +2,60 @@ import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Calendar, Briefcase, Network, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
-import { mockOpportunities } from "./mock-data";
+// Live opportunities come from the same hook the /opportunities page uses, so
+// the home spotlight card and the full page can never disagree about what the
+// "top match" is. (This replaced a hardcoded mock list that showed every
+// student identical fake data.)
+import { useOpportunities } from "../opportunities/hooks/useOpportunities";
+import { OPPORTUNITY_TYPE_ICON } from "../opportunities/types/opportunities";
 import { DeadlineChip } from "./deadline-chip";
 import { format } from "date-fns";
-import { useAuth } from "../../context/AuthContext";
-import {
-  CATEGORY_STYLE, EventDetailModal, fmt12, CLUB_EMOJIS,
-} from "../events/components/EventDetailModal";
-import type { AttendeeInfo, UserProfile } from "../events/components/EventDetailModal";
+import { useAuth } from "@/context/AuthContext";
+import { EventDetailModal } from "../events/components/EventDetailModal";
+import { ClubAvatar, TrendingClubAvatar } from "../events/components/ClubAvatar";
+import { CATEGORY_STYLE, fmt12 } from "../events/utils/eventFormatting";
+import type { UserProfile } from "../events/utils/eventScoring";
+import type { AttendeeInfo } from "../events/components/EventDetailModal";
+import type { EdenEvent } from "../events/types/events";
+// Home's trending panel is now star-driven (Decision 4). The Events page sidebar
+// podium keeps its own Instagram-likes ranking and its own TrendingClub type —
+// deliberately two different notions of "trending", one per page.
+import type { TrendingOrg } from "../organizations/types/organizations";
 
-const EVENTS_API = import.meta.env.VITE_EVENTS_API_URL ?? "http://localhost:8000";
-const AUTH_API = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
-const HOME_CACHE_KEY = "jithub.home-overview.v1";
+import { apiFetch, authHeaders, EVENTS_API_BASE_URL as EVENTS_API } from "@/lib/api";
+import { readJsonCache, writeJsonCache } from "@/lib/localCache";
+// Overview cache: 5-minute TTL so a page revisit paints instantly without
+// showing stale-beyond-usefulness data. Storage mechanics (TTL, parse guards,
+// quota tolerance) live in the shared lib/localCache helper — this used to be
+// a second hand-rolled localStorage implementation.
+// v3, not v2: the cached shape changed (trendingClubs -> trendingOrgs), and a
+// stale v2 envelope must not deserialize into the new state. readJsonCache
+// returns null for an unknown key, so old payloads are simply ignored — one cold
+// load per user, no crash.
+const HOME_CACHE_KEY = "jithub.home-overview.v3"; // v3: trendingClubs (likes) -> trendingOrgs (stars)
 const HOME_CACHE_TTL_MS = 5 * 60 * 1000;
 
 type HomeOverviewCache = {
-  fetchedAt: number;
-  topEvents: any[];
-  trendingClubs: any[];
+  topEvents: EdenEvent[];
+  trendingOrgs: TrendingOrg[];
 };
 
 function readHomeOverviewCache(): HomeOverviewCache | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(HOME_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as HomeOverviewCache;
-    if (!parsed || !Array.isArray(parsed.topEvents) || !Array.isArray(parsed.trendingClubs) || typeof parsed.fetchedAt !== "number") {
-      return null;
-    }
-    if (Date.now() - parsed.fetchedAt > HOME_CACHE_TTL_MS) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
+  return readJsonCache<HomeOverviewCache>(HOME_CACHE_KEY, {
+    ttlMs: HOME_CACHE_TTL_MS,
+    validate: (v): v is HomeOverviewCache =>
+      typeof v === "object" && v !== null &&
+      Array.isArray((v as HomeOverviewCache).topEvents) &&
+      Array.isArray((v as HomeOverviewCache).trendingOrgs),
+  });
 }
 
-function writeHomeOverviewCache(payload: Omit<HomeOverviewCache, "fetchedAt">) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(HOME_CACHE_KEY, JSON.stringify({
-      ...payload,
-      fetchedAt: Date.now(),
-    }));
-  } catch {
-    /* ignore storage issues */
-  }
+function writeHomeOverviewCache(payload: HomeOverviewCache) {
+  writeJsonCache(HOME_CACHE_KEY, payload);
 }
 
-function ClubAvatar({ clubId, clubName, index }: { clubId: number; clubName: string; index: number }) {
-  const [failed, setFailed] = useState(false);
-  if (!failed)
-    return <img src={`/club_pics/${clubId}.jpg`} alt={clubName} onError={() => setFailed(true)} className="w-10 h-10 rounded-lg object-cover shrink-0" />;
-  return <div className="text-3xl shrink-0 w-10 h-10 flex items-center justify-center">{CLUB_EMOJIS[index % CLUB_EMOJIS.length]}</div>;
-}
-
-function TrendingClubAvatar({ clubId, clubName, index }: { clubId?: number; clubName: string; index: number }) {
-  const [failed, setFailed] = useState(false);
-
-  if (clubId && !failed) {
-    return (
-      <img
-        src={`/club_pics/${clubId}.jpg`}
-        alt={clubName}
-        onError={() => setFailed(true)}
-        className="w-8 h-8 rounded-lg object-cover shrink-0"
-      />
-    );
-  }
-
-  return (
-    <div
-      className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
-      style={{ backgroundColor: "rgba(255,255,255,0.05)" }}
-      aria-label={clubName}
-    >
-      {CLUB_EMOJIS[index % CLUB_EMOJIS.length]}
-    </div>
-  );
-}
-
-// change_pct: positive = up, negative = down, null = not yet available
-function ClubChangePct({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-xs" style={{ color: "var(--text-subtle)" }}>—</span>;
-  const color = pct >= 0 ? "var(--status-success)" : "var(--status-error)";
-  const sign = pct >= 0 ? "+" : "";
-  return (
-    <span style={{ color, fontSize: "11px", fontWeight: 600 }}>
-      {sign}{Math.round(pct)}%
-    </span>
-  );
-}
+// REMOVED: ClubChangePct. It rendered the Instagram-likes week-over-week delta,
+// and star-based ranking has no percent-change concept (AC 34).
 
 const FREE_FOOD_BADGE = {
   backgroundColor: "var(--accent-events-soft)",
@@ -109,7 +70,10 @@ const VIRTUAL_BADGE = {
 export default function Home() {
   const { user, token } = useAuth();
   const firstName = user?.name?.split(" ")[0] ?? "";
-  const topOpportunity = mockOpportunities[0];
+  // sortedFiltered defaults to best-match order, so [0] is genuinely the
+  // strongest lead for this student, not an arbitrary first row.
+  const { sortedFiltered: opportunities, counts: opportunityCounts } = useOpportunities();
+  const topOpportunity = opportunities[0];
   const cachedOverview = readHomeOverviewCache();
 
   const profile: UserProfile = {
@@ -121,20 +85,21 @@ export default function Home() {
     year: user?.year ?? null,
   };
 
-  const [topEvents, setTopEvents] = useState<any[]>(cachedOverview?.topEvents ?? []);
-  const [trendingClubs, setTrendingClubs] = useState<any[]>(cachedOverview?.trendingClubs ?? []);
+  const [topEvents, setTopEvents] = useState<EdenEvent[]>(cachedOverview?.topEvents ?? []);
+  // No loading or error state for trending: the panel renders only when there is
+  // something to rank (AC 35), so a skeleton or an error box would be exactly the
+  // "left behind" chrome that criterion forbids.
+  const [trendingOrgs, setTrendingOrgs] = useState<TrendingOrg[]>(cachedOverview?.trendingOrgs ?? []);
   const [topEventsLoading, setTopEventsLoading] = useState(!cachedOverview?.topEvents?.length);
-  const [trendingClubsLoading, setTrendingClubsLoading] = useState(!cachedOverview?.trendingClubs?.length);
   const [topEventsError, setTopEventsError] = useState<string | null>(null);
-  const [trendingClubsError, setTrendingClubsError] = useState<string | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [selectedEvent, setSelectedEvent] = useState<EdenEvent | null>(null);
   const [modalAttendees, setModalAttendees] = useState<AttendeeInfo | null>(null);
   const [attendeeMap, setAttendeeMap] = useState<Record<number, AttendeeInfo>>({});
   const [connectionIds, setConnectionIds] = useState<Set<string>>(new Set());
   const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
   const selectedEventId = selectedEvent?.event_id ?? null;
   const selectedEventAttendees = selectedEventId ? attendeeMap[selectedEventId] : null;
-  const topEventIds = topEvents.map((event: any) => event.event_id);
+  const topEventIds = topEvents.map((event) => event.event_id);
   const topEventIdsKey = topEventIds.join(",");
 
   const moduleCards = [
@@ -154,7 +119,7 @@ export default function Home() {
       accent: "var(--accent-opportunities)",
       accentSoft: "rgba(49, 197, 143, 0.12)",
       description: "Track internships, scholarships, and roles to act on.",
-      metric: `${mockOpportunities.length} active leads surfaced`,
+      metric: `${opportunityCounts.all} active leads surfaced`,
     },
     {
       icon: Network,
@@ -172,26 +137,28 @@ export default function Home() {
 
     async function loadHomeOverview() {
       setTopEventsError(null);
-      setTrendingClubsError(null);
       setTopEventsLoading(topEvents.length === 0);
-      setTrendingClubsLoading(trendingClubs.length === 0);
 
-      const [eventsResult, clubsResult] = await Promise.allSettled([
+      const [eventsResult, orgsResult] = await Promise.allSettled([
         fetch(`${EVENTS_API}/events/upcoming?limit=3`).then(async (response) => {
           if (!response.ok) throw new Error("Could not load upcoming events");
           const body = await response.json();
           return body.events ?? body;
         }),
-        fetch(`${EVENTS_API}/events/clubs/trending?limit=5`).then(async (response) => {
-          if (!response.ok) throw new Error("Could not load trending clubs");
-          return await response.json();
+        // Star-based ranking (Decision 6). /api/events/clubs/trending still exists
+        // and still feeds the Events page podium — it is NOT deprecated, it just
+        // no longer feeds Home.
+        fetch(`${EVENTS_API}/organizations/trending?limit=5`).then(async (response) => {
+          if (!response.ok) throw new Error("Could not load trending organizations");
+          const body = await response.json();
+          return Array.isArray(body) ? (body as TrendingOrg[]) : [];
         }),
       ]);
 
       if (cancelled) return;
 
       let nextTopEvents = topEvents;
-      let nextTrendingClubs = trendingClubs;
+      let nextTrendingOrgs = trendingOrgs;
 
       if (eventsResult.status === "fulfilled") {
         nextTopEvents = eventsResult.value;
@@ -201,18 +168,17 @@ export default function Home() {
       }
       setTopEventsLoading(false);
 
-      if (clubsResult.status === "fulfilled") {
-        nextTrendingClubs = clubsResult.value;
-        setTrendingClubs(clubsResult.value);
-      } else {
-        setTrendingClubsError("Could not load trending clubs right now.");
+      if (orgsResult.status === "fulfilled") {
+        nextTrendingOrgs = orgsResult.value;
+        setTrendingOrgs(orgsResult.value);
       }
-      setTrendingClubsLoading(false);
+      // A failed trending fetch leaves the panel exactly as absent as an empty
+      // one. There is nothing useful to say about a ranking nobody asked for.
 
-      if (eventsResult.status === "fulfilled" || clubsResult.status === "fulfilled") {
+      if (eventsResult.status === "fulfilled" || orgsResult.status === "fulfilled") {
         writeHomeOverviewCache({
           topEvents: nextTopEvents,
-          trendingClubs: nextTrendingClubs,
+          trendingOrgs: nextTrendingOrgs,
         });
       }
     }
@@ -233,7 +199,7 @@ export default function Home() {
       .then((response) => response.json())
       .then((data) => {
         if (cancelled || data?.error) return;
-        setSelectedEvent((prev: any) => (
+        setSelectedEvent((prev) => (
           prev?.event_id === selectedEventId
             ? { ...prev, ...data }
             : prev
@@ -273,25 +239,34 @@ export default function Home() {
 
   useEffect(() => {
     if (!user?.id || !token) return;
-    fetch(`${AUTH_API}/api/connections`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then((data: { id: string }[]) => {
-        if (cancelled) return;
+    // BUG FIX: this effect referenced `cancelled` without ever declaring it —
+    // a ReferenceError crash whenever the fetch resolved. The cancellation
+    // pattern was copied from the neighboring effects but the declaration and
+    // cleanup were dropped. Restored both so a response arriving after the
+    // user/token changes (or the page unmounts) can't write stale state.
+    let cancelled = false;
+    apiFetch<{ id: string }[]>("/api/connections", token)
+      .then(({ ok, data }) => {
+        if (cancelled || !ok || !Array.isArray(data)) return;
         setConnectionIds(new Set(data.map((connection) => connection.id)));
       })
       .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id, token]);
 
   // Batch-fetch RSVP status for visible events
   useEffect(() => {
-    if (!topEventIds.length || !user?.id) return;
+    if (!topEventIds.length || !user?.id || !token) return;
 
     let cancelled = false;
 
+    // Whose statuses these are comes from the token, not the body.
     fetch(`${EVENTS_API}/rsvp/batch-status`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: user.id, event_ids: topEventIds }),
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify({ event_ids: topEventIds }),
     })
       .then(r => r.json())
       .then((data: Record<string, string>) => {
@@ -306,40 +281,38 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [topEventIds, topEventIdsKey, user?.id]);
+  }, [topEventIds, topEventIdsKey, user?.id, token]);
 
   async function handleRsvpToggle(eventId: number) {
-    if (!user) return;
+    if (!user || !token) return;
     const current = rsvpMap[eventId] ?? null;
     const newStatus = current === "going" ? null : "going";
     setRsvpMap(prev => ({ ...prev, [eventId]: newStatus }));
     try {
-      if (newStatus === null) {
-        await fetch(`${EVENTS_API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, { method: "DELETE" });
-      } else {
-        await fetch(`${EVENTS_API}/rsvp/${eventId}`, {
+      const res = newStatus === null
+        ? await fetch(`${EVENTS_API}/rsvp/${eventId}/${encodeURIComponent(user.id)}`, {
+          method: "DELETE",
+          headers: authHeaders(token),
+        })
+        : await fetch(`${EVENTS_API}/rsvp/${eventId}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders(token) },
           body: JSON.stringify({
-            user_id: user.id, user_name: user.name,
+            user_name: user.name,
             user_major: user.major ?? null,
             user_interests: JSON.stringify(user.interests ?? []),
             user_clubs: JSON.stringify(user.clubs ?? []),
             status: "going",
           }),
         });
-      }
+      if (!res.ok) throw new Error(`RSVP failed with ${res.status}`);
+      // The write returns the fresh attendee snapshot — no follow-up fetch.
+      const data = (await res.json()) as AttendeeInfo;
+      setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
+      if (selectedEvent?.event_id === eventId) setModalAttendees(data);
     } catch {
       setRsvpMap(prev => ({ ...prev, [eventId]: current }));
     }
-
-    fetch(`${EVENTS_API}/rsvp/${eventId}/attendees`)
-      .then(r => r.json())
-      .then((data: AttendeeInfo) => {
-        setAttendeeMap(prev => ({ ...prev, [eventId]: data }));
-        if (selectedEvent?.event_id === eventId) setModalAttendees(data);
-      })
-      .catch(() => {});
   }
 
   return (
@@ -491,95 +464,108 @@ export default function Home() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Opportunity Spotlight */}
-        <div className="lg:col-span-2">
+        {/* Opportunity Spotlight.
+            Spans all three columns when the trending panel is hidden — a
+            two-thirds card sitting beside dead space reads as a broken layout,
+            not as an absent panel. */}
+        <div className={trendingOrgs.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}>
           <div className="flex items-center gap-2 mb-4">
             <h2 className="text-xl font-semibold text-white">Opportunity Spotlight</h2>
             <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "var(--brand-primary)" }} />
           </div>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 }}
-            className="rounded-xl p-6"
-            style={{ background: "var(--surface-gradient)", border: "1px solid var(--border-default)" }}
-          >
-            <div className="flex items-start mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center text-2xl">
-                  {topOpportunity.logo}
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">{topOpportunity.role}</h3>
-                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>{topOpportunity.company}</p>
+          {/* Guard: the hook seeds fallback data synchronously so this is
+              practically always present, but a guard costs one line and makes
+              the card safe against an empty feed forever. */}
+          {topOpportunity && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1 }}
+              className="rounded-xl p-6"
+              style={{ background: "var(--surface-gradient)", border: "1px solid var(--border-default)" }}
+            >
+              <div className="flex items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center text-2xl">
+                    {OPPORTUNITY_TYPE_ICON[topOpportunity.type]}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">{topOpportunity.title}</h3>
+                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>{topOpportunity.org}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex flex-wrap gap-2 mb-4">
-              <span className="text-xs px-3 py-1.5 rounded-md" style={{ backgroundColor: "var(--accent-opportunities-soft)", color: "var(--accent-opportunities)" }}>
-                {topOpportunity.type}
-              </span>
-              <DeadlineChip deadline={topOpportunity.deadline} />
-              <span className="text-xs px-3 py-1.5 rounded-md bg-white/5" style={{ color: "var(--text-muted)" }}>
-                {topOpportunity.location}
-              </span>
-            </div>
-            <p className="text-sm text-white mb-4 font-medium">{topOpportunity.salary}</p>
-            <div className="flex gap-2">
-              <button className="flex-1 px-4 py-2 text-white rounded-lg font-medium transition-all" style={{ background: "var(--brand-gradient)", boxShadow: "var(--shadow-brand)" }}>
-                Apply Now
-              </button>
-              <Link to="/opportunities" className="px-4 py-2 bg-white/5 text-white rounded-lg font-medium hover:bg-white/10 transition-colors">
-                View More
-              </Link>
-            </div>
-          </motion.div>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <span className="text-xs px-3 py-1.5 rounded-md" style={{ backgroundColor: "var(--accent-opportunities-soft)", color: "var(--accent-opportunities)" }}>
+                  {topOpportunity.type}
+                </span>
+                {/* Canonical Opportunity.deadline is an ISO string (it travels over
+                    JSON); DeadlineChip wants a Date, so parse at the boundary. */}
+                {topOpportunity.deadline && <DeadlineChip deadline={new Date(topOpportunity.deadline)} />}
+                <span className="text-xs px-3 py-1.5 rounded-md bg-white/5" style={{ color: "var(--text-muted)" }}>
+                  {topOpportunity.city}, {topOpportunity.state}
+                </span>
+              </div>
+              {/* Internships carry `stipend`, scholarships carry `amount`; networking events have neither. */}
+              {(topOpportunity.stipend ?? topOpportunity.amount) && (
+                <p className="text-sm text-white mb-4 font-medium">{topOpportunity.stipend ?? topOpportunity.amount}</p>
+              )}
+              <div className="flex gap-2">
+                <button className="flex-1 px-4 py-2 text-white rounded-lg font-medium transition-all" style={{ background: "var(--brand-gradient)", boxShadow: "var(--shadow-brand)" }}>
+                  Apply Now
+                </button>
+                <Link to="/opportunities" className="px-4 py-2 bg-white/5 text-white rounded-lg font-medium hover:bg-white/10 transition-colors">
+                  View More
+                </Link>
+              </div>
+            </motion.div>
+          )}
         </div>
 
-        {/* Trending Clubs */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-5 h-5" style={{ color: "var(--brand-primary)" }} />
-            <h2 className="text-xl font-semibold text-white">Trending Clubs</h2>
-          </div>
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.12 }}
-            className="rounded-xl p-4"
-            style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
-          >
-            <div className="space-y-3">
-              {trendingClubsLoading && trendingClubs.length === 0 && Array.from({ length: 5 }).map((_, index) => (
-                <div key={`club-skeleton-${index}`} className="flex items-center gap-3 animate-pulse">
-                  <div className="w-8 h-8 rounded-lg" style={{ backgroundColor: "rgba(255,255,255,0.08)" }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="h-3 rounded mb-2 w-2/3" style={{ backgroundColor: "rgba(255,255,255,0.08)" }} />
-                    <div className="h-2.5 rounded w-1/3" style={{ backgroundColor: "rgba(255,255,255,0.05)" }} />
-                  </div>
-                  <div className="h-3 w-8 rounded" style={{ backgroundColor: "rgba(255,255,255,0.05)" }} />
-                </div>
-              ))}
-              {!trendingClubsLoading && trendingClubs.length === 0 && (
-                <div className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  {trendingClubsError ?? "No trending clubs right now."}
-                </div>
-              )}
-              {trendingClubs.map((club, index) => (
-                <div key={club.club_name} className="flex items-center gap-3 group cursor-pointer">
-                  <TrendingClubAvatar clubId={club.club_id} clubName={club.club_name} index={index} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate transition-colors group-hover:opacity-90">
-                      {club.club_name}
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>{club.event_count} events this semester</p>
-                  </div>
-                  <ClubChangePct pct={club.change_pct ?? null} />
-                </div>
-              ))}
+        {/* Trending Clubs.
+            AC 35: when nothing is starred, this whole column is ABSENT — no
+            container, no heading, no empty-state line, no skeleton. Gating on
+            `length > 0` alone (rather than on a loading flag) is what makes it
+            absent *during* the fetch too, so there is no skeleton left behind.
+            AC 36 needs no code: the first star makes the array non-empty on the
+            next load and the panel simply appears. */}
+        {trendingOrgs.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="w-5 h-5" style={{ color: "var(--brand-primary)" }} />
+              <h2 className="text-xl font-semibold text-white">Trending Clubs</h2>
             </div>
-          </motion.div>
-        </div>
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.12 }}
+              className="rounded-xl p-4"
+              style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
+            >
+              <div className="space-y-3">
+                {trendingOrgs.map((org, index) => (
+                  // Keyed by club_id, not by name: a real unique id, where the old
+                  // name key collided across duplicate club rows.
+                  <Link
+                    to="/organizations"
+                    key={org.club_id}
+                    className="flex items-center gap-3 group cursor-pointer"
+                  >
+                    <TrendingClubAvatar clubId={org.club_id} clubName={org.club_name} index={index} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate transition-colors group-hover:opacity-90">
+                        {org.club_name}
+                      </p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {org.star_count} {org.star_count === 1 ? "star" : "stars"}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
       </div>
     </div>
 

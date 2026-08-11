@@ -1,14 +1,11 @@
 import { Request, Response, NextFunction } from "express"
-import { createClerkClient } from "@clerk/backend"
 import { db } from "../config/postgres.js"
-import { verifyClerkSessionToken } from "../utils/clerkToken.js"
+import { verifyClerkSessionToken, getClerkVerifiedPrimaryEmail } from "../utils/clerkToken.js"
 import { verifySessionToken } from "../utils/customToken.js"
 
 export interface AuthRequest extends Request {
   userId?: string
 }
-
-const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! })
 
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization
@@ -53,32 +50,29 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       return
     }
 
-    try {
-      const clerkUser = await clerk.users.getUser(clerkId)
-      const primaryEmail = clerkUser.emailAddresses.find(
-        (emailAddress: { id: string; emailAddress: string }) =>
-          emailAddress.id === clerkUser.primaryEmailAddressId
-      )?.emailAddress
+    // Reclaim an existing row by the Clerk-VERIFIED primary email — including
+    // rows still carrying a clerk_id from a previous Clerk instance. Matching
+    // only `clerk_id IS NULL` here once stranded every existing user behind
+    // 403/500 loops when the app moved to a new production instance: their old
+    // ids matched nothing, and the stale value blocked the re-link.
+    const primaryEmail = await getClerkVerifiedPrimaryEmail(clerkId)
+    if (primaryEmail) {
+      const legacy = await db.query(
+        "SELECT id, clerk_id FROM users WHERE email = $1",
+        [primaryEmail]
+      )
 
-      if (primaryEmail) {
-        const legacy = await db.query(
-          "SELECT id FROM users WHERE email = $1 AND clerk_id IS NULL",
-          [primaryEmail]
+      if (legacy.rows.length > 0) {
+        const stale = legacy.rows[0].clerk_id !== null
+        await db.query(
+          "UPDATE users SET clerk_id = $1 WHERE id = $2",
+          [clerkId, legacy.rows[0].id]
         )
-
-        if (legacy.rows.length > 0) {
-          await db.query(
-            "UPDATE users SET clerk_id = $1 WHERE id = $2",
-            [clerkId, legacy.rows[0].id]
-          )
-          req.userId = legacy.rows[0].id
-          console.info("[security][auth-success]", { path: req.originalUrl, ip: req.ip, userId: req.userId, via: "legacy_reclaim" })
-          next()
-          return
-        }
+        req.userId = legacy.rows[0].id
+        console.info("[security][auth-success]", { path: req.originalUrl, ip: req.ip, userId: req.userId, via: stale ? "stale_clerk_reclaim" : "legacy_reclaim" })
+        next()
+        return
       }
-    } catch {
-      // If Clerk user lookup fails, fall through to PROFILE_REQUIRED below.
     }
 
     console.warn("[security][auth-failed]", { reason: "profile_required", path: req.originalUrl, ip: req.ip, clerkId })

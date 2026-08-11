@@ -11,7 +11,7 @@ import {
   updateProfessorNode,
 } from "../services/graphService.js"
 import { safeGraphWrite } from "../services/graphService.js"
-import { verifyClerkSessionToken } from "../utils/clerkToken.js"
+import { verifyClerkSessionToken, getClerkVerifiedPrimaryEmail } from "../utils/clerkToken.js"
 import { syncRateLimiter, profileUpdateRateLimiter } from "../middleware/authRateLimit.js"
 import {
   requireSafeId,
@@ -263,14 +263,31 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
       return
     }
 
+    // Link decisions run on the Clerk-VERIFIED primary email, not the body
+    // email — see getClerkVerifiedPrimaryEmail. This also reclaims rows whose
+    // clerk_id points at a PREVIOUS Clerk instance: matching only
+    // `clerk_id IS NULL` here once 500'd on users_email_key for every existing
+    // user after a production instance swap, stranding them at setup.
+    const verifiedEmail = await getClerkVerifiedPrimaryEmail(clerkId)
+    const linkEmail = verifiedEmail ?? normalizedEmail
     const legacy = await db.query(
-      "SELECT id FROM users WHERE email = $1 AND clerk_id IS NULL",
-      [normalizedEmail]
+      "SELECT id, clerk_id FROM users WHERE email = $1",
+      [linkEmail]
     )
     if (legacy.rows.length > 0) {
-      await db.query("UPDATE users SET clerk_id = $1 WHERE id = $2", [clerkId, legacy.rows[0].id])
-      console.info("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "legacy_linked", userId: legacy.rows[0].id, ip: req.ip })
-      const user = await db.query(SELECT_PROFILE, [legacy.rows[0].id])
+      const row = legacy.rows[0]
+      const stale = row.clerk_id !== null // != clerkId too, or the lookup above would have matched
+      if (stale && !verifiedEmail) {
+        // The row belongs to a different Clerk identity and Clerk couldn't
+        // confirm the caller owns this address — refuse rather than hand the
+        // row over on a client-supplied email.
+        console.warn("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "relink_unverified_refused", ip: req.ip })
+        res.status(409).json({ error: "Account already linked" })
+        return
+      }
+      await db.query("UPDATE users SET clerk_id = $1 WHERE id = $2", [clerkId, row.id])
+      console.info("[security][auth-attempt]", { route: "/api/auth/sync", outcome: stale ? "stale_clerk_relinked" : "legacy_linked", userId: row.id, ip: req.ip })
+      const user = await db.query(SELECT_PROFILE, [row.id])
       res.json(formatUser(user.rows[0], { includePrivate: true }))
       return
     }
@@ -349,6 +366,13 @@ router.post("/sync", syncRateLimiter, async (req: Request, res: Response) => {
     console.info("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "new_user_created", userId: id, ip: req.ip })
     res.status(201).json(formatUser(user.rows[0], { includePrivate: true }))
   } catch (err) {
+    // A concurrent sync for the same email can still slip between the SELECT
+    // and the INSERT; surface the constraint as a retryable conflict, not a 500.
+    if ((err as { code?: string })?.code === "23505") {
+      console.warn("[security][auth-attempt]", { route: "/api/auth/sync", outcome: "duplicate_email_conflict", ip: req.ip })
+      res.status(409).json({ error: "An account with this email already exists" })
+      return
+    }
     console.error("Sync error:", err)
     res.status(500).json({ error: "Internal server error" })
   }

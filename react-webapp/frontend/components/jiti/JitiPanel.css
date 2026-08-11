@@ -6,13 +6,16 @@
 
 .jiti-launcher {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
+  /* Nudged in from the corner rather than pinned to it: 24px read as "stuck to
+     the edge" next to the app's own gutters. 64px is still unmistakably a
+     corner affordance, just not jammed against the scrollbar. */
+  right: 64px;
+  bottom: 40px;
   /* Highest existing z-index in the app is 1100
      (pages/opportunities/Opportunities.css:461-463) — sit above everything. */
   z-index: 1150;
-  width: 56px;
-  height: 56px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
   border: 1px solid var(--border-default);
   background: var(--brand-primary);
@@ -35,18 +38,18 @@
    there instead of overlapping it. */
 .jiti-launcher--left {
   right: auto;
-  left: 24px;
+  left: 64px;
 }
 
 .jiti-launcher svg {
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
 }
 
 .jiti-panel {
   position: fixed;
-  right: 24px;
-  bottom: 92px;
+  right: 64px;
+  bottom: 120px;
   z-index: 1150;
   width: min(380px, calc(100vw - 32px));
   max-height: min(560px, calc(100vh - 140px));
@@ -61,7 +64,7 @@
 
 .jiti-panel--left {
   right: auto;
-  left: 24px;
+  left: 64px;
 }
 
 .jiti-panel__header {
@@ -205,7 +208,7 @@
 @media (max-width: 480px) {
   .jiti-panel {
     right: 16px;
-    bottom: 84px;
+    bottom: 92px;
   }
   .jiti-panel--left {
     right: auto;

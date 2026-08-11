@@ -147,7 +147,7 @@ export default function JitiPanel({ token, quota, positionLeft, onClose }: JitiP
         <div className="jiti-panel__header-text">
           <p className="jiti-panel__title">Jiti</p>
           <span className="jiti-panel__quota">
-            {quota.used} of {quota.limit} today
+            {quota.remaining} of {quota.limit} left today
           </span>
         </div>
         <button type="button" className="jiti-panel__close" onClick={onClose} aria-label="Close Jiti chat">

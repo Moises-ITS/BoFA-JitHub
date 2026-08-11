@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
 import { Calendar, Briefcase, Network, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -99,8 +99,20 @@ export default function Home() {
   const [rsvpMap, setRsvpMap] = useState<Record<number, string | null>>({});
   const selectedEventId = selectedEvent?.event_id ?? null;
   const selectedEventAttendees = selectedEventId ? attendeeMap[selectedEventId] : null;
-  const topEventIds = topEvents.map((event) => event.event_id);
-  const topEventIdsKey = topEventIds.join(",");
+  // Both memoized, and the KEY is what effects depend on.
+  //
+  // Unmemoized, `topEventIds` was a fresh array on every render, so the
+  // batch-status effect below — which listed it as a dependency — re-ran every
+  // render, set state, re-rendered, and re-ran. That loop hammered
+  // POST /api/rsvp/batch-status until the IP rate limiter started returning
+  // 429s, which then looked like a rate-limit bug rather than a render bug.
+  // The join()'d string is the honest dependency: it changes only when the set
+  // of ids actually changes.
+  const topEventIds = useMemo(
+    () => topEvents.map((event) => event.event_id),
+    [topEvents],
+  );
+  const topEventIdsKey = useMemo(() => topEventIds.join(","), [topEventIds]);
 
   const moduleCards = [
     {
@@ -281,7 +293,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [topEventIds, topEventIdsKey, user?.id, token]);
+  }, [topEventIdsKey, user?.id, token]);
 
   async function handleRsvpToggle(eventId: number) {
     if (!user || !token) return;

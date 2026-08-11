@@ -199,19 +199,34 @@ if (process.env.ENABLE_EDEN === "true") {
 // it calls a metered external API and needs ANTHROPIC_API_KEY + Redis
 // configured before it's safe to expose. See src/services/jitiService.ts.
 if (process.env.JITI_ENABLED === "true") {
-  const jitiMod = await import("./routes/jiti.js")
-  app.use("/api/jiti", jitiMod.default)
-  console.log("[config] Jiti routes mounted at /api/jiti (JITI_ENABLED=true)")
-
-  // Build and token-check the cached corpus HERE, at boot, rather than letting
-  // it happen lazily on the first student's question. The check throws when the
-  // system block falls under Anthropic's 4,096-token minimum cacheable prefix —
-  // a corpus that never caches pays the cache-WRITE price on every request and
-  // quietly burns the daily budget. Doing it at boot turns that into a failed
-  // deploy you notice immediately; doing it lazily turns it into a 500 served
-  // to one unlucky student and a log line nobody reads.
-  const { warmUpJiti } = await import("./services/jitiService.js")
-  await warmUpJiti()
+  // Warm up BEFORE mounting, and mount only if it succeeds.
+  //
+  // The warm-up builds the club corpus and token-checks it, throwing when the
+  // system block falls under Anthropic's 4,096-token minimum cacheable prefix
+  // (a prefix below that never caches, so every request pays the cache-WRITE
+  // price and quietly burns the daily budget) or when ANTHROPIC_API_KEY is
+  // missing entirely.
+  //
+  // Failing here must take out the CHATBOT, not the server. An earlier version
+  // mounted first and let the throw escape, which meant one wrong env var on a
+  // Railway deploy killed auth, events, and opportunities along with it. Jiti
+  // is one optional feature; it does not get to decide whether 2000 students
+  // can log in. The frontend widget already fails closed on a 404 from
+  // /api/jiti/status, so an unmounted route degrades to "no chat bubble".
+  try {
+    const { warmUpJiti } = await import("./services/jitiService.js")
+    await warmUpJiti()
+    const jitiMod = await import("./routes/jiti.js")
+    app.use("/api/jiti", jitiMod.default)
+    console.log("[config] Jiti routes mounted at /api/jiti (JITI_ENABLED=true)")
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(
+      "[config] Jiti is DISABLED — warm-up failed, routes not mounted. " +
+        "The rest of the backend is unaffected. Cause:",
+      msg
+    )
+  }
 }
 
 app.use("/api", (_req, res) => {

@@ -106,9 +106,15 @@ export async function createStudentNode(student: StudentInput): Promise<string> 
 
     for (const clubName of cappedStudent.clubs) {
       await session.run(
+        // Keyed on the LOWERCASED name, exactly like Company below. Merging on
+        // the raw label made "SHPE" and "Shpe" two separate organisations with
+        // separate memberships — and since members type these freely, the graph
+        // fragmented a little more with every signup. The first spelling seen
+        // wins the display label (ON CREATE), so casing stays stable once set.
         `MATCH (s:Student {id: $studentId})
-         MERGE (c:Club {type: 'club', label: $clubName})
-           ON CREATE SET c.id = 'club-' + toLower(replace($clubName, ' ', '-'))
+         MERGE (c:Club {type: 'club', normalizedName: toLower($clubName)})
+           ON CREATE SET c.id    = 'club-' + toLower(replace($clubName, ' ', '-')),
+                         c.label = $clubName
          MERGE (s)-[:MEMBER_OF]->(c)`,
         { studentId: cappedStudent.id, clubName }
       )
@@ -129,15 +135,22 @@ export async function createStudentNode(student: StudentInput): Promise<string> 
     // If so, create an Interest node and connect all matching students to it.
     for (const interest of cappedStudent.interests) {
       const result = await session.run(
-        `MATCH (other:Student) WHERE other.id <> $id AND $interest IN other.interests
+        // Case-insensitive: "Robotics" and "robotics" are the same interest, so
+        // two people who typed it differently must still cross the 2-person
+        // threshold together. An exact `IN` comparison silently kept them apart
+        // and neither ever got a node.
+        `MATCH (other:Student)
+         WHERE other.id <> $id
+           AND ANY(x IN other.interests WHERE toLower(x) = toLower($interest))
          RETURN other.id AS otherId`,
         { id: cappedStudent.id, interest }
       )
 
       if (result.records.length > 0) {
         await session.run(
-          `MERGE (i:Interest {type: 'interest', label: $interest})
-           ON CREATE SET i.id = 'interest-' + toLower(replace($interest, ' ', '-'))
+          `MERGE (i:Interest {type: 'interest', normalizedName: toLower($interest)})
+           ON CREATE SET i.id    = 'interest-' + toLower(replace($interest, ' ', '-')),
+                         i.label = $interest
            WITH i MATCH (s:Student {id: $id})
            MERGE (s)-[:INTERESTED_IN]->(i)`,
           { id: cappedStudent.id, interest }
@@ -145,7 +158,10 @@ export async function createStudentNode(student: StudentInput): Promise<string> 
         for (const record of result.records) {
           const otherId = record.get("otherId")
           await session.run(
-            `MATCH (s:Student {id: $otherId}), (i:Interest {label: $interest})
+            // Matched on normalizedName, not label: the other student may have
+            // typed a different casing, and the node carries whichever spelling
+            // was seen first. Keying on label would fail to find it.
+            `MATCH (s:Student {id: $otherId}), (i:Interest {normalizedName: toLower($interest)})
              MERGE (s)-[:INTERESTED_IN]->(i)`,
             { otherId, interest }
           )
@@ -196,9 +212,15 @@ export async function updateStudentNode(student: StudentInput): Promise<void> {
     // Re-create MEMBER_OF relationships
     for (const clubName of cappedStudent.clubs) {
       await session.run(
+        // Keyed on the LOWERCASED name, exactly like Company below. Merging on
+        // the raw label made "SHPE" and "Shpe" two separate organisations with
+        // separate memberships — and since members type these freely, the graph
+        // fragmented a little more with every signup. The first spelling seen
+        // wins the display label (ON CREATE), so casing stays stable once set.
         `MATCH (s:Student {id: $studentId})
-         MERGE (c:Club {type: 'club', label: $clubName})
-           ON CREATE SET c.id = 'club-' + toLower(replace($clubName, ' ', '-'))
+         MERGE (c:Club {type: 'club', normalizedName: toLower($clubName)})
+           ON CREATE SET c.id    = 'club-' + toLower(replace($clubName, ' ', '-')),
+                         c.label = $clubName
          MERGE (s)-[:MEMBER_OF]->(c)`,
         { studentId: cappedStudent.id, clubName }
       )
@@ -219,14 +241,21 @@ export async function updateStudentNode(student: StudentInput): Promise<void> {
     // Re-create INTERESTED_IN relationships (shared-interest logic)
     for (const interest of cappedStudent.interests) {
       const result = await session.run(
-        `MATCH (other:Student) WHERE other.id <> $id AND $interest IN other.interests
+        // Case-insensitive: "Robotics" and "robotics" are the same interest, so
+        // two people who typed it differently must still cross the 2-person
+        // threshold together. An exact `IN` comparison silently kept them apart
+        // and neither ever got a node.
+        `MATCH (other:Student)
+         WHERE other.id <> $id
+           AND ANY(x IN other.interests WHERE toLower(x) = toLower($interest))
          RETURN other.id AS otherId`,
         { id: cappedStudent.id, interest }
       )
       if (result.records.length > 0) {
         await session.run(
-          `MERGE (i:Interest {type: 'interest', label: $interest})
-           ON CREATE SET i.id = 'interest-' + toLower(replace($interest, ' ', '-'))
+          `MERGE (i:Interest {type: 'interest', normalizedName: toLower($interest)})
+           ON CREATE SET i.id    = 'interest-' + toLower(replace($interest, ' ', '-')),
+                         i.label = $interest
            WITH i MATCH (s:Student {id: $id})
            MERGE (s)-[:INTERESTED_IN]->(i)`,
           { id: cappedStudent.id, interest }
@@ -234,7 +263,10 @@ export async function updateStudentNode(student: StudentInput): Promise<void> {
         for (const record of result.records) {
           const otherId = record.get("otherId")
           await session.run(
-            `MATCH (s:Student {id: $otherId}), (i:Interest {label: $interest})
+            // Matched on normalizedName, not label: the other student may have
+            // typed a different casing, and the node carries whichever spelling
+            // was seen first. Keying on label would fail to find it.
+            `MATCH (s:Student {id: $otherId}), (i:Interest {normalizedName: toLower($interest)})
              MERGE (s)-[:INTERESTED_IN]->(i)`,
             { otherId, interest }
           )
@@ -313,8 +345,13 @@ export async function createProfessorNode(prof: ProfessorInput): Promise<string>
 
     for (const interest of prof.interests) {
       await session.run(
-        `MERGE (i:Interest {type: 'interest', label: $interest})
-         ON CREATE SET i.id = 'interest-' + toLower(replace($interest, ' ', '-'))
+        // Same normalizedName key the student paths use. Professors and students
+        // must land on ONE node per interest — keying these on the raw label
+        // would put a professor's "Robotics" on a different node from the
+        // students' "robotics", and the two groups would never meet in the graph.
+        `MERGE (i:Interest {type: 'interest', normalizedName: toLower($interest)})
+         ON CREATE SET i.id    = 'interest-' + toLower(replace($interest, ' ', '-')),
+                       i.label = $interest
          WITH i MATCH (p:Professor {id: $id})
          MERGE (p)-[:INTERESTED_IN]->(i)`,
         { id: prof.id, interest }
@@ -355,8 +392,13 @@ export async function updateProfessorNode(prof: ProfessorInput): Promise<void> {
     // Re-create relationships
     for (const interest of prof.interests) {
       await session.run(
-        `MERGE (i:Interest {type: 'interest', label: $interest})
-         ON CREATE SET i.id = 'interest-' + toLower(replace($interest, ' ', '-'))
+        // Same normalizedName key the student paths use. Professors and students
+        // must land on ONE node per interest — keying these on the raw label
+        // would put a professor's "Robotics" on a different node from the
+        // students' "robotics", and the two groups would never meet in the graph.
+        `MERGE (i:Interest {type: 'interest', normalizedName: toLower($interest)})
+         ON CREATE SET i.id    = 'interest-' + toLower(replace($interest, ' ', '-')),
+                       i.label = $interest
          WITH i MATCH (p:Professor {id: $id})
          MERGE (p)-[:INTERESTED_IN]->(i)`,
         { id: prof.id, interest }

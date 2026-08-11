@@ -32,6 +32,13 @@ const BACKUP_DIR = path.resolve(__dirname, "..", "..", "..", ".backups", "video-
 
 const APPLY = process.argv.includes("--apply");
 
+// --only=video10.mp4,video20.mp4 — reprocess specific clips (e.g. ones that
+// failed because a file was locked) without touching the rest.
+const onlyArg = process.argv.find((arg) => arg.startsWith("--only="));
+const ONLY = onlyArg
+  ? new Set(onlyArg.slice("--only=".length).split(",").map((s) => s.trim()).filter(Boolean))
+  : null;
+
 // Height in px. 480 is generous behind a 5px blur; the tiles render ~250px tall
 // on a 1080p screen, so even this is oversampled.
 const HEIGHT = 480;
@@ -40,6 +47,38 @@ const HEIGHT = 480;
 const CRF = 32;
 
 const mb = (bytes) => (bytes / 1048576).toFixed(1);
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Move `from` onto `to`, surviving a locked destination.
+ *
+ * Windows refuses to rename or delete a file while any process holds it open,
+ * and a looping <video> in a browser tab holds its clip open indefinitely — so
+ * the clips currently on screen are precisely the ones that fail. Retrying
+ * alone does not help: the lock is permanent, not transient.
+ *
+ * The fallback works because those holders opened the file with read SHARING.
+ * That forbids rename/delete but still permits writes, so overwriting the
+ * contents in place succeeds where swapping the directory entry cannot.
+ */
+async function replaceFile(from, to, attempts = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      fs.renameSync(from, to);
+      return;
+    } catch (err) {
+      const locked = err.code === "EPERM" || err.code === "EBUSY";
+      if (!locked) throw err;
+      if (attempt >= attempts) {
+        fs.writeFileSync(to, fs.readFileSync(from));
+        fs.unlinkSync(from);
+        return;
+      }
+      await sleep(attempt * 300);
+    }
+  }
+}
 
 async function ffmpegAvailable() {
   try {
@@ -60,6 +99,7 @@ async function main() {
   const files = fs
     .readdirSync(VIDEO_DIR)
     .filter((name) => name.toLowerCase().endsWith(".mp4"))
+    .filter((name) => !ONLY || ONLY.has(name))
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
   if (files.length === 0) {
@@ -115,8 +155,16 @@ async function main() {
       // already safe and the temp file is the only casualty.
       if (!fs.existsSync(backup)) fs.copyFileSync(src, backup);
 
+      // ALWAYS encode from the pristine backup, never from whatever is
+      // currently in public/. Encoding from the live file made this script
+      // destructive to re-run: a second pass would re-encode already-compressed
+      // output, stacking generation loss each time. Sourcing from the backup
+      // makes every run produce byte-identical output no matter how often it
+      // runs — which is what lets a partial failure be retried safely.
+      const encodeFrom = fs.existsSync(backup) ? backup : src;
+
       await run("ffmpeg", [
-        "-y", "-i", src,
+        "-y", "-i", encodeFrom,
         "-an",                              // strip audio — tiles are muted
         "-vf", `scale=-2:${HEIGHT}`,        // -2 keeps the aspect ratio even
         "-c:v", "libx264",
@@ -129,7 +177,7 @@ async function main() {
       ]);
 
       await run("ffmpeg", [
-        "-y", "-i", src,
+        "-y", "-i", encodeFrom,
         "-vf", `scale=-2:360,thumbnail`,    // thumbnail picks a representative frame
         "-frames:v", "1",
         "-q:v", "80",
@@ -137,7 +185,7 @@ async function main() {
         poster,
       ]);
 
-      fs.renameSync(tmp, src);
+      await replaceFile(tmp, src);
       const newSize = fs.statSync(src).size;
       after += newSize;
       const saved = Math.round((1 - newSize / originalSize) * 100);

@@ -3,9 +3,10 @@
  * resetAt}) for the chat widget.
  *
  * Doubles as the feature-flag check: GET /api/jiti/status is fetched once,
- * on mount (once a token exists), and a 404 means the feature is off
- * server-side — JitiWidget reads `phase === "unavailable"` to render
- * nothing at all (fail closed, no launcher button). Any OTHER failure fails
+ * on mount (once a token exists). A 404 means the feature is off
+ * server-side; a 403 means this account is not permitted Jiti (guest
+ * accounts). Either way JitiWidget reads `phase === "unavailable"` and
+ * renders nothing at all (fail closed, no launcher button). Any OTHER failure fails
  * OPEN with a conservative default (5/day) so a transient backend hiccup
  * doesn't hide the widget entirely; POST /api/jiti/chat remains the real,
  * authoritative gate on every send regardless.
@@ -89,7 +90,13 @@ export function useJitiQuota(token: string | null): JitiQuotaState {
       try {
         const { ok, status, data } = await apiFetch<StatusResponse>("/api/jiti/status", token)
         if (cancelled) return
-        if (status === 404) {
+        // 404 = feature flag off server-side. 403 = this account is not
+        // allowed Jiti at all (guest accounts — see denyGuests in
+        // routes/jiti.ts). Both mean "render nothing": a launcher that opens
+        // onto a permission error is worse than no launcher, and a guest has
+        // no path to fix it. Every OTHER failure still fails OPEN with the
+        // conservative default below, because POST /chat re-checks anyway.
+        if (status === 404 || status === 403) {
           setState({ phase: "unavailable" })
           return
         }

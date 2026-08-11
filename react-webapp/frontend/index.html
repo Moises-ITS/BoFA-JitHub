@@ -3,7 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BoFA</title>
+    <title>JitHub — Your Campus in One Place</title>
+    <meta name="description" content="Everything happening at NJIT — events, organizations, opportunities, and your campus network, in one place." />
+
+    <!-- Favicons: SVG for modern browsers, PNG fallbacks for the rest.
+         All derive from public/jithub-logo.svg via scripts/generate-brand-assets.mjs. -->
+    <link rel="icon" type="image/svg+xml" href="/jithub-logo.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Social link previews (LinkedIn/Slack/iMessage read og:*, Twitter reads
+         twitter:*). og:image MUST be an absolute URL — scrapers fetch it with
+         no page context — and a raster, not SVG. The image is a real screenshot
+         of the landing page; regenerate via scripts/generate-brand-assets.mjs
+         after a redesign, then re-scrape at linkedin.com/post-inspector (social
+         sites cache these for weeks). -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="JitHub" />
+    <meta property="og:title" content="JitHub — Your Campus in One Place" />
+    <meta property="og:description" content="Everything happening at NJIT — events, organizations, opportunities, and your campus network." />
+    <meta property="og:url" content="https://jit-hub.com/" />
+    <meta property="og:image" content="https://jit-hub.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="JitHub — Your Campus in One Place" />
+    <meta name="twitter:description" content="Everything happening at NJIT — events, organizations, opportunities, and your campus network." />
+    <meta name="twitter:image" content="https://jit-hub.com/og-image.png" />
     <!-- Archivo + IBM Plex Mono back the signed-out auth screens (see
          pages/auth/AuthBackdrop.css). Loaded here rather than @import-ed from
          CSS so the fetch starts with the document instead of waiting on the

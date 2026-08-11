@@ -135,7 +135,7 @@ describe("JitiPanel", () => {
     vi.stubGlobal("fetch", fetchMock)
     render(<Harness token="test-token" />)
 
-    await screen.findByText(/0 of 5 today/i)
+    await screen.findByText(/5 of 5 left today/i)
     const callsBeforeEvent = fetchMock.mock.calls.length
 
     const payload = {
@@ -151,7 +151,7 @@ describe("JitiPanel", () => {
       )
     })
 
-    await screen.findByText(/3 of 5 today/i)
+    await screen.findByText(/2 of 5 left today/i)
     expect(fetchMock.mock.calls.length).toBe(callsBeforeEvent)
   })
 })

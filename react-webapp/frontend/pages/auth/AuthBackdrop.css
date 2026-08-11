@@ -76,11 +76,34 @@
   filter: var(--ab-tile-filter, none);
 }
 
+/*
+ * Starts invisible and dissolves in once the clip can play (the .is-ready class
+ * is applied from AuthBackdrop.tsx). Without this the tile cut straight from
+ * empty to video the moment the first frame decoded, which read as a black
+ * flash — and with 24 tiles settling at different times, two dozen of them.
+ *
+ * 700ms is deliberately slow: tiles arrive staggered, and a quick fade makes
+ * that staggering read as popping. A long dissolve reads as the background
+ * gently coming up.
+ */
 .auth-backdrop__video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  opacity: 0;
+  transition: opacity 700ms ease-out;
+}
+
+.auth-backdrop__video.is-ready {
+  opacity: 1;
+}
+
+/* No dissolve for anyone who asked for less motion — the clip simply appears. */
+@media (prefers-reduced-motion: reduce) {
+  .auth-backdrop__video {
+    transition: none;
+  }
 }
 
 @keyframes ab-drift-left {

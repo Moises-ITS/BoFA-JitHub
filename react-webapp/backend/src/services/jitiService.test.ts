@@ -300,3 +300,24 @@ describe('chat — reconcile', () => {
     incrBySpy.mockRestore()
   })
 })
+
+describe('history size limits — cost-amplification guard', () => {
+  it('truncates each history entry to 2,000 chars', () => {
+    const huge = 'x'.repeat(50_000)
+    const out = jiti.validateChatInput({
+      question: 'hi', deviceId: 'd',
+      history: [{ role: 'user', content: huge }, { role: 'assistant', content: huge }],
+    })
+    for (const entry of out.history) expect(entry.content.length).toBe(2_000)
+  })
+
+  it('bounds total history payload regardless of what the client posts', () => {
+    // 6 entries x 50KB = 300KB in; must come out bounded by 6 x 2,000.
+    const out = jiti.validateChatInput({
+      question: 'hi', deviceId: 'd',
+      history: Array.from({ length: 6 }, () => ({ role: 'user', content: 'y'.repeat(50_000) })),
+    })
+    const total = out.history.reduce((n, e) => n + e.content.length, 0)
+    expect(total).toBeLessThanOrEqual(6 * 2_000)
+  })
+})

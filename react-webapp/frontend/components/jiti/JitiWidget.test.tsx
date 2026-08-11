@@ -108,4 +108,26 @@ describe("JitiWidget", () => {
     expect(statusCalls).toHaveLength(1)
     expect(chatCalls).toHaveLength(0)
   })
+
+  it("renders nothing for a guest account (403 GUEST_NOT_ALLOWED)", async () => {
+    // Guests are denied Jiti server-side (denyGuests in routes/jiti.ts). The
+    // widget must hide entirely rather than show a launcher that errors on
+    // first use — a guest has no way to resolve that error.
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({
+        ok: false,
+        status: 403,
+        json: () =>
+          Promise.resolve({
+            error: "Jiti is available to NJIT students, faculty, and staff.",
+            code: "GUEST_NOT_ALLOWED",
+          }),
+      })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+    renderWidget()
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    expect(screen.queryByRole("button", { name: /jiti/i })).not.toBeInTheDocument()
+  })
 })

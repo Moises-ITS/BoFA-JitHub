@@ -1,0 +1,34 @@
+<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JitHub">
+  <!-- THE JitHub mark: the campus-graph hub (center node, 6 spokes, 6 outer
+       nodes) on the brand-gradient square. Extracted from the inline SVG that
+       previously lived only in pages/home/sidebar.tsx, so the sidebar, the
+       favicon, and any future use render one asset instead of drifting copies.
+       The gradient duplicates the "brand-gradient" custom property from
+       theme.css, because a standalone SVG cannot read CSS variables. NOTE:
+       a double hyphen is ILLEGAL inside an XML comment; writing the property
+       name verbatim here once broke strict XML parsing, so every img-tag load
+       showed alt text while inline-HTML uses rendered fine. -->
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#D71920" />
+      <stop offset="100%" stop-color="#BA7BB0" />
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="12" fill="url(#brand)" />
+  <!-- Mark drawn on a 48-grid, shown at 2/3 scale like the sidebar (32px in a 48px tile) -->
+  <g transform="translate(8 8) scale(0.6667)" fill="none">
+    <circle cx="24" cy="24" r="5" fill="white" />
+    <line x1="24" y1="19" x2="24" y2="10" stroke="white" stroke-width="2.5" stroke-linecap="round" />
+    <line x1="24" y1="29" x2="24" y2="38" stroke="white" stroke-width="2.5" stroke-linecap="round" />
+    <line x1="19" y1="21" x2="11" y2="15" stroke="white" stroke-width="2.5" stroke-linecap="round" />
+    <line x1="29" y1="27" x2="37" y2="33" stroke="white" stroke-width="2.5" stroke-linecap="round" />
+    <line x1="29" y1="21" x2="37" y2="15" stroke="white" stroke-width="2.5" stroke-linecap="round" />
+    <line x1="19" y1="27" x2="11" y2="33" stroke="white" stroke-width="2.5" stroke-linecap="round" />
+    <circle cx="24" cy="7" r="3.5" fill="white" />
+    <circle cx="24" cy="41" r="3.5" fill="white" />
+    <circle cx="8" cy="13" r="3.5" fill="white" />
+    <circle cx="40" cy="35" r="3.5" fill="white" />
+    <circle cx="40" cy="13" r="3.5" fill="white" />
+    <circle cx="8" cy="35" r="3.5" fill="white" />
+  </g>
+</svg>

@@ -1,5 +1,21 @@
 {
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "//": "Files in public/ are served under their own names, so Vercel cannot content-hash them and defaults to `max-age=0, must-revalidate` — meaning every repeat visitor re-validates all 20 clips before the backdrop appears. These are write-once assets: a changed clip gets a new filename in backgroundVideos.ts, so caching them immutably for a year is safe and makes the second visit instant.",
+      "source": "/videos/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "//": "Same reasoning for the logo and other static imagery in public/.",
+      "source": "/(.*)\\.(png|jpg|jpeg|webp|svg|glb)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
   ]
 }

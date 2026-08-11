@@ -69,6 +69,79 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
+/**
+ * True when the visitor has asked for less data, or is on a connection where
+ * video is a bad trade at any size.
+ *
+ * `navigator.connection` is Chromium-only; Safari and Firefox report nothing,
+ * which resolves to false — video plays, same as before. That is the right
+ * default: this is an optimisation for people who signalled a constraint, not
+ * a gate that has to work everywhere.
+ *
+ * 3g deliberately still gets video. Uncompressed it would be miserable, but
+ * once the clips are a few hundred KB each it is perfectly viable, and cutting
+ * it would strip the design from a large share of campus phones.
+ */
+function useSaveData(): boolean {
+  const read = () => {
+    const connection = (navigator as unknown as {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (!connection) return false;
+    if (connection.saveData) return true;
+    return connection.effectiveType === "2g" || connection.effectiveType === "slow-2g";
+  };
+
+  const [saveData, setSaveData] = useState(read);
+
+  useEffect(() => {
+    const connection = (navigator as unknown as {
+      connection?: EventTarget;
+    }).connection;
+    if (!connection?.addEventListener) return;
+    const onChange = () => setSaveData(read());
+    connection.addEventListener("change", onChange);
+    return () => connection.removeEventListener("change", onChange);
+  }, []);
+
+  return saveData;
+}
+
+/**
+ * Activation priority: tiles nearest the centre of the grid load first.
+ *
+ * Tiles used to fill in index order — top-left first — while the auth card sits
+ * dead centre. The tiles framing the card, the only ones a visitor is really
+ * looking at, were therefore last to arrive. Ranking by distance from the grid
+ * centre costs nothing and makes the page feel loaded well before it is.
+ *
+ * Distance is measured in grid coordinates, not pixels. Tiles are wider than
+ * they are tall in viewport units, so this slightly favours vertical
+ * neighbours — immaterial at a 6×4 grid, and it keeps the maths readable.
+ */
+function buildActivationRank(): number[] {
+  const total = ROWS * TILES_PER_ROW;
+  const centreColumn = (TILES_PER_ROW - 1) / 2;
+  const centreRow = (ROWS - 1) / 2;
+
+  const distance = (index: number) =>
+    Math.hypot(
+      (index % TILES_PER_ROW) - centreColumn,
+      Math.floor(index / TILES_PER_ROW) - centreRow,
+    );
+
+  const order = Array.from({ length: total }, (_, index) => index).sort(
+    // Index as tiebreak keeps the order deterministic across renders.
+    (a, b) => distance(a) - distance(b) || a - b,
+  );
+
+  const rank = new Array<number>(total);
+  order.forEach((tileIndex, position) => {
+    rank[tileIndex] = position;
+  });
+  return rank;
+}
+
 export default function AuthBackdrop({
   children,
   showFooter = true,
@@ -77,6 +150,8 @@ export default function AuthBackdrop({
   motion = true,
 }: Props) {
   const prefersReducedMotion = usePrefersReducedMotion();
+  const saveData = useSaveData();
+  const activationRank = useMemo(buildActivationRank, []);
   // Two consequences of the preference, deliberately decoupled.
   //
   // Row drift ALWAYS stops — that is the large-scale movement the setting is
@@ -107,8 +182,9 @@ export default function AuthBackdrop({
     if (BACKGROUND_VIDEOS.length === 0) {
       return new Array<{ video: string; poster: string } | null>(total).fill(null);
     }
+    // Assignment stays keyed to the tile's own index so neighbouring tiles show
+    // different clips. Only the ORDER they load in follows activationRank.
     return Array.from({ length: total }, (_, index) => {
-      if (index >= MAX_CONCURRENT_VIDEOS) return null;
       const fileName = BACKGROUND_VIDEOS[index % BACKGROUND_VIDEOS.length];
       return { video: videoUrl(fileName), poster: posterUrl(fileName) };
     });
@@ -127,19 +203,24 @@ export default function AuthBackdrop({
    * canPlay, and without counting it the whole chain would stall behind one
    * bad file.
    */
-  const [readyCount, setReadyCount] = useState(0);
-  const admitted = useRef<Set<number>>(new Set());
+  const [settled, setSettled] = useState<ReadonlySet<number>>(new Set());
+  const failed = useRef<Set<number>>(new Set());
   const activeCount = Math.min(
     ROWS * TILES_PER_ROW,
-    INITIAL_VIDEO_BATCH + readyCount,
+    INITIAL_VIDEO_BATCH + settled.size,
   );
+
   // Idempotent per tile: canPlay fires again on every loop iteration, and an
   // unguarded setState there would re-render the whole 24-tile tree on a timer
-  // forever.
-  const admitNext = (index: number) => {
-    if (admitted.current.has(index)) return;
-    admitted.current.add(index);
-    setReadyCount((n) => n + 1);
+  // forever. A Set gives that for free.
+  const settle = (index: number, ok: boolean) => {
+    if (!ok) failed.current.add(index);
+    setSettled((prev) => {
+      if (prev.has(index)) return prev; // same reference → React bails out
+      const next = new Set(prev);
+      next.add(index);
+      return next;
+    });
   };
 
   return (
@@ -160,7 +241,15 @@ export default function AuthBackdrop({
             {Array.from({ length: TILES_PER_ROW }, (_, column) => {
               const index = row * TILES_PER_ROW + column;
               const tile = tileSources[index];
-              const showVideo = tile !== null && index < activeCount;
+              // Both the concurrency cap and the staggered activation are keyed
+              // to RANK, not index — so lowering MAX_CONCURRENT_VIDEOS keeps the
+              // tiles around the card rather than the top-left corner, and the
+              // mosaic fills outward from the middle.
+              // saveData drops video entirely: posters only, no clip fetched.
+              const showVideo =
+                tile !== null &&
+                !saveData &&
+                activationRank[index] < Math.min(MAX_CONCURRENT_VIDEOS, activeCount);
               return (
                 <div
                   key={column}
@@ -177,7 +266,19 @@ export default function AuthBackdrop({
                 >
                   {showVideo && (
                     <video
-                      className="auth-backdrop__video"
+                      // Fades in only once the clip can actually play. Mounting
+                      // it visible meant a hard cut from an empty black tile to
+                      // video the instant the first frame decoded — the "starts
+                      // on a black screen for a bit" flash. Held at opacity 0
+                      // until ready, the tile shows its poster (or the design's
+                      // translucent fill) and the clip dissolves in over it.
+                      // An errored clip never gets the class, so it stays
+                      // invisible rather than flashing a broken frame.
+                      className={
+                        settled.has(index) && !failed.current.has(index)
+                          ? "auth-backdrop__video is-ready"
+                          : "auth-backdrop__video"
+                      }
                       src={tile.video}
                       // Shown until the first frame decodes, so there is no
                       // flash of empty tile between mount and playback.
@@ -195,8 +296,8 @@ export default function AuthBackdrop({
                       playsInline
                       preload="auto"
                       tabIndex={-1}
-                      onCanPlay={() => admitNext(index)}
-                      onError={() => admitNext(index)}
+                      onCanPlay={() => settle(index, true)}
+                      onError={() => settle(index, false)}
                     />
                   )}
                 </div>

@@ -133,10 +133,11 @@ const clerkBaseParties = new Set<string>([
   "http://127.0.0.1:5173",
   "http://127.0.0.1:5174",
   "http://127.0.0.1:5175",
-  // No trailing slash. Every lookup against this set goes through
-  // normalizeOrigin(), which yields `protocol//host` — "https://jit-hub.com/"
-  // could never match and the production origin would have been silently
-  // rejected by Clerk verification.
+  // ORIGINS ONLY — scheme + host, no trailing slash and no path. Every lookup
+  // goes through normalizeOrigin(), which returns `protocol//host` and discards
+  // the rest, so "https://jit-hub.com/" and "https://jit-hub.com/home" can
+  // never match anything (both were tried; both were silently dead). The single
+  // entry below already covers every path on the domain.
   "https://jit-hub.com",
 ])
 

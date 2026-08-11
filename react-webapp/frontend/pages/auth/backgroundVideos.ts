@@ -76,7 +76,7 @@ export function posterUrl(fileName: string): string {
  * Generate them and flip this to true:
  *   node scripts/optimize-videos.mjs --apply
  */
-export const POSTERS_GENERATED = false;
+export const POSTERS_GENERATED = true;
 
 /**
  * How many clips start loading immediately; the rest mount as those become

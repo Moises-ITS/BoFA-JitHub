@@ -3,8 +3,11 @@
        nodes) on the brand-gradient square. Extracted from the inline SVG that
        previously lived only in pages/home/sidebar.tsx, so the sidebar, the
        favicon, and any future use render one asset instead of drifting copies.
-       Gradient duplicates --brand-gradient (theme.css) because a standalone
-       SVG cannot read CSS custom properties. -->
+       The gradient duplicates the "brand-gradient" custom property from
+       theme.css, because a standalone SVG cannot read CSS variables. NOTE:
+       a double hyphen is ILLEGAL inside an XML comment; writing the property
+       name verbatim here once broke strict XML parsing, so every img-tag load
+       showed alt text while inline-HTML uses rendered fine. -->
   <defs>
     <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#D71920" />

@@ -1,20 +1,19 @@
 /**
- * JitiLauncher.tsx — the small circular bottom-right (or bottom-left, on
- * /research) button that opens/closes the Jiti chat panel.
+ * JitiLauncher.tsx — the small circular bottom-right button that opens and
+ * closes the Jiti chat panel.
  */
 import "./JitiPanel.css"
 
 interface JitiLauncherProps {
   readonly isOpen: boolean
-  readonly positionLeft: boolean
   readonly onToggle: () => void
 }
 
-export default function JitiLauncher({ isOpen, positionLeft, onToggle }: JitiLauncherProps) {
+export default function JitiLauncher({ isOpen, onToggle }: JitiLauncherProps) {
   return (
     <button
       type="button"
-      className={`jiti-launcher${positionLeft ? " jiti-launcher--left" : ""}`}
+      className="jiti-launcher"
       onClick={onToggle}
       aria-label={isOpen ? "Close Jiti chat" : "Ask Jiti about NJIT clubs"}
       aria-expanded={isOpen}

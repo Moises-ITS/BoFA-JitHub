@@ -19,7 +19,6 @@ import "./JitiPanel.css"
 interface JitiPanelProps {
   readonly token: string | null
   readonly quota: JitiQuotaState
-  readonly positionLeft: boolean
   readonly onClose: () => void
 }
 
@@ -59,7 +58,7 @@ function formatResetTime(resetAt: string | null): string {
   })
 }
 
-export default function JitiPanel({ token, quota, positionLeft, onClose }: JitiPanelProps) {
+export default function JitiPanel({ token, quota, onClose }: JitiPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputValue, setInputValue] = useState("")
   const [pending, setPending] = useState(false)
@@ -142,7 +141,7 @@ export default function JitiPanel({ token, quota, positionLeft, onClose }: JitiP
   }
 
   return (
-    <div className={`jiti-panel${positionLeft ? " jiti-panel--left" : ""}`} role="dialog" aria-label="Jiti chat">
+    <div className="jiti-panel" role="dialog" aria-label="Jiti chat">
       <div className="jiti-panel__header">
         <div className="jiti-panel__header-text">
           <p className="jiti-panel__title">Jiti</p>

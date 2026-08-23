@@ -1,22 +1,8 @@
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/context/AuthContext"
 import "./EditProfileModal.css"
+import { NJIT_MAJORS } from "@/constants/majors"
 
-const NJIT_MAJORS = [
-  "Accounting", "Actuarial Mathematics", "Applied Mathematics", "Applied Statistics",
-  "Architecture", "Biomedical Engineering", "Biomedical Sciences", "Biology",
-  "Business Administration", "Chemical Biology", "Chemical Engineering", "Chemistry",
-  "Civil Engineering", "Communication Studies", "Computer Engineering", "Computer Science",
-  "Construction Management", "Criminal Justice", "Data Science", "Digital Design",
-  "Digital Marketing", "Electrical Engineering", "Engineering Science", "Engineering Technology",
-  "Environmental Engineering", "Environmental Science", "Finance", "Health Informatics",
-  "History", "Humanities", "Imaging Science", "Industrial Engineering", "Information Systems",
-  "Information Technology", "Interior Design", "Liberal Studies", "Management",
-  "Materials Science and Engineering", "Mathematics", "Mechanical Engineering",
-  "Medical Informatics", "Music Technology", "Nursing", "Physics", "Pre-Medical Studies",
-  "Professional and Technical Communication", "Real Estate Development",
-  "Science Technology and Society", "Statistics", "Urban Systems",
-]
 
 const KNOWN_INTERESTS = [
   "Architecture", "Art", "Artificial Intelligence", "Automotive", "Biomedical Engineering",

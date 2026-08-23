@@ -6,62 +6,11 @@ import type { SyncData } from "@/context/AuthContext"
 import "./auth.css"
 
 import { apiFetch } from "@/lib/api"
+import { NJIT_MAJORS } from "@/constants/majors"
 
 const STEPS = ["Academic", "Campus Life", "Profile"] as const
 type Step = 0 | 1 | 2
 
-const NJIT_MAJORS = [
-  "Accounting",
-  "Actuarial Mathematics",
-  "Applied Mathematics",
-  "Applied Statistics",
-  "Architecture",
-  "Biomedical Engineering",
-  "Biomedical Sciences",
-  "Biology",
-  "Business Administration",
-  "Chemical Biology",
-  "Chemical Engineering",
-  "Chemistry",
-  "Civil Engineering",
-  "Communication Studies",
-  "Computer Engineering",
-  "Computer Science",
-  "Construction Management",
-  "Criminal Justice",
-  "Data Science",
-  "Digital Design",
-  "Digital Marketing",
-  "Electrical Engineering",
-  "Engineering Science",
-  "Engineering Technology",
-  "Environmental Engineering",
-  "Environmental Science",
-  "Finance",
-  "Health Informatics",
-  "History",
-  "Humanities",
-  "Imaging Science",
-  "Industrial Engineering",
-  "Information Systems",
-  "Information Technology",
-  "Interior Design",
-  "Liberal Studies",
-  "Management",
-  "Materials Science and Engineering",
-  "Mathematics",
-  "Mechanical Engineering",
-  "Medical Informatics",
-  "Music Technology",
-  "Nursing",
-  "Physics",
-  "Pre-Medical Studies",
-  "Professional and Technical Communication",
-  "Real Estate Development",
-  "Science Technology and Society",
-  "Statistics",
-  "Urban Systems",
-]
 
 const KNOWN_INTERESTS = [
   "Architecture",

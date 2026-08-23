@@ -34,12 +34,14 @@ const MAJOR_LABELS: Record<string, string> = {
 export function formatMajorLabel(id: string): string {
   if (id === 'all') return 'All majors';
   return (
+    MAJOR_SLUG_TO_LABEL[id] ??
     MAJOR_LABELS[id] ??
     id.split('-').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
   );
 }
 
 import { apiFetch, API_BASE_URL as API } from '@/lib/api';
+import { MAJOR_SLUG_TO_LABEL, NJIT_MAJOR_SLUGS, majorSlug } from '@/constants/majors';
 
 function getDaysUntilDeadline(deadline?: string) {
   if (!deadline) return Number.POSITIVE_INFINITY;
@@ -58,7 +60,13 @@ export function useOpportunities(initialDistrict?: string | null) {
   // `districtFilter` IS the major filter — the department slug on an opportunity.
   // The name is kept because it is also driven by the ?district= URL param that
   // the campus graph links in with; the UI just labels it "Major".
-  const [districtFilter, setDistrictFilter] = useState<string | null>(initialDistrict ?? null);
+  // Always held in slug form. ?district= can arrive as prose ("Computer
+  // Science") from a campus-graph link; normalizing on the way in keeps it
+  // equal to the <option> value the dropdown renders, so the select shows the
+  // active major instead of going blank.
+  const [districtFilter, setDistrictFilter] = useState<string | null>(
+    initialDistrict ? majorSlug(initialDistrict) : null,
+  );
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
@@ -69,7 +77,7 @@ export function useOpportunities(initialDistrict?: string | null) {
   }, []);
 
   useEffect(() => {
-    setDistrictFilter(initialDistrict ?? null);
+    setDistrictFilter(initialDistrict ? majorSlug(initialDistrict) : null);
   }, [initialDistrict]);
 
   // Every listing shown is a real row from /api/opportunities — i.e. submitted by
@@ -83,20 +91,30 @@ export function useOpportunities(initialDistrict?: string | null) {
   const districtScoped = useMemo(() => {
     if (!districtFilter) return allOpportunities;
     const id = districtFilter.toLowerCase();
+    // Compare on the slug form of both sides: dropdown values are slugs
+    // ("computer-science") while a submitter types tags in prose ("Computer
+    // Science"), and a raw lowercase compare would never match the two.
+    const slug = majorSlug(districtFilter);
     return allOpportunities.filter((opportunity) =>
-      (opportunity.districtId && opportunity.districtId.toLowerCase() === id) ||
-      opportunity.tags.some((tag) => tag.toLowerCase() === id)
+      (opportunity.districtId &&
+        (opportunity.districtId.toLowerCase() === id || majorSlug(opportunity.districtId) === slug)) ||
+      opportunity.tags.some((tag) => tag.toLowerCase() === id || majorSlug(tag) === slug)
     );
   }, [allOpportunities, districtFilter]);
 
-  // Derived from the data, not a hardcoded list, so a department that only
-  // exists in API rows still appears. Built from ALL opportunities rather than
-  // districtScoped — otherwise picking a major would collapse the dropdown to
-  // just that one option and strand the user there.
+  // Seeded with every major from onboarding (@/constants/majors) so the
+  // dropdown offers the same choices a student picked their own major from.
+  // Deriving it purely from the data left it empty: /api/opportunities does not
+  // return districtId at all, so the set below was always just ['all'].
+  //
+  // Data-derived ids are unioned on top rather than replacing the seed, so a
+  // department that only exists in API rows still appears. Built from ALL
+  // opportunities rather than districtScoped — otherwise picking a major would
+  // collapse the dropdown to just that one option and strand the user there.
   const majorOptions = useMemo(() => {
-    const ids = new Set<string>();
+    const ids = new Set<string>(NJIT_MAJOR_SLUGS);
     for (const opportunity of allOpportunities) {
-      if (opportunity.districtId) ids.add(opportunity.districtId);
+      if (opportunity.districtId) ids.add(majorSlug(opportunity.districtId));
     }
     // districtScoped matches a districtId OR a tag, so an incoming ?district=
     // (e.g. a campus-graph link using a tag like "SWE") can be a value no

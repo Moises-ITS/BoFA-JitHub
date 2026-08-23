@@ -132,3 +132,44 @@ async function jsonFetch<T>(
     clearTimeout(timeoutId)
   }
 }
+
+/** Thrown by `withTimeout` when the wrapped promise outlives its deadline. */
+export class TimeoutError extends Error {
+  constructor(label: string, ms: number) {
+    super(`${label} did not settle within ${ms}ms`)
+    this.name = "TimeoutError"
+  }
+}
+
+/**
+ * Deadline for promises whose transport we DON'T own — clerk-js, mainly.
+ *
+ * jsonFetch above enforces REQUEST_TIMEOUT_MS with an AbortController, which
+ * only works because it owns the fetch. An SDK call hands us a bare promise, so
+ * the best we can do is race it. The distinction matters: this does NOT cancel
+ * the underlying request, it only guarantees the CALLER settles — which is the
+ * whole point. A hung SDK call previously surfaced as a button spinning forever
+ * with no error and nothing logged (the production change-password bug); now it
+ * surfaces as a TimeoutError the UI can render.
+ *
+ * Callers pass their own `ms` when the operation can legitimately outlive a
+ * network round trip (e.g. a flow that parks on a Clerk-owned modal waiting for
+ * the user to type). Default is the same 10s the rest of the app uses.
+ */
+export async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number = REQUEST_TIMEOUT_MS,
+  label = "request"
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timeoutId = setTimeout(() => reject(new TimeoutError(label, ms)), ms)
+      }),
+    ])
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
+}

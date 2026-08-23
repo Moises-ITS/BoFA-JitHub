@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { apiFetch, eventsFetch, authHeaders, API_BASE_URL, EVENTS_API_BASE_URL } from './api'
+import { apiFetch, eventsFetch, authHeaders, withTimeout, TimeoutError, API_BASE_URL, EVENTS_API_BASE_URL } from './api'
 
 type FetchMock = ReturnType<typeof vi.fn>
 
@@ -121,5 +121,47 @@ describe('eventsFetch', () => {
 describe('authHeaders', () => {
   it('builds a Bearer header object for raw-Response callers', () => {
     expect(authHeaders('tok')).toEqual({ Authorization: 'Bearer tok' })
+  })
+})
+
+describe('withTimeout', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('passes the resolved value straight through when the promise wins', async () => {
+    await expect(withTimeout(Promise.resolve('done'), 1_000, 'fast')).resolves.toBe('done')
+  })
+
+  it('propagates the original rejection rather than masking it as a timeout', async () => {
+    await expect(withTimeout(Promise.reject(new Error('upstream blew up')), 1_000, 'fast'))
+      .rejects.toThrow('upstream blew up')
+  })
+
+  it('rejects with a TimeoutError when the promise never settles', async () => {
+    // This is the regression guard for the production change-password bug: an
+    // SDK call that hangs forever used to leave the caller pending forever too,
+    // which surfaced as a button spinning with no error and nothing logged.
+    vi.useFakeTimers()
+    const pending = withTimeout(new Promise(() => {}), 5_000, 'clerk.updatePassword')
+    const assertion = expect(pending).rejects.toBeInstanceOf(TimeoutError)
+    await vi.advanceTimersByTimeAsync(5_001)
+    await assertion
+  })
+
+  it('names the labelled operation in the timeout message', async () => {
+    vi.useFakeTimers()
+    const pending = withTimeout(new Promise(() => {}), 2_000, 'clerk.updatePassword')
+    const assertion = expect(pending).rejects.toThrow(/clerk\.updatePassword did not settle within 2000ms/)
+    await vi.advanceTimersByTimeAsync(2_001)
+    await assertion
+  })
+
+  it('clears its timer when the promise resolves first, so no stray timer is left armed', async () => {
+    vi.useFakeTimers()
+    const clearSpy = vi.spyOn(globalThis, 'clearTimeout')
+    await withTimeout(Promise.resolve('quick'), 10_000, 'fast')
+    expect(clearSpy).toHaveBeenCalled()
+    clearSpy.mockRestore()
   })
 })

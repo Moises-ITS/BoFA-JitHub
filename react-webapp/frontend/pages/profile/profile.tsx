@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { useSignIn } from "@clerk/clerk-react";
+import { useUser, useReverification } from "@clerk/clerk-react";
+import { isClerkAPIResponseError } from "@clerk/clerk-react/errors";
 import { Target, Award, Edit2, Calendar, Briefcase, Users, ShieldCheck, KeyRound, Trash2, AlertTriangle } from "lucide-react";
 // Same live-data hook the /opportunities page uses — replaced a hardcoded mock
 // list so students see real, best-match recommendations here.
@@ -9,7 +10,15 @@ import { OPPORTUNITY_TYPE_ICON } from "../opportunities/types/opportunities";
 import { useAuth } from "@/context/AuthContext";
 import EditProfileModal from "../node/components/EditProfileModal";
 
-import { apiFetch, authHeaders, EVENTS_API_BASE_URL as EVENTS_API } from "@/lib/api";
+import { apiFetch, authHeaders, withTimeout, EVENTS_API_BASE_URL as EVENTS_API } from "@/lib/api";
+import { isCustomAuthUser } from "@/lib/auth";
+import {
+  describePasswordError,
+  classifyPasswordError,
+  logPasswordEvent,
+  PASSWORD_ACTION_TIMEOUT_MS,
+  MIN_PASSWORD_LENGTH,
+} from "./passwordErrors";
 
 type ProfileEvent = {
   event_id: number;
@@ -46,19 +55,28 @@ function formatEventDate(date: string | null, startTime: string | null) {
   return `${dateLabel} at ${timeLabel}`;
 }
 
+// Derived from the resource rather than imported from @clerk/types, which is a
+// transitive dep we don't declare — this stays correct if Clerk changes the shape.
+type ClerkUserResource = NonNullable<ReturnType<typeof useUser>["user"]>;
+type UpdateUserPasswordParams = Parameters<ClerkUserResource["updatePassword"]>[0];
+
 export default function Profile() {
   const { user, token, logout } = useAuth();
-  const { isLoaded: signInLoaded, signIn, setActive } = useSignIn();
+  // `user` above is OUR Postgres row; `clerkUser` is Clerk's identity. Only
+  // the latter can change a password, and only students have one.
+  const { user: clerkUser, isLoaded: clerkUserLoaded } = useUser();
+  const isCustomAuth = isCustomAuthUser(user);
   const [editOpen, setEditOpen] = useState(false);
   const [yourEvents, setYourEvents] = useState<ProfileEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
-  const [passwordResetOpen, setPasswordResetOpen] = useState(false);
-  const [passwordResetCode, setPasswordResetCode] = useState("");
-  const [passwordResetPassword, setPasswordResetPassword] = useState("");
-  const [passwordResetConfirm, setPasswordResetConfirm] = useState("");
-  const [passwordResetLoading, setPasswordResetLoading] = useState(false);
-  const [passwordResetMessage, setPasswordResetMessage] = useState("");
-  const [passwordResetError, setPasswordResetError] = useState("");
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [signOutOthers, setSignOutOthers] = useState(true);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -120,78 +138,94 @@ export default function Profile() {
     });
   }, [yourEvents]);
 
-  const startPasswordReset = async () => {
-    setPasswordResetError("");
-    setPasswordResetMessage("");
+  /**
+   * Clerk treats a password change as a sensitive action and may demand the
+   * session be reverified first. Wrapping the call in useReverification lets
+   * Clerk mount its own challenge modal and then transparently retry this
+   * fetcher, so the happy path needs no extra code here. Passing NO options is
+   * deliberate: supplying onNeedsReverification would opt us out of Clerk's
+   * built-in modal and oblige us to build the challenge UI ourselves.
+   */
+  const changePassword = useReverification((params: UpdateUserPasswordParams) => {
+    if (!clerkUser) throw new Error("No Clerk user on this session");
+    return clerkUser.updatePassword(params);
+  });
 
-    if (!signInLoaded || !signIn || !user?.email) {
-      setPasswordResetError("Password reset is not ready yet. Please try again.");
-      setPasswordResetOpen(true);
+  /**
+   * Changes the password IN SESSION.
+   *
+   * The previous implementation called signIn.create({ strategy:
+   * "reset_password_email_code" }) — Clerk's SIGNED-OUT "I forgot my password"
+   * flow — from a page that only renders behind <ProtectedRoute>, i.e. with a
+   * live session. That conflicts with single-session mode, and on the
+   * production instance it hung outright waiting on a bot-protection challenge
+   * that has no mount point in this app. updatePassword is an authenticated
+   * call against the current session: no sign-in attempt, no captcha.
+   */
+  const submitPasswordChange = async () => {
+    setPasswordError("");
+    setPasswordMessage("");
+
+    if (!clerkUserLoaded || !clerkUser) {
+      setPasswordError("Your account isn't loaded yet. Refresh the page and try again.");
       return;
     }
 
-    setPasswordResetLoading(true);
+    // Clerk users who signed in by email code or SSO have no password yet — for
+    // them this is a SET flow, and Clerk rejects a currentPassword it can't verify.
+    const hasExistingPassword = clerkUser.passwordEnabled;
+
+    if (hasExistingPassword && !currentPassword) {
+      setPasswordError("Enter your current password.");
+      return;
+    }
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      setPasswordError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+    if (hasExistingPassword && newPassword === currentPassword) {
+      setPasswordError("New password must be different from your current password.");
+      return;
+    }
+
+    setPasswordSaving(true);
     try {
-      await signIn.create({
-        strategy: "reset_password_email_code",
-        identifier: user.email,
-      });
-      setPasswordResetOpen(true);
-      setPasswordResetMessage(`A confirmation code was sent to ${user.email}.`);
+      await withTimeout(
+        changePassword({
+          newPassword,
+          ...(hasExistingPassword ? { currentPassword } : {}),
+          signOutOfOtherSessions: signOutOthers,
+        }),
+        PASSWORD_ACTION_TIMEOUT_MS,
+        "clerk.updatePassword"
+      );
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      // Modal stays open on purpose: closing it here would hide the only
+      // confirmation the student ever gets.
+      setPasswordMessage(
+        signOutOthers
+          ? "Password updated. You've been signed out on your other devices."
+          : "Password updated."
+      );
+      logPasswordEvent("success", { signOutOthers, wasSet: !hasExistingPassword });
     } catch (error) {
-      setPasswordResetOpen(true);
-      setPasswordResetError(error instanceof Error ? error.message : "Unable to send password reset code.");
-    } finally {
-      setPasswordResetLoading(false);
-    }
-  };
-
-  const completePasswordReset = async () => {
-    setPasswordResetError("");
-
-    if (!signInLoaded || !signIn) {
-      setPasswordResetError("Password reset is not ready yet. Please try again.");
-      return;
-    }
-
-    if (!passwordResetCode.trim()) {
-      setPasswordResetError("Enter the confirmation code from your email.");
-      return;
-    }
-
-    if (passwordResetPassword.length < 8) {
-      setPasswordResetError("Password must be at least 8 characters.");
-      return;
-    }
-
-    if (passwordResetPassword !== passwordResetConfirm) {
-      setPasswordResetError("Passwords do not match.");
-      return;
-    }
-
-    setPasswordResetLoading(true);
-    try {
-      const result = await signIn.attemptFirstFactor({
-        strategy: "reset_password_email_code",
-        code: passwordResetCode.trim(),
-        password: passwordResetPassword,
+      setPasswordError(describePasswordError(error));
+      logPasswordEvent("failed", {
+        kind: classifyPasswordError(error),
+        clerkCodes: isClerkAPIResponseError(error) ? error.errors?.map((e) => e.code) : undefined,
+        hadExistingPassword: hasExistingPassword,
       });
-
-      if (result.status === "complete") {
-        if (result.createdSessionId && setActive) {
-          await setActive({ session: result.createdSessionId });
-        }
-        setPasswordResetCode("");
-        setPasswordResetPassword("");
-        setPasswordResetConfirm("");
-        setPasswordResetMessage("Password changed successfully.");
-      } else {
-        setPasswordResetError("Additional verification is required before the password can be changed.");
-      }
-    } catch (error) {
-      setPasswordResetError(error instanceof Error ? error.message : "Unable to change password.");
     } finally {
-      setPasswordResetLoading(false);
+      // Unconditional, on every path. The original bug was precisely a loading
+      // flag that never cleared.
+      setPasswordSaving(false);
     }
   };
 
@@ -508,19 +542,35 @@ export default function Profile() {
               <h3 className="font-semibold text-white">Account Security</h3>
             </div>
 
-            <button
-              type="button"
-              onClick={startPasswordReset}
-              disabled={passwordResetLoading}
-              className="w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid var(--border-default)" }}
-            >
-              <KeyRound className="w-4 h-4" />
-              {passwordResetLoading ? "Sending code..." : "Change password by email"}
-            </button>
-            <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-              Clerk sends a confirmation code to your NJIT email before changing the password.
-            </p>
+            {isCustomAuth ? (
+              // Guests and professors authenticate against our own bcrypt hash and
+              // have no Clerk identity, so a Clerk password control can only fail
+              // for them. Explanatory copy beats a dead button — and beats hiding
+              // the section, which just makes the page look broken.
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                Password changes aren't available for guest and professor accounts yet.
+              </p>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  data-testid="password-open"
+                  onClick={() => setPasswordModalOpen(true)}
+                  disabled={!clerkUserLoaded}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid var(--border-default)" }}
+                >
+                  <KeyRound className="w-4 h-4" />
+                  {/* No async work behind this click any more, so it can never spin. */}
+                  {clerkUser?.passwordEnabled === false ? "Set a password" : "Change password"}
+                </button>
+                <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+                  {clerkUser?.passwordEnabled === false
+                    ? "You don't have a password yet — set one to sign in without an email code."
+                    : "Enter your current password, then choose a new one."}
+                </p>
+              </>
+            )}
 
             <div className="mt-5 pt-5 border-t border-white/10">
               <div className="flex items-center gap-2 mb-2">
@@ -580,8 +630,8 @@ export default function Profile() {
           </motion.div>
         </div>
       </div>
-      {passwordResetOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+      {passwordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" data-testid="password-modal">
           <div
             className="w-full max-w-md rounded-xl p-6"
             style={{ backgroundColor: "var(--bg-surface)", border: "1px solid var(--border-default)" }}
@@ -589,83 +639,115 @@ export default function Profile() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <KeyRound className="w-5 h-5" style={{ color: "var(--brand-primary)" }} />
-                <h3 className="text-lg font-semibold text-white">Change password</h3>
+                <h3 className="text-lg font-semibold text-white">
+                  {clerkUser?.passwordEnabled === false ? "Set a password" : "Change password"}
+                </h3>
               </div>
               <button
                 type="button"
-                onClick={() => setPasswordResetOpen(false)}
+                onClick={() => setPasswordModalOpen(false)}
                 className="rounded-lg px-2 py-1 text-sm text-white/70 hover:bg-white/10"
-                disabled={passwordResetLoading}
+                disabled={passwordSaving}
               >
                 Close
               </button>
             </div>
 
-            {passwordResetMessage && (
-              <p className="mb-4 rounded-lg bg-white/5 px-3 py-2 text-sm text-white">{passwordResetMessage}</p>
+            {passwordMessage && (
+              <p className="mb-4 rounded-lg bg-white/5 px-3 py-2 text-sm text-white" data-testid="password-message">
+                {passwordMessage}
+              </p>
             )}
-            {passwordResetError && (
-              <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-200">{passwordResetError}</p>
+            {passwordError && (
+              <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-200" data-testid="password-error">
+                {passwordError}
+              </p>
             )}
 
-            <div className="space-y-3">
-              <label className="block">
-                <span className="mb-1 block text-xs" style={{ color: "var(--text-muted)" }}>Email confirmation code</span>
-                <input
-                  value={passwordResetCode}
-                  onChange={(event) => setPasswordResetCode(event.target.value)}
-                  className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
-                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)" }}
-                  placeholder="6-digit code"
-                  disabled={passwordResetLoading}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-xs" style={{ color: "var(--text-muted)" }}>New password</span>
-                <input
-                  type="password"
-                  value={passwordResetPassword}
-                  onChange={(event) => setPasswordResetPassword(event.target.value)}
-                  className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
-                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)" }}
-                  placeholder="At least 8 characters"
-                  disabled={passwordResetLoading}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-xs" style={{ color: "var(--text-muted)" }}>Confirm new password</span>
-                <input
-                  type="password"
-                  value={passwordResetConfirm}
-                  onChange={(event) => setPasswordResetConfirm(event.target.value)}
-                  className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
-                  style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)" }}
-                  placeholder="Re-enter password"
-                  disabled={passwordResetLoading}
-                />
-              </label>
-            </div>
+            {/* A real <form> so Enter submits and password managers offer to save. */}
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submitPasswordChange();
+              }}
+            >
+              <div className="space-y-3">
+                {clerkUser?.passwordEnabled !== false && (
+                  <label className="block">
+                    <span className="mb-1 block text-xs" style={{ color: "var(--text-muted)" }}>Current password</span>
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      value={currentPassword}
+                      onChange={(event) => setCurrentPassword(event.target.value)}
+                      className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                      style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)" }}
+                      placeholder="Your current password"
+                      disabled={passwordSaving}
+                    />
+                  </label>
+                )}
+                <label className="block">
+                  <span className="mb-1 block text-xs" style={{ color: "var(--text-muted)" }}>New password</span>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                    style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)" }}
+                    placeholder="At least 8 characters"
+                    disabled={passwordSaving}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs" style={{ color: "var(--text-muted)" }}>Confirm new password</span>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    className="w-full rounded-lg px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                    style={{ backgroundColor: "rgba(255,255,255,0.05)", border: "1px solid var(--border-default)" }}
+                    placeholder="Re-enter password"
+                    disabled={passwordSaving}
+                  />
+                </label>
+              </div>
 
-            <div className="mt-5 flex gap-2">
-              <button
-                type="button"
-                onClick={startPasswordReset}
-                disabled={passwordResetLoading}
-                className="flex-1 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid var(--border-default)" }}
-              >
-                Resend code
-              </button>
-              <button
-                type="button"
-                onClick={completePasswordReset}
-                disabled={passwordResetLoading}
-                className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                style={{ background: "var(--brand-gradient)" }}
-              >
-                {passwordResetLoading ? "Saving..." : "Save password"}
-              </button>
-            </div>
+              <label className="mt-4 flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                <input
+                  type="checkbox"
+                  checked={signOutOthers}
+                  onChange={(event) => setSignOutOthers(event.target.checked)}
+                  disabled={passwordSaving}
+                />
+                {/* Default on: the safe assumption after a password change, and this
+                    page is reachable from shared lab machines. */}
+                Sign out of other devices
+              </label>
+
+              <div className="mt-5 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPasswordModalOpen(false)}
+                  disabled={passwordSaving}
+                  className="flex-1 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid var(--border-default)" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  data-testid="password-save"
+                  disabled={passwordSaving}
+                  className="flex-1 rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{ background: "var(--brand-gradient)" }}
+                >
+                  {passwordSaving ? "Saving..." : "Update password"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

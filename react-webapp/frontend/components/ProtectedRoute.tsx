@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from "react-router-dom"
 import { useAuth as useClerkAuth } from "@clerk/clerk-react"
 import { useAuth } from "../context/AuthContext"
+import { isCustomAuthUser } from "@/lib/auth"
 import JitiWidget from "./jiti/JitiWidget"
 
 const spinnerStyle: React.CSSProperties = {
@@ -24,7 +25,7 @@ export default function ProtectedRoute() {
   const { user, loading, needsProfileSetup, authError, retryAuth } = useAuth()
   const { isSignedIn, isLoaded } = useClerkAuth()
 
-  const isCustomAuth = !!(user && (user.userType === "guest" || user.userType === "professor"))
+  const isCustomAuth = isCustomAuthUser(user)
 
   // Wait for both Clerk and our context to finish loading
   if (!isCustomAuth && (!isLoaded || loading)) {

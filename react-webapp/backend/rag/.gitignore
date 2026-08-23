@@ -1,1 +1,13 @@
-njit_orgs.csv
+# data/text_files/njit_orgs.csv is deliberately TRACKED, not ignored.
+#
+# It is Jiti's entire knowledge base (see services/jitiCorpusService.ts), read
+# from disk at boot. While it was ignored, it existed only on developer
+# machines: Railway and Vercel build from this repo, so production had no
+# corpus, resolveCsvPath() threw, warmUpJiti() failed, and /api/jiti never
+# mounted — the chat widget silently hid itself for every student. CI failed
+# the same way on a clean checkout.
+#
+# The file is a frozen build-time artifact (the corpus header carries a
+# hardcoded "current as of" date precisely so the cached prompt prefix never
+# drifts), so it belongs in version control alongside the code that reads it.
+# Re-scraping it with scrape_njit_orgs.py should be a reviewable commit.

@@ -15,6 +15,12 @@
 *.mjs  text eol=lf
 *.sql  text eol=lf
 
+# Jiti's club corpus (backend/rag/data/text_files/njit_orgs.csv). Pinned to LF
+# so a Windows checkout, a Linux CI runner, and Railway all read byte-identical
+# bytes: jitiCorpusService builds the cached prompt prefix from this file, and
+# the cost model in jitiQuotaService assumes that prefix never drifts.
+*.csv  text eol=lf
+
 # Binary files — no line-ending normalization
 *.png  binary
 *.jpg  binary

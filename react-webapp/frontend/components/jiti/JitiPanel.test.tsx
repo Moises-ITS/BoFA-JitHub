@@ -20,7 +20,7 @@ import { useJitiQuota } from "./useJitiQuota"
 function Harness({ token }: { readonly token: string | null }) {
   const quota = useJitiQuota(token)
   if (quota.phase !== "ready") return <div>not ready</div>
-  return <JitiPanel token={token} quota={quota} positionLeft={false} onClose={() => {}} />
+  return <JitiPanel token={token} quota={quota} onClose={() => {}} />
 }
 
 interface RecordedCall {

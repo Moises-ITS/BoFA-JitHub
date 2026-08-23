@@ -33,14 +33,6 @@
   transform: translateY(-2px);
 }
 
-/* Research Districts docks a full-height panel on the right
-   (.rd-panel, pages/districts/ResearchDistricts.css) — anchor bottom-left
-   there instead of overlapping it. */
-.jiti-launcher--left {
-  right: auto;
-  left: 64px;
-}
-
 .jiti-launcher svg {
   width: 32px;
   height: 32px;
@@ -60,11 +52,6 @@
   border-radius: 16px;
   box-shadow: var(--shadow-elevated, 0 18px 40px rgba(0, 0, 0, 0.38));
   overflow: hidden;
-}
-
-.jiti-panel--left {
-  right: auto;
-  left: 64px;
 }
 
 .jiti-panel__header {
@@ -210,16 +197,8 @@
     right: 16px;
     bottom: 92px;
   }
-  .jiti-panel--left {
-    right: auto;
-    left: 16px;
-  }
   .jiti-launcher {
     right: 16px;
     bottom: 16px;
-  }
-  .jiti-launcher--left {
-    right: auto;
-    left: 16px;
   }
 }

@@ -2,12 +2,10 @@
 // JitiWidget.test.tsx
 //
 // Proves:
-//  - the widget renders the launcher on an authenticated route once the
-//    status check succeeds
+//  - the widget renders the launcher on /home once the status check succeeds
 //  - it renders nothing at all when GET /api/jiti/status returns 404
 //    (feature flag off — fail closed)
-//  - the launcher gets the --left position class on /research and the
-//    default (bottom-right) class everywhere else
+//  - it renders nothing on any route other than /home
 //  - opening the panel triggers exactly one GET /api/jiti/status and zero
 //    POST /api/jiti/chat calls
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,7 +58,7 @@ describe("JitiWidget", () => {
     vi.restoreAllMocks()
   })
 
-  it("renders the launcher on an authenticated route once the status check succeeds", async () => {
+  it("renders the launcher on /home once the status check succeeds", async () => {
     vi.stubGlobal("fetch", mockStatusOk())
     renderWidget()
 
@@ -76,22 +74,17 @@ describe("JitiWidget", () => {
     expect(screen.queryByRole("button", { name: /jiti/i })).not.toBeInTheDocument()
   })
 
-  it("anchors the launcher bottom-left on /research", async () => {
-    vi.stubGlobal("fetch", mockStatusOk())
-    renderWidget("/research")
+  it.each(["/research", "/events", "/profile", "/organizations", "/opportunities", "/network"])(
+    "renders nothing on %s — Jiti is home-only",
+    async (path) => {
+      const fetchMock = mockStatusOk()
+      vi.stubGlobal("fetch", fetchMock)
+      renderWidget(path)
 
-    const launcher = await screen.findByRole("button", { name: /jiti/i })
-    expect(launcher.className).toContain("jiti-launcher--left")
-  })
-
-  it("uses the default (bottom-right) position class on every other route", async () => {
-    vi.stubGlobal("fetch", mockStatusOk())
-    renderWidget("/home")
-
-    const launcher = await screen.findByRole("button", { name: /jiti/i })
-    expect(launcher.className).toContain("jiti-launcher")
-    expect(launcher.className).not.toContain("jiti-launcher--left")
-  })
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+      expect(screen.queryByRole("button", { name: /jiti/i })).not.toBeInTheDocument()
+    }
+  )
 
   it("opening the panel triggers exactly one GET status call and zero POST chat calls", async () => {
     const fetchMock = mockStatusOk()

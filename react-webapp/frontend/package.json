@@ -68,7 +68,7 @@
     "supabase": "^2.77.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.1",
-    "vite": "^7.3.1",
+    "vite": "^7.3.7",
     "vitest": "^3.2.4"
   },
   "scriptsSupabase": {
